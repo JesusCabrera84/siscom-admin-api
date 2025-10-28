@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: siscom-admin-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-siscom}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-siscom_admin}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-siscom}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: siscom-admin-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PROJECT_NAME: ${PROJECT_NAME:-SISCOM Admin API}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-siscom}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_NAME: ${DB_NAME:-siscom_admin}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      COGNITO_USERPOOL_ID: ${COGNITO_USERPOOL_ID}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+
