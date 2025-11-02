@@ -29,6 +29,47 @@ class UserCreate(UserBase):
         return validate_name(v)
 
 
+class UserLogin(BaseModel):
+    """Schema para la petición de login."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+    password: str = Field(..., min_length=1, description="Contraseña del usuario")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@example.com",
+                "password": "MiPassword123!"
+            }
+        }
+
+
+class UserLoginResponse(BaseModel):
+    """Schema para la respuesta de login."""
+    user: "UserOut"
+    access_token: str
+    id_token: str
+    refresh_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user": {
+                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                    "email": "usuario@example.com",
+                    "full_name": "Juan García",
+                    "is_master": True,
+                },
+                "access_token": "eyJraWQiOiJ...",
+                "id_token": "eyJraWQiOiJ...",
+                "refresh_token": "eyJjdHkiOiJ...",
+                "token_type": "Bearer",
+                "expires_in": 3600
+            }
+        }
+
+
 class UserOut(UserBase):
     id: UUID
     client_id: UUID
