@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 
 class ClientStatus(str, enum.Enum):
+    PENDING = "PENDING"  # Cliente pendiente de verificación de email
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
     DELETED = "DELETED"
@@ -32,7 +33,7 @@ class Client(SQLModel, table=True):
     )
     name: str = Field(max_length=255, nullable=False)
     status: ClientStatus = Field(
-        sa_column=Column(String, default=ClientStatus.ACTIVE.value, nullable=False)
+        sa_column=Column(String, default=ClientStatus.PENDING.value, nullable=False)
     )
     active_subscription_id: Optional[UUID] = Field(
         default=None,
@@ -56,6 +57,15 @@ class Client(SQLModel, table=True):
     # Relationships
     users: list["User"] = Relationship(back_populates="client")
     devices: list["Device"] = Relationship(back_populates="client")
-    subscriptions: list["Subscription"] = Relationship(back_populates="client")
+    subscriptions: list["Subscription"] = Relationship(
+        back_populates="client",
+        sa_relationship_kwargs={"foreign_keys": "[Subscription.client_id]"}
+    )
+    active_subscription: Optional["Subscription"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[Client.active_subscription_id]",
+            "uselist": False,
+        }
+    )
     payments: list["Payment"] = Relationship(back_populates="client")
     orders: list["Order"] = Relationship(back_populates="client")

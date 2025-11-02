@@ -81,5 +81,8 @@ class Subscription(SQLModel, table=True):
     )
 
     # Relationships
-    client: "Client" = Relationship(back_populates="subscriptions")
+    client: "Client" = Relationship(
+        back_populates="subscriptions",
+        sa_relationship_kwargs={"foreign_keys": "[Subscription.client_id]"}
+    )
     plan: "Plan" = Relationship(back_populates="subscriptions")

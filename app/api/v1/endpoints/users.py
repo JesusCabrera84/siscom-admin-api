@@ -28,6 +28,14 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     """
     Crea un usuario en AWS Cognito y lo registra en la base de datos.
     """
+    
+    # 🔍 Verificar que el usuario no exista en la base de datos
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="El usuario con este correo electrónico ya existe en el sistema."
+        )
 
     try:
         # 1️⃣ Crear usuario en Cognito
@@ -36,18 +44,17 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
             Username=user.email,
             UserAttributes=[
                 {"Name": "email", "Value": user.email},
-                {"Name": "name", "Value": user.full_name or ""},
+                {"Name": "name", "Value": user.name},
             ],
             DesiredDeliveryMediums=["EMAIL"],  # o "SMS"
             MessageAction="SUPPRESS",  # evita que Cognito envíe correo automático
         )
 
-        # 2️⃣ Establecer contraseña permanente (opcional)
-        temp_password = settings.DEFAULT_USER_PASSWORD or "TempPass123!"
+        # 2️⃣ Establecer contraseña proporcionada por el usuario
         cognito.admin_set_user_password(
             UserPoolId=settings.COGNITO_USER_POOL_ID,
             Username=user.email,
-            Password=temp_password,
+            Password=user.password,
             Permanent=True,
         )
 
@@ -63,7 +70,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     # 3️⃣ Guardar usuario en la base de datos
     new_user = User(
         email=user.email,
-        full_name=user.full_name,
+        full_name=user.name,  # Usamos el campo 'name' recibido
         cognito_sub=cognito_sub,
         is_master=user.is_master,
         client_id=user.client_id,

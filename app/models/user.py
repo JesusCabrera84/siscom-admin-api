@@ -30,11 +30,18 @@ class User(SQLModel, table=True):
             nullable=False,
         ),
     )
-    cognito_sub: str = Field(
-        sa_column=Column(String(255), unique=True, nullable=False, index=True)
+    cognito_sub: Optional[str] = Field(
+        default=None, sa_column=Column(String(255), unique=True, nullable=True, index=True)
     )
     email: str = Field(max_length=255, nullable=False)
     full_name: Optional[str] = Field(default=None, max_length=255)
+    password_hash: Optional[str] = Field(
+        default=None, sa_column=Column(String(255), nullable=True)
+    )
+    email_verified: bool = Field(sa_column=Column(Boolean, default=False, nullable=False))
+    verification_token: Optional[str] = Field(
+        default=None, sa_column=Column(String(255), nullable=True, unique=True, index=True)
+    )
     is_master: bool = Field(sa_column=Column(Boolean, default=False, nullable=False))
     last_login_at: Optional[datetime] = Field(
         default=None, sa_column=Column(DateTime, nullable=True)
