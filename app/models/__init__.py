@@ -15,6 +15,7 @@ from app.models.device_service import (
 from app.models.device_installation import DeviceInstallation
 from app.models.user_unit import UserUnit
 from app.models.invitation import Invitation
+from app.models.token_confirmacion import TokenConfirmacion, TokenType
 
 __all__ = [
     "Client",
@@ -37,4 +38,6 @@ __all__ = [
     "DeviceInstallation",
     "UserUnit",
     "Invitation",
+    "TokenConfirmacion",
+    "TokenType",
 ]

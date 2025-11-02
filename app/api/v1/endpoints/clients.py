@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
+from datetime import datetime
 from app.db.session import get_db
 from app.api.deps import get_current_client_id
 from app.models.client import Client, ClientStatus
 from app.models.user import User
+from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.schemas.client import ClientOut, ClientCreate
 from app.utils.security import hash_password, generate_verification_token
 from app.core.config import settings
@@ -59,29 +61,35 @@ def create_client(data: ClientCreate, db: Session = Depends(get_db)):
     # 2️⃣ Hashear la contraseña
     password_hashed = hash_password(data.password)
     
-    # 3️⃣ Generar token de verificación
-    verification_token = generate_verification_token()
-    
-    # 4️⃣ Crear usuario master asociado al cliente
+    # 3️⃣ Crear usuario master asociado al cliente
     user = User(
         client_id=client.id,
         email=data.email,
         full_name=data.name,
         is_master=True,
         password_hash=password_hashed,
-        verification_token=verification_token,
         email_verified=False,
         # cognito_sub se asignará después de la verificación
     )
     db.add(user)
+    db.flush()  # Para obtener el id del usuario
+    
+    # 4️⃣ Generar token de verificación y guardarlo en la tabla tokens_confirmacion
+    verification_token_str = generate_verification_token()
+    token = TokenConfirmacion(
+        token=verification_token_str,
+        user_id=user.id,
+        type=TokenType.EMAIL_VERIFICATION,
+    )
+    db.add(token)
     db.commit()
     db.refresh(client)
     db.refresh(user)
     
     # TODO: 5️⃣ Enviar correo de verificación
-    # Aquí se enviará un correo con el verification_token
-    # URL ejemplo: https://tu-app.com/verify-email?token={verification_token}
-    # await send_verification_email(user.email, verification_token)
+    # Aquí se enviará un correo con el verification_token_str
+    # URL ejemplo: https://tu-app.com/verify-email?token={verification_token_str}
+    # await send_verification_email(user.email, verification_token_str)
     
     return client
 
@@ -92,20 +100,48 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     Verifica el email del usuario mediante el token enviado por correo.
     
     Flujo:
-    1. Buscar usuario con el token de verificación
-    2. Crear usuario en Cognito con email_verified=true
-    3. Actualizar usuario con cognito_sub y email_verified=true
-    4. Actualizar cliente a status ACTIVE
-    5. Limpiar verification_token
+    1. Buscar token en la tabla tokens_confirmacion
+    2. Validar que el token no haya sido usado y no esté expirado
+    3. Buscar usuario asociado al token
+    4. Crear usuario en Cognito con email_verified=true
+    5. Actualizar usuario con cognito_sub y email_verified=true
+    6. Actualizar cliente a status ACTIVE
+    7. Marcar token como usado
     """
     
-    # 1️⃣ Buscar usuario con el token
-    user = db.query(User).filter(User.verification_token == token).first()
+    # 1️⃣ Buscar token en la tabla tokens_confirmacion
+    token_record = db.query(TokenConfirmacion).filter(
+        TokenConfirmacion.token == token,
+        TokenConfirmacion.type == TokenType.EMAIL_VERIFICATION
+    ).first()
+    
+    if not token_record:
+        raise HTTPException(
+            status_code=400,
+            detail="Token de verificación inválido."
+        )
+    
+    # 2️⃣ Validar que el token no haya sido usado
+    if token_record.used:
+        raise HTTPException(
+            status_code=400,
+            detail="Este token ya ha sido utilizado."
+        )
+    
+    # 3️⃣ Validar que el token no esté expirado
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=400,
+            detail="Token de verificación expirado."
+        )
+    
+    # 4️⃣ Buscar usuario asociado al token
+    user = db.query(User).filter(User.id == token_record.user_id).first()
     
     if not user:
         raise HTTPException(
-            status_code=400,
-            detail="Token de verificación inválido o expirado."
+            status_code=404,
+            detail="Usuario no encontrado."
         )
     
     if user.email_verified:
@@ -159,10 +195,12 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     # 5️⃣ Actualizar usuario en la base de datos
     user.cognito_sub = cognito_sub
     user.email_verified = True
-    user.verification_token = None  # Limpiar el token
     
     # 6️⃣ Actualizar cliente a ACTIVE
     client.status = ClientStatus.ACTIVE
+    
+    # 7️⃣ Marcar token como usado
+    token_record.used = True
     
     db.commit()
     
