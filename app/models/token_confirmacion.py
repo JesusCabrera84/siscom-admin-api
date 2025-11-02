@@ -51,12 +51,9 @@ class TokenConfirmacion(SQLModel, table=True):
 
     created_at: datetime = Field(
         sa_column=Column(
-            TIMESTAMP(timezone=True), 
-            server_default=text("NOW()"), 
-            nullable=False
+            TIMESTAMP(timezone=True), server_default=text("NOW()"), nullable=False
         )
     )
 
     # Relationships
     user: "User" = Relationship(back_populates="tokens")
-

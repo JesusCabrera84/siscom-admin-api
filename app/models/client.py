@@ -59,7 +59,7 @@ class Client(SQLModel, table=True):
     devices: list["Device"] = Relationship(back_populates="client")
     subscriptions: list["Subscription"] = Relationship(
         back_populates="client",
-        sa_relationship_kwargs={"foreign_keys": "[Subscription.client_id]"}
+        sa_relationship_kwargs={"foreign_keys": "[Subscription.client_id]"},
     )
     active_subscription: Optional["Subscription"] = Relationship(
         sa_relationship_kwargs={

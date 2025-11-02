@@ -15,14 +15,14 @@ class UserCreate(UserBase):
     client_id: Optional[UUID] = None
     name: str = Field(..., min_length=1, description="Nombre del usuario")
     password: str = Field(..., min_length=8, description="Contraseña del usuario")
-    
-    @field_validator('password')
+
+    @field_validator("password")
     @classmethod
     def validate_password_field(cls, v: str) -> str:
         """Valida la contraseña usando el validador reutilizable."""
         return validate_password(v)
-    
-    @field_validator('name')
+
+    @field_validator("name")
     @classmethod
     def validate_name_field(cls, v: str) -> str:
         """Valida el nombre usando el validador reutilizable."""

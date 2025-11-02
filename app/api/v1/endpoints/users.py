@@ -28,13 +28,13 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     """
     Crea un usuario en AWS Cognito y lo registra en la base de datos.
     """
-    
+
     # 🔍 Verificar que el usuario no exista en la base de datos
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(
             status_code=400,
-            detail="El usuario con este correo electrónico ya existe en el sistema."
+            detail="El usuario con este correo electrónico ya existe en el sistema.",
         )
 
     try:
