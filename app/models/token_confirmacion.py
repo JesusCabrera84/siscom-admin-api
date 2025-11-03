@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 class TokenType(str, enum.Enum):
     EMAIL_VERIFICATION = "email_verification"
     PASSWORD_RESET = "password_reset"
+    INVITATION = "invitation"
 
 
 class TokenConfirmacion(SQLModel, table=True):
@@ -41,11 +42,29 @@ class TokenConfirmacion(SQLModel, table=True):
             String, default=TokenType.EMAIL_VERIFICATION.value, nullable=False
         )
     )
-    user_id: UUID = Field(
+    user_id: UUID | None = Field(
+        default=None,
         sa_column=Column(
             PGUUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False,
+            nullable=True,
+        )
+    )
+    # Campos adicionales para invitaciones
+    email: str | None = Field(
+        default=None,
+        sa_column=Column(String(255), nullable=True)
+    )
+    full_name: str | None = Field(
+        default=None,
+        sa_column=Column(String(255), nullable=True)
+    )
+    client_id: UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("clients.id", ondelete="CASCADE"),
+            nullable=True,
         )
     )
 

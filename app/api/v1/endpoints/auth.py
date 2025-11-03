@@ -84,6 +84,13 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
         auth_result = response.get("AuthenticationResult")
         
         if not auth_result:
+            # Puede ser que requiera un challenge (ej: cambio de contraseña)
+            challenge_name = response.get("ChallengeName")
+            if challenge_name:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Se requiere completar el challenge: {challenge_name}"
+                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Credenciales inválidas"
@@ -96,26 +103,35 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
         
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"].get("Message", str(e))
+        
+        # Log para debugging (en producción usar logger apropiado)
+        print(f"[AUTH ERROR] Code: {error_code}, Message: {error_message}, Email: {credentials.email}")
         
         if error_code == "NotAuthorizedException":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas"
+                detail=f"Credenciales inválidas. {error_message}"
             )
         elif error_code == "UserNotFoundException":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado"
+                detail="Usuario no encontrado en Cognito"
             )
         elif error_code == "UserNotConfirmedException":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Usuario no confirmado en Cognito"
             )
+        elif error_code == "InvalidParameterException":
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error de configuración: {error_message}"
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error de autenticación: {str(e)}"
+                detail=f"Error de autenticación [{error_code}]: {error_message}"
             )
     
     # 4️⃣ Actualizar el last_login_at del usuario

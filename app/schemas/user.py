@@ -95,3 +95,74 @@ class UserOut(UserBase):
                 "updated_at": "2024-01-15T10:30:00Z",
             }
         }
+
+
+class UserInvite(BaseModel):
+    """Schema para invitar un usuario."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario a invitar")
+    full_name: str = Field(..., min_length=1, description="Nombre completo del usuario")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "invitado@ejemplo.com",
+                "full_name": "Juan Pérez"
+            }
+        }
+
+
+class UserInviteResponse(BaseModel):
+    """Schema para la respuesta de invitación."""
+    detail: str
+    expires_at: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "detail": "Invitación enviada a invitado@ejemplo.com",
+                "expires_at": "2025-11-05T23:59:00"
+            }
+        }
+
+
+class UserAcceptInvitation(BaseModel):
+    """Schema para aceptar una invitación."""
+    token: str = Field(..., description="Token de invitación")
+    password: str = Field(..., min_length=8, description="Contraseña del usuario")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_field(cls, v: str) -> str:
+        """Valida la contraseña usando el validador reutilizable."""
+        return validate_password(v)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "abc123-def456-ghi789",
+                "password": "MiPassword123!"
+            }
+        }
+
+
+class UserAcceptInvitationResponse(BaseModel):
+    """Schema para la respuesta de aceptación de invitación."""
+    detail: str
+    user: UserOut
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "detail": "Usuario creado exitosamente.",
+                "user": {
+                    "id": "123e4567-e89b-12d3-a456-426614174000",
+                    "client_id": "223e4567-e89b-12d3-a456-426614174000",
+                    "email": "invitado@ejemplo.com",
+                    "full_name": "Juan Pérez",
+                    "is_master": False,
+                    "email_verified": True,
+                    "created_at": "2024-01-10T08:00:00Z",
+                    "updated_at": "2024-01-10T08:00:00Z",
+                }
+            }
+        }
