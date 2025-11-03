@@ -67,6 +67,11 @@ class TokenConfirmacion(SQLModel, table=True):
             nullable=True,
         )
     )
+    # Contraseña temporal (solo para EMAIL_VERIFICATION)
+    password_temp: str | None = Field(
+        default=None,
+        sa_column=Column(String(255), nullable=True)
+    )
 
     created_at: datetime = Field(
         sa_column=Column(

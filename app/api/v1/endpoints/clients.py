@@ -8,7 +8,7 @@ from app.models.client import Client, ClientStatus
 from app.models.user import User
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.schemas.client import ClientOut, ClientCreate
-from app.utils.security import hash_password, generate_verification_token
+from app.utils.security import generate_verification_token
 from app.core.config import settings
 from botocore.exceptions import ClientError
 import boto3
@@ -56,28 +56,26 @@ def create_client(data: ClientCreate, db: Session = Depends(get_db)):
     db.add(client)
     db.flush()  # Para obtener el id del cliente
 
-    # 2️⃣ Hashear la contraseña
-    password_hashed = hash_password(data.password)
-
-    # 3️⃣ Crear usuario master asociado al cliente
+    # 2️⃣ Crear usuario master asociado al cliente (sin password_hash, sin cognito_sub)
     user = User(
         client_id=client.id,
         email=data.email,
         full_name=data.name,
         is_master=True,
-        password_hash=password_hashed,
         email_verified=False,
+        # password_hash no se usa, la autenticación es con Cognito
         # cognito_sub se asignará después de la verificación
     )
     db.add(user)
     db.flush()  # Para obtener el id del usuario
 
-    # 4️⃣ Generar token de verificación y guardarlo en la tabla tokens_confirmacion
+    # 3️⃣ Generar token de verificación y guardar la contraseña temporalmente
     verification_token_str = generate_verification_token()
     token = TokenConfirmacion(
         token=verification_token_str,
         user_id=user.id,
         type=TokenType.EMAIL_VERIFICATION,
+        password_temp=data.password,  # Guardar contraseña temporalmente para Cognito
     )
     db.add(token)
     db.commit()
@@ -143,8 +141,15 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Cliente no encontrado.")
 
+    # 5️⃣ Validar que el token tenga contraseña temporal
+    if not token_record.password_temp:
+        raise HTTPException(
+            status_code=500,
+            detail="Token sin contraseña temporal. No se puede completar la verificación."
+        )
+
     try:
-        # 3️⃣ Crear usuario en Cognito con email verificado
+        # 6️⃣ Crear usuario en Cognito con email verificado
         cognito_resp = cognito.admin_create_user(
             UserPoolId=settings.COGNITO_USER_POOL_ID,
             Username=user.email,
@@ -156,33 +161,47 @@ def verify_email(token: str, db: Session = Depends(get_db)):
             MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
         )
 
-        # 4️⃣ Establecer contraseña temporal en Cognito
-        # El usuario recibirá un correo de Cognito para establecer su contraseña
-        # O pueden usar el flujo de "forgot password" después de verificar el email
-        # Otra opción: usar admin_create_user sin MessageAction="SUPPRESS"
-        # para que Cognito envíe el correo con contraseña temporal
+        # 7️⃣ Establecer contraseña permanente del usuario
+        cognito.admin_set_user_password(
+            UserPoolId=settings.COGNITO_USER_POOL_ID,
+            Username=user.email,
+            Password=token_record.password_temp,
+            Permanent=True,  # Contraseña permanente, no temporal
+        )
 
-        # Obtener el cognito_sub
-        cognito_sub = cognito_resp["User"]["Attributes"][0]["Value"]
+        # 8️⃣ Obtener el cognito_sub
+        cognito_sub = next(
+            (attr["Value"] for attr in cognito_resp["User"]["Attributes"] if attr["Name"] == "sub"),
+            None
+        )
+        
+        if not cognito_sub:
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudo obtener el cognito_sub del usuario creado"
+            )
 
     except ClientError as e:
-        if e.response["Error"]["Code"] == "UsernameExistsException":
+        error_code = e.response["Error"]["Code"]
+        if error_code == "UsernameExistsException":
             raise HTTPException(
                 status_code=400, detail="El usuario ya existe en Cognito."
             )
         raise HTTPException(
-            status_code=500, detail=f"Error al crear usuario en Cognito: {str(e)}"
+            status_code=500,
+            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}"
         )
 
-    # 5️⃣ Actualizar usuario en la base de datos
+    # 9️⃣ Actualizar usuario en la base de datos
     user.cognito_sub = cognito_sub
     user.email_verified = True
 
-    # 6️⃣ Actualizar cliente a ACTIVE
+    # 🔟 Actualizar cliente a ACTIVE
     client.status = ClientStatus.ACTIVE
 
-    # 7️⃣ Marcar token como usado
+    # 1️⃣1️⃣ Marcar token como usado y limpiar contraseña temporal
     token_record.used = True
+    token_record.password_temp = None  # Limpiar contraseña por seguridad
 
     db.commit()
 

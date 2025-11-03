@@ -8,7 +8,6 @@ from app.api.deps import get_current_client_id, get_current_user_full
 from app.models.user import User
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.schemas.user import (
-    UserCreate, 
     UserOut, 
     UserInvite, 
     UserInviteResponse,
@@ -28,83 +27,6 @@ router = APIRouter()
 # Cognito client
 # ------------------------------------------
 cognito = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
-
-
-# ------------------------------------------
-# Crear usuario
-# ------------------------------------------
-@router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    """
-    Crea un usuario en AWS Cognito y lo registra en la base de datos.
-    """
-
-    # 🔍 Verificar que el usuario no exista en la base de datos
-    existing_user = db.query(User).filter(User.email == user.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="El usuario con este correo electrónico ya existe en el sistema.",
-        )
-
-    try:
-        # 1️⃣ Crear usuario en Cognito
-        cognito_resp = cognito.admin_create_user(
-            UserPoolId=settings.COGNITO_USER_POOL_ID,
-            Username=user.email,
-            UserAttributes=[
-                {"Name": "email", "Value": user.email},
-                {"Name": "email_verified", "Value": "true"},  # Marcar email como verificado
-                {"Name": "name", "Value": user.name},
-            ],
-            DesiredDeliveryMediums=["EMAIL"],  # o "SMS"
-            MessageAction="SUPPRESS",  # evita que Cognito envíe correo automático
-        )
-
-        # 2️⃣ Establecer contraseña proporcionada por el usuario (permanente)
-        cognito.admin_set_user_password(
-            UserPoolId=settings.COGNITO_USER_POOL_ID,
-            Username=user.email,
-            Password=user.password,
-            Permanent=True,  # Esto evita el estado FORCE_CHANGE_PASSWORD
-        )
-
-        # 3️⃣ Extraer el cognito_sub del usuario creado
-        cognito_sub = next(
-            (attr["Value"] for attr in cognito_resp["User"]["Attributes"] if attr["Name"] == "sub"),
-            None
-        )
-
-        if not cognito_sub:
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudo obtener el cognito_sub del usuario creado"
-            )
-
-    except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-        if error_code == "UsernameExistsException":
-            raise HTTPException(
-                status_code=400, detail="El usuario ya existe en Cognito."
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}"
-        )
-
-    # 4️⃣ Guardar usuario en la base de datos
-    new_user = User(
-        email=user.email,
-        full_name=user.name,  # Usamos el campo 'name' recibido
-        cognito_sub=cognito_sub,
-        is_master=user.is_master,
-        client_id=user.client_id,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return new_user
 
 
 @router.get("/", response_model=List[UserOut])
@@ -330,6 +252,7 @@ def accept_invitation(
         cognito_sub=cognito_sub,
         is_master=False,
         email_verified=True,
+        # password_hash no se usa, la autenticación es con Cognito
     )
     
     db.add(new_user)
