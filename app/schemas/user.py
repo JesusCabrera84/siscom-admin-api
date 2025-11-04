@@ -222,3 +222,109 @@ class ResetPasswordResponse(BaseModel):
                 "message": "Contraseña restablecida exitosamente. Ahora puede iniciar sesión con su nueva contraseña."
             }
         }
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema para cambiar contraseña de usuario autenticado."""
+    old_password: str = Field(..., min_length=1, description="Contraseña actual del usuario")
+    new_password: str = Field(..., min_length=8, description="Nueva contraseña del usuario")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_field(cls, v: str) -> str:
+        """Valida la contraseña usando el validador reutilizable."""
+        return validate_password(v)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "old_password": "MiPwdAnterior123",
+                "new_password": "NuevoPwdFuerte456!"
+            }
+        }
+
+
+class ChangePasswordResponse(BaseModel):
+    """Schema para la respuesta de cambio de contraseña."""
+    message: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Contraseña actualizada exitosamente."
+            }
+        }
+
+
+class ResendVerificationRequest(BaseModel):
+    """Schema para reenviar verificación de email."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@example.com"
+            }
+        }
+
+
+class ResendVerificationResponse(BaseModel):
+    """Schema para la respuesta de reenvío de verificación."""
+    message: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Si la cuenta existe, se ha reenviado el correo de verificación."
+            }
+        }
+
+
+class ConfirmEmailRequest(BaseModel):
+    """Schema para confirmar email con token."""
+    token: str = Field(..., description="Token de verificación de email")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "abc123-def456-ghi789"
+            }
+        }
+
+
+class ConfirmEmailResponse(BaseModel):
+    """Schema para la respuesta de confirmación de email."""
+    message: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Email verificado exitosamente. Ahora puede iniciar sesión."
+            }
+        }
+
+
+class ResendInvitationRequest(BaseModel):
+    """Schema para reenviar invitación a un usuario."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario invitado")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "invitado@ejemplo.com"
+            }
+        }
+
+
+class ResendInvitationResponse(BaseModel):
+    """Schema para la respuesta de reenvío de invitación."""
+    message: str
+    expires_at: datetime
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Invitación reenviada a invitado@ejemplo.com",
+                "expires_at": "2025-11-07T23:59:00"
+            }
+        }

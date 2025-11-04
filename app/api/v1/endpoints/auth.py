@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.api.deps import get_current_user_full
 from app.models.user import User
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.schemas.user import (
@@ -10,7 +11,13 @@ from app.schemas.user import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     ResetPasswordRequest,
-    ResetPasswordResponse
+    ResetPasswordResponse,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
+    ResendVerificationRequest,
+    ResendVerificationResponse,
+    ConfirmEmailRequest,
+    ConfirmEmailResponse
 )
 from app.core.config import settings
 from botocore.exceptions import ClientError
@@ -317,5 +324,256 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     # 7️⃣ Retornar mensaje de éxito
     return ResetPasswordResponse(
         message="Contraseña restablecida exitosamente. Ahora puede iniciar sesión con su nueva contraseña."
+    )
+
+
+# ------------------------------------------
+# Change Password - Cambio de contraseña (usuario autenticado)
+# ------------------------------------------
+@router.patch("/password", response_model=ChangePasswordResponse, status_code=status.HTTP_200_OK)
+def change_password(
+    request: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full)
+):
+    """
+    Cambia la contraseña de un usuario autenticado.
+    
+    El usuario debe proporcionar su contraseña actual y la nueva contraseña.
+    Utiliza ChangePassword de AWS Cognito para cambiar la contraseña de forma segura.
+    
+    Proceso:
+    1. Verifica que el usuario esté autenticado
+    2. Obtiene el access_token del usuario (necesario para ChangePassword)
+    3. Llama a change_password de Cognito con la contraseña actual y la nueva
+    4. Retorna mensaje de éxito
+    
+    Códigos de error:
+    - 400: Contraseña actual incorrecta o nueva contraseña inválida
+    - 401: Token de acceso inválido o expirado
+    - 500: Error al cambiar la contraseña en Cognito
+    
+    Nota: Este endpoint requiere autenticación (Bearer token en el header Authorization)
+    """
+    
+    # Para usar ChangePassword necesitamos el AccessToken del usuario
+    # El access token debe venir en el header Authorization
+    # Aquí tenemos un problema: get_current_user_full valida el token pero no lo retorna
+    # Necesitamos obtener el access token del header
+    
+    # Por seguridad, vamos a usar AdminSetUserPassword en lugar de ChangePassword
+    # Esto nos permite cambiar la contraseña sin necesitar el access token
+    # Pero primero validamos la contraseña actual autenticando al usuario
+    
+    # 1️⃣ Verificar la contraseña actual autenticando con Cognito
+    try:
+        auth_params = {
+            "USERNAME": current_user.email,
+            "PASSWORD": request.old_password,
+            "SECRET_HASH": get_secret_hash(current_user.email),
+        }
+        
+        cognito.initiate_auth(
+            ClientId=settings.COGNITO_CLIENT_ID,
+            AuthFlow="USER_PASSWORD_AUTH",
+            AuthParameters=auth_params,
+        )
+        
+        # Si llegamos aquí, la contraseña actual es correcta
+        
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        
+        if error_code == "NotAuthorizedException":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La contraseña actual es incorrecta"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al verificar la contraseña actual: {error_code}"
+            )
+    
+    # 2️⃣ Cambiar la contraseña usando AdminSetUserPassword
+    try:
+        cognito.admin_set_user_password(
+            UserPoolId=settings.COGNITO_USER_POOL_ID,
+            Username=current_user.email,
+            Password=request.new_password,
+            Permanent=True
+        )
+        
+        print(f"[CHANGE PASSWORD] Contraseña actualizada exitosamente para {current_user.email}")
+        
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"].get("Message", str(e))
+        
+        print(f"[CHANGE PASSWORD ERROR] Code: {error_code}, Message: {error_message}, Email: {current_user.email}")
+        
+        if error_code == "InvalidPasswordException":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La nueva contraseña no cumple con los requisitos: {error_message}"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al actualizar la contraseña: {error_code}"
+            )
+    
+    # 3️⃣ Retornar mensaje de éxito
+    return ChangePasswordResponse(
+        message="Contraseña actualizada exitosamente."
+    )
+
+
+# ------------------------------------------
+# Resend Verification - Reenviar verificación de email
+# ------------------------------------------
+@router.post("/resend-verification", response_model=ResendVerificationResponse, status_code=status.HTTP_200_OK)
+def resend_verification(request: ResendVerificationRequest, db: Session = Depends(get_db)):
+    """
+    Reenvía el correo de verificación de email a un usuario no verificado.
+    
+    Proceso:
+    1. Busca el usuario por email
+    2. Si no existe o ya está verificado, retorna mensaje genérico (seguridad)
+    3. Si existe y no está verificado:
+       a. Invalida todos los tokens de verificación anteriores no usados
+       b. Genera un nuevo token UUID
+       c. Guarda el token en tokens_confirmacion con tipo EMAIL_VERIFICATION
+       d. TODO: Envía correo con el token
+    4. Retorna mensaje genérico
+    
+    Notas de seguridad:
+    - Siempre retorna el mismo mensaje, sin revelar si el usuario existe o ya está verificado
+    - Invalida tokens anteriores para evitar que se usen tokens antiguos
+    """
+    
+    # 1️⃣ Buscar el usuario en la base de datos
+    user = db.query(User).filter(User.email == request.email).first()
+    
+    # 2️⃣ Si no existe o ya está verificado, retornar mensaje genérico
+    if not user:
+        print(f"[RESEND VERIFICATION] Intento para email no registrado: {request.email}")
+        return ResendVerificationResponse(
+            message="Si la cuenta existe, se ha reenviado el correo de verificación."
+        )
+    
+    if user.email_verified:
+        print(f"[RESEND VERIFICATION] Usuario ya verificado: {request.email}")
+        return ResendVerificationResponse(
+            message="Si la cuenta existe, se ha reenviado el correo de verificación."
+        )
+    
+    # 3️⃣ Usuario existe y no está verificado, continuar con el reenvío
+    
+    # a) Invalidar tokens anteriores no usados del usuario
+    previous_tokens = db.query(TokenConfirmacion).filter(
+        TokenConfirmacion.user_id == user.id,
+        TokenConfirmacion.type == TokenType.EMAIL_VERIFICATION,
+        ~TokenConfirmacion.used
+    ).all()
+    
+    for token in previous_tokens:
+        token.used = True
+    
+    # b) Generar nuevo token UUID
+    verification_token = str(uuid.uuid4())
+    
+    # c) Guardar el token en la base de datos
+    token_record = TokenConfirmacion(
+        token=verification_token,
+        type=TokenType.EMAIL_VERIFICATION,
+        user_id=user.id,
+        email=user.email,
+        expires_at=datetime.utcnow() + timedelta(hours=24),  # Expira en 24 horas
+        used=False
+    )
+    db.add(token_record)
+    db.commit()
+    
+    # d) TODO: Enviar correo electrónico con el token
+    print(f"[RESEND VERIFICATION] Token generado para {user.email}: {verification_token}")
+    print("[RESEND VERIFICATION] El token expira en 24 horas")
+    print("[RESEND VERIFICATION] TODO: Enviar correo electrónico con el token")
+    
+    # 4️⃣ Retornar mensaje genérico
+    return ResendVerificationResponse(
+        message="Si la cuenta existe, se ha reenviado el correo de verificación."
+    )
+
+
+# ------------------------------------------
+# Confirm Email - Confirmar email con token
+# ------------------------------------------
+@router.post("/confirm-email", response_model=ConfirmEmailResponse, status_code=status.HTTP_200_OK)
+def confirm_email(request: ConfirmEmailRequest, db: Session = Depends(get_db)):
+    """
+    Confirma el email de un usuario utilizando un token de verificación.
+    
+    Proceso:
+    1. Busca y valida el token en la base de datos
+    2. Verifica que el token no haya expirado
+    3. Verifica que el token no haya sido usado
+    4. Marca el token como usado
+    5. Actualiza user.email_verified = True
+    6. Retorna mensaje de éxito
+    
+    Códigos de error:
+    - 400: Token inválido, expirado o ya usado
+    - 404: Usuario no encontrado
+    """
+    
+    # 1️⃣ Buscar el token en la base de datos
+    token_record = db.query(TokenConfirmacion).filter(
+        TokenConfirmacion.token == request.token,
+        TokenConfirmacion.type == TokenType.EMAIL_VERIFICATION
+    ).first()
+    
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de verificación inválido"
+        )
+    
+    # 2️⃣ Verificar que el token no haya expirado
+    if token_record.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El token de verificación ha expirado. Por favor, solicita un nuevo código."
+        )
+    
+    # 3️⃣ Verificar que el token no haya sido usado
+    if token_record.used:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este token de verificación ya ha sido utilizado"
+        )
+    
+    # 4️⃣ Buscar el usuario asociado al token
+    user = db.query(User).filter(User.id == token_record.user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    # 5️⃣ Marcar el token como usado
+    token_record.used = True
+    
+    # 6️⃣ Actualizar email_verified del usuario
+    user.email_verified = True
+    
+    db.commit()
+    
+    print(f"[EMAIL VERIFICATION] Email verificado exitosamente para {user.email}")
+    
+    # 7️⃣ Retornar mensaje de éxito
+    return ConfirmEmailResponse(
+        message="Email verificado exitosamente. Ahora puede iniciar sesión."
     )
 

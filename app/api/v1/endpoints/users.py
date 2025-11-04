@@ -12,7 +12,9 @@ from app.schemas.user import (
     UserInvite, 
     UserInviteResponse,
     UserAcceptInvitation,
-    UserAcceptInvitationResponse
+    UserAcceptInvitationResponse,
+    ResendInvitationRequest,
+    ResendInvitationResponse
 )
 from app.core.config import settings
 from app.utils.security import generate_verification_token
@@ -267,4 +269,100 @@ def accept_invitation(
     return UserAcceptInvitationResponse(
         detail="Usuario creado exitosamente.",
         user=new_user
+    )
+
+
+@router.post("/resend-invitation", response_model=ResendInvitationResponse, status_code=status.HTTP_200_OK)
+def resend_invitation(
+    data: ResendInvitationRequest,
+    current_user: User = Depends(get_current_user_full),
+    db: Session = Depends(get_db),
+):
+    """
+    Reenvía una invitación a un usuario que no ha aceptado su invitación original.
+    
+    Solo usuarios maestros pueden reenviar invitaciones.
+    
+    Flujo:
+    1. Verificar que el usuario autenticado sea maestro
+    2. Buscar invitación(es) existente(s) para ese email
+    3. Verificar que no sea un usuario ya registrado
+    4. Invalidar invitación(es) anterior(es) no usada(s)
+    5. Generar nueva invitación con nuevo token y nueva expiración
+    6. TODO: Enviar email con nueva URL de invitación
+    7. Responder con confirmación y nueva fecha de expiración
+    
+    Códigos de error:
+    - 403: Usuario no es maestro
+    - 400: No existe invitación pendiente o el usuario ya está registrado
+    """
+    
+    # 1️⃣ Verificar que el usuario autenticado sea maestro
+    if not current_user.is_master:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los usuarios maestros pueden reenviar invitaciones."
+        )
+    
+    # 2️⃣ Verificar que el email NO esté ya registrado
+    existing_user = db.query(User).filter(User.email == data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El usuario {data.email} ya está registrado en el sistema."
+        )
+    
+    # 3️⃣ Buscar invitaciones existentes para este email (incluyendo expiradas)
+    existing_invitations = (
+        db.query(TokenConfirmacion)
+        .filter(
+            TokenConfirmacion.email == data.email,
+            TokenConfirmacion.type == TokenType.INVITATION,
+            TokenConfirmacion.client_id == current_user.client_id,
+            ~TokenConfirmacion.used
+        )
+        .all()
+    )
+    
+    if not existing_invitations:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No existe una invitación pendiente para {data.email} en este cliente."
+        )
+    
+    # 4️⃣ Obtener datos de la invitación original (full_name)
+    original_invitation = existing_invitations[0]
+    full_name = original_invitation.full_name
+    
+    # 5️⃣ Invalidar todas las invitaciones anteriores no usadas
+    for invitation in existing_invitations:
+        invitation.used = True
+    
+    # 6️⃣ Generar nueva invitación
+    new_token = generate_verification_token()
+    expires_at = datetime.utcnow() + timedelta(days=3)
+    
+    new_invitation = TokenConfirmacion(
+        token=new_token,
+        client_id=current_user.client_id,
+        email=data.email,
+        full_name=full_name,
+        expires_at=expires_at,
+        used=False,
+        type=TokenType.INVITATION,
+    )
+    
+    db.add(new_invitation)
+    db.commit()
+    db.refresh(new_invitation)
+    
+    # 7️⃣ TODO: Enviar email con la nueva URL de invitación
+    print(f"[RESEND INVITATION] Nueva invitación generada para {data.email} por {current_user.email}")
+    print(f"[RESEND INVITATION] Token: {new_token}")
+    print(f"[RESEND INVITATION] Expira: {expires_at}")
+    print("[RESEND INVITATION] TODO: Enviar correo electrónico con el token")
+    
+    return ResendInvitationResponse(
+        message=f"Invitación reenviada a {data.email}",
+        expires_at=expires_at
     )
