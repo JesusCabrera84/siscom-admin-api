@@ -8,13 +8,13 @@ from app.api.deps import get_current_client_id, get_current_user_full
 from app.models.user import User
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.schemas.user import (
-    UserOut, 
-    UserInvite, 
+    UserOut,
+    UserInvite,
     UserInviteResponse,
     UserAcceptInvitation,
     UserAcceptInvitationResponse,
     ResendInvitationRequest,
-    ResendInvitationResponse
+    ResendInvitationResponse,
 )
 from app.core.config import settings
 from app.utils.security import generate_verification_token
@@ -53,7 +53,9 @@ def get_current_user_info(
     return current_user
 
 
-@router.post("/invite", response_model=UserInviteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invite", response_model=UserInviteResponse, status_code=status.HTTP_201_CREATED
+)
 def invite_user(
     data: UserInvite,
     current_user: User = Depends(get_current_user_full),
@@ -61,7 +63,7 @@ def invite_user(
 ):
     """
     Permite a un usuario maestro invitar a un nuevo usuario.
-    
+
     Flujo:
     1. Verificar que el usuario autenticado sea maestro (is_master=True)
     2. Verificar que el email no esté ya registrado en la tabla users
@@ -69,22 +71,22 @@ def invite_user(
     4. Enviar email con la URL de invitación (TODO)
     5. Responder con confirmación y fecha de expiración
     """
-    
+
     # 1️⃣ Verificar que el usuario autenticado sea maestro
     if not current_user.is_master:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo los usuarios maestros pueden enviar invitaciones."
+            detail="Solo los usuarios maestros pueden enviar invitaciones.",
         )
-    
+
     # 2️⃣ Verificar que el email no esté ya registrado
     existing_user = db.query(User).filter(User.email == data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya existe un usuario registrado con el email {data.email}."
+            detail=f"Ya existe un usuario registrado con el email {data.email}.",
         )
-    
+
     # 3️⃣ Verificar que no haya una invitación pendiente para este email
     existing_invitation = (
         db.query(TokenConfirmacion)
@@ -92,20 +94,20 @@ def invite_user(
             TokenConfirmacion.email == data.email,
             TokenConfirmacion.type == TokenType.INVITATION,
             ~TokenConfirmacion.used,
-            TokenConfirmacion.expires_at > datetime.utcnow()
+            TokenConfirmacion.expires_at > datetime.utcnow(),
         )
         .first()
     )
     if existing_invitation:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya existe una invitación pendiente para {data.email}."
+            detail=f"Ya existe una invitación pendiente para {data.email}.",
         )
-    
+
     # 4️⃣ Generar token de invitación
     invitation_token = generate_verification_token()
     expires_at = datetime.utcnow() + timedelta(days=3)
-    
+
     token_record = TokenConfirmacion(
         token=invitation_token,
         client_id=current_user.client_id,
@@ -114,30 +116,33 @@ def invite_user(
         expires_at=expires_at,
         used=False,
         type=TokenType.INVITATION,
-        user_id=None  # No hay user_id todavía, se creará al aceptar
+        user_id=None,  # No hay user_id todavía, se creará al aceptar
     )
-    
+
     db.add(token_record)
     db.commit()
-    
+
     # TODO: 5️⃣ Enviar correo con la URL de invitación
     # URL ejemplo: https://tu-app.com/accept-invitation?token={invitation_token}
     # await send_invitation_email(data.email, invitation_token, data.full_name)
-    
+
     return UserInviteResponse(
-        detail=f"Invitación enviada a {data.email}",
-        expires_at=expires_at
+        detail=f"Invitación enviada a {data.email}", expires_at=expires_at
     )
 
 
-@router.post("/accept-invitation", response_model=UserAcceptInvitationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/accept-invitation",
+    response_model=UserAcceptInvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def accept_invitation(
     data: UserAcceptInvitation,
     db: Session = Depends(get_db),
 ):
     """
     Permite a un usuario invitado aceptar la invitación y crear su cuenta.
-    
+
     Flujo:
     1. Buscar token en tokens_confirmacion y validar
     2. Extraer email y client_id del token
@@ -146,7 +151,7 @@ def accept_invitation(
     5. Marcar token como usado
     6. Responder con información del usuario creado
     """
-    
+
     # 1️⃣ Buscar token en la tabla tokens_confirmacion
     token_record = (
         db.query(TokenConfirmacion)
@@ -156,64 +161,64 @@ def accept_invitation(
         )
         .first()
     )
-    
+
     if not token_record:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token de invitación inválido."
+            detail="Token de invitación inválido.",
         )
-    
+
     # 2️⃣ Validar que el token no haya sido usado
     if token_record.used:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este token ya ha sido utilizado."
+            detail="Este token ya ha sido utilizado.",
         )
-    
+
     # 3️⃣ Validar que el token no esté expirado
     if token_record.expires_at < datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token de invitación expirado."
+            detail="Token de invitación expirado.",
         )
-    
+
     # 4️⃣ Extraer email, full_name y client_id del token
     email = token_record.email
     full_name = token_record.full_name
     client_id = token_record.client_id
-    
+
     if not email or not client_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Datos de invitación incompletos."
+            detail="Datos de invitación incompletos.",
         )
-    
+
     # 5️⃣ Verificar que el usuario no exista (doble validación)
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Ya existe un usuario con el email {email}."
+            detail=f"Ya existe un usuario con el email {email}.",
         )
-    
+
     try:
         # 6️⃣ Crear usuario en Cognito con email verificado
         user_attributes = [
             {"Name": "email", "Value": email},
             {"Name": "email_verified", "Value": "true"},
         ]
-        
+
         # Agregar nombre si está disponible
         if full_name:
             user_attributes.append({"Name": "name", "Value": full_name})
-        
+
         cognito_resp = cognito.admin_create_user(
             UserPoolId=settings.COGNITO_USER_POOL_ID,
             Username=email,
             UserAttributes=user_attributes,
             MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
         )
-        
+
         # 7️⃣ Establecer contraseña proporcionada por el usuario (permanente)
         cognito.admin_set_user_password(
             UserPoolId=settings.COGNITO_USER_POOL_ID,
@@ -221,31 +226,35 @@ def accept_invitation(
             Password=data.password,
             Permanent=True,  # Esto evita el estado FORCE_CHANGE_PASSWORD
         )
-        
+
         # 8️⃣ Obtener el cognito_sub
         cognito_sub = next(
-            (attr["Value"] for attr in cognito_resp["User"]["Attributes"] if attr["Name"] == "sub"),
-            None
+            (
+                attr["Value"]
+                for attr in cognito_resp["User"]["Attributes"]
+                if attr["Name"] == "sub"
+            ),
+            None,
         )
-        
+
         if not cognito_sub:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo obtener el identificador de Cognito."
+                detail="No se pudo obtener el identificador de Cognito.",
             )
-    
+
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
         if error_code == "UsernameExistsException":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El usuario ya existe en Cognito."
+                detail="El usuario ya existe en Cognito.",
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}"
+            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
         )
-    
+
     # 9️⃣ Crear usuario en la base de datos
     new_user = User(
         email=email,
@@ -256,23 +265,26 @@ def accept_invitation(
         email_verified=True,
         # password_hash no se usa, la autenticación es con Cognito
     )
-    
+
     db.add(new_user)
-    
+
     # 🔟 Marcar token como usado
     token_record.used = True
     token_record.user_id = new_user.id  # Asociar el user_id creado
-    
+
     db.commit()
     db.refresh(new_user)
-    
+
     return UserAcceptInvitationResponse(
-        detail="Usuario creado exitosamente.",
-        user=new_user
+        detail="Usuario creado exitosamente.", user=new_user
     )
 
 
-@router.post("/resend-invitation", response_model=ResendInvitationResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/resend-invitation",
+    response_model=ResendInvitationResponse,
+    status_code=status.HTTP_200_OK,
+)
 def resend_invitation(
     data: ResendInvitationRequest,
     current_user: User = Depends(get_current_user_full),
@@ -280,9 +292,9 @@ def resend_invitation(
 ):
     """
     Reenvía una invitación a un usuario que no ha aceptado su invitación original.
-    
+
     Solo usuarios maestros pueden reenviar invitaciones.
-    
+
     Flujo:
     1. Verificar que el usuario autenticado sea maestro
     2. Buscar invitación(es) existente(s) para ese email
@@ -291,27 +303,27 @@ def resend_invitation(
     5. Generar nueva invitación con nuevo token y nueva expiración
     6. TODO: Enviar email con nueva URL de invitación
     7. Responder con confirmación y nueva fecha de expiración
-    
+
     Códigos de error:
     - 403: Usuario no es maestro
     - 400: No existe invitación pendiente o el usuario ya está registrado
     """
-    
+
     # 1️⃣ Verificar que el usuario autenticado sea maestro
     if not current_user.is_master:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo los usuarios maestros pueden reenviar invitaciones."
+            detail="Solo los usuarios maestros pueden reenviar invitaciones.",
         )
-    
+
     # 2️⃣ Verificar que el email NO esté ya registrado
     existing_user = db.query(User).filter(User.email == data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El usuario {data.email} ya está registrado en el sistema."
+            detail=f"El usuario {data.email} ya está registrado en el sistema.",
         )
-    
+
     # 3️⃣ Buscar invitaciones existentes para este email (incluyendo expiradas)
     existing_invitations = (
         db.query(TokenConfirmacion)
@@ -319,29 +331,29 @@ def resend_invitation(
             TokenConfirmacion.email == data.email,
             TokenConfirmacion.type == TokenType.INVITATION,
             TokenConfirmacion.client_id == current_user.client_id,
-            ~TokenConfirmacion.used
+            ~TokenConfirmacion.used,
         )
         .all()
     )
-    
+
     if not existing_invitations:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No existe una invitación pendiente para {data.email} en este cliente."
+            detail=f"No existe una invitación pendiente para {data.email} en este cliente.",
         )
-    
+
     # 4️⃣ Obtener datos de la invitación original (full_name)
     original_invitation = existing_invitations[0]
     full_name = original_invitation.full_name
-    
+
     # 5️⃣ Invalidar todas las invitaciones anteriores no usadas
     for invitation in existing_invitations:
         invitation.used = True
-    
+
     # 6️⃣ Generar nueva invitación
     new_token = generate_verification_token()
     expires_at = datetime.utcnow() + timedelta(days=3)
-    
+
     new_invitation = TokenConfirmacion(
         token=new_token,
         client_id=current_user.client_id,
@@ -351,18 +363,19 @@ def resend_invitation(
         used=False,
         type=TokenType.INVITATION,
     )
-    
+
     db.add(new_invitation)
     db.commit()
     db.refresh(new_invitation)
-    
+
     # 7️⃣ TODO: Enviar email con la nueva URL de invitación
-    print(f"[RESEND INVITATION] Nueva invitación generada para {data.email} por {current_user.email}")
+    print(
+        f"[RESEND INVITATION] Nueva invitación generada para {data.email} por {current_user.email}"
+    )
     print(f"[RESEND INVITATION] Token: {new_token}")
     print(f"[RESEND INVITATION] Expira: {expires_at}")
     print("[RESEND INVITATION] TODO: Enviar correo electrónico con el token")
-    
+
     return ResendInvitationResponse(
-        message=f"Invitación reenviada a {data.email}",
-        expires_at=expires_at
+        message=f"Invitación reenviada a {data.email}", expires_at=expires_at
     )

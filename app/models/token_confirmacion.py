@@ -48,16 +48,14 @@ class TokenConfirmacion(SQLModel, table=True):
             PGUUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
             nullable=True,
-        )
+        ),
     )
     # Campos adicionales para invitaciones
     email: str | None = Field(
-        default=None,
-        sa_column=Column(String(255), nullable=True)
+        default=None, sa_column=Column(String(255), nullable=True)
     )
     full_name: str | None = Field(
-        default=None,
-        sa_column=Column(String(255), nullable=True)
+        default=None, sa_column=Column(String(255), nullable=True)
     )
     client_id: UUID | None = Field(
         default=None,
@@ -65,12 +63,11 @@ class TokenConfirmacion(SQLModel, table=True):
             PGUUID(as_uuid=True),
             ForeignKey("clients.id", ondelete="CASCADE"),
             nullable=True,
-        )
+        ),
     )
     # Contraseña temporal (solo para EMAIL_VERIFICATION)
     password_temp: str | None = Field(
-        default=None,
-        sa_column=Column(String(255), nullable=True)
+        default=None, sa_column=Column(String(255), nullable=True)
     )
 
     created_at: datetime = Field(

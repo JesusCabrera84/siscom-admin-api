@@ -31,20 +31,19 @@ class UserCreate(UserBase):
 
 class UserLogin(BaseModel):
     """Schema para la petición de login."""
+
     email: EmailStr = Field(..., description="Correo electrónico del usuario")
     password: str = Field(..., min_length=1, description="Contraseña del usuario")
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "email": "usuario@example.com",
-                "password": "MiPassword123!"
-            }
+            "example": {"email": "usuario@example.com", "password": "MiPassword123!"}
         }
 
 
 class UserLoginResponse(BaseModel):
     """Schema para la respuesta de login."""
+
     user: "UserOut"
     access_token: str
     id_token: str
@@ -65,7 +64,7 @@ class UserLoginResponse(BaseModel):
                 "id_token": "eyJraWQiOiJ...",
                 "refresh_token": "eyJjdHkiOiJ...",
                 "token_type": "Bearer",
-                "expires_in": 3600
+                "expires_in": 3600,
             }
         }
 
@@ -99,20 +98,19 @@ class UserOut(UserBase):
 
 class UserInvite(BaseModel):
     """Schema para invitar un usuario."""
+
     email: EmailStr = Field(..., description="Correo electrónico del usuario a invitar")
     full_name: str = Field(..., min_length=1, description="Nombre completo del usuario")
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "email": "invitado@ejemplo.com",
-                "full_name": "Juan Pérez"
-            }
+            "example": {"email": "invitado@ejemplo.com", "full_name": "Juan Pérez"}
         }
 
 
 class UserInviteResponse(BaseModel):
     """Schema para la respuesta de invitación."""
+
     detail: str
     expires_at: datetime
 
@@ -120,13 +118,14 @@ class UserInviteResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "detail": "Invitación enviada a invitado@ejemplo.com",
-                "expires_at": "2025-11-05T23:59:00"
+                "expires_at": "2025-11-05T23:59:00",
             }
         }
 
 
 class UserAcceptInvitation(BaseModel):
     """Schema para aceptar una invitación."""
+
     token: str = Field(..., description="Token de invitación")
     password: str = Field(..., min_length=8, description="Contraseña del usuario")
 
@@ -138,15 +137,13 @@ class UserAcceptInvitation(BaseModel):
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "token": "abc123-def456-ghi789",
-                "password": "MiPassword123!"
-            }
+            "example": {"token": "abc123-def456-ghi789", "password": "MiPassword123!"}
         }
 
 
 class UserAcceptInvitationResponse(BaseModel):
     """Schema para la respuesta de aceptación de invitación."""
+
     detail: str
     user: UserOut
 
@@ -163,25 +160,23 @@ class UserAcceptInvitationResponse(BaseModel):
                     "email_verified": True,
                     "created_at": "2024-01-10T08:00:00Z",
                     "updated_at": "2024-01-10T08:00:00Z",
-                }
+                },
             }
         }
 
 
 class ForgotPasswordRequest(BaseModel):
     """Schema para solicitar recuperación de contraseña."""
+
     email: EmailStr = Field(..., description="Correo electrónico del usuario")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "usuario@example.com"
-            }
-        }
+        json_schema_extra = {"example": {"email": "usuario@example.com"}}
 
 
 class ForgotPasswordResponse(BaseModel):
     """Schema para la respuesta de solicitud de recuperación de contraseña."""
+
     message: str
 
     class Config:
@@ -194,8 +189,11 @@ class ForgotPasswordResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     """Schema para restablecer la contraseña."""
+
     token: str = Field(..., description="Token de recuperación de contraseña")
-    new_password: str = Field(..., min_length=8, description="Nueva contraseña del usuario")
+    new_password: str = Field(
+        ..., min_length=8, description="Nueva contraseña del usuario"
+    )
 
     @field_validator("new_password")
     @classmethod
@@ -207,13 +205,14 @@ class ResetPasswordRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "token": "abc123-def456-ghi789",
-                "new_password": "NuevaPassword123!"
+                "new_password": "NuevaPassword123!",
             }
         }
 
 
 class ResetPasswordResponse(BaseModel):
     """Schema para la respuesta de restablecimiento de contraseña."""
+
     message: str
 
     class Config:
@@ -226,8 +225,13 @@ class ResetPasswordResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     """Schema para cambiar contraseña de usuario autenticado."""
-    old_password: str = Field(..., min_length=1, description="Contraseña actual del usuario")
-    new_password: str = Field(..., min_length=8, description="Nueva contraseña del usuario")
+
+    old_password: str = Field(
+        ..., min_length=1, description="Contraseña actual del usuario"
+    )
+    new_password: str = Field(
+        ..., min_length=8, description="Nueva contraseña del usuario"
+    )
 
     @field_validator("new_password")
     @classmethod
@@ -239,37 +243,34 @@ class ChangePasswordRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "old_password": "MiPwdAnterior123",
-                "new_password": "NuevoPwdFuerte456!"
+                "new_password": "NuevoPwdFuerte456!",
             }
         }
 
 
 class ChangePasswordResponse(BaseModel):
     """Schema para la respuesta de cambio de contraseña."""
+
     message: str
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "message": "Contraseña actualizada exitosamente."
-            }
+            "example": {"message": "Contraseña actualizada exitosamente."}
         }
 
 
 class ResendVerificationRequest(BaseModel):
     """Schema para reenviar verificación de email."""
+
     email: EmailStr = Field(..., description="Correo electrónico del usuario")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "usuario@example.com"
-            }
-        }
+        json_schema_extra = {"example": {"email": "usuario@example.com"}}
 
 
 class ResendVerificationResponse(BaseModel):
     """Schema para la respuesta de reenvío de verificación."""
+
     message: str
 
     class Config:
@@ -282,18 +283,16 @@ class ResendVerificationResponse(BaseModel):
 
 class ConfirmEmailRequest(BaseModel):
     """Schema para confirmar email con token."""
+
     token: str = Field(..., description="Token de verificación de email")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "token": "abc123-def456-ghi789"
-            }
-        }
+        json_schema_extra = {"example": {"token": "abc123-def456-ghi789"}}
 
 
 class ConfirmEmailResponse(BaseModel):
     """Schema para la respuesta de confirmación de email."""
+
     message: str
 
     class Config:
@@ -306,18 +305,16 @@ class ConfirmEmailResponse(BaseModel):
 
 class ResendInvitationRequest(BaseModel):
     """Schema para reenviar invitación a un usuario."""
+
     email: EmailStr = Field(..., description="Correo electrónico del usuario invitado")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "invitado@ejemplo.com"
-            }
-        }
+        json_schema_extra = {"example": {"email": "invitado@ejemplo.com"}}
 
 
 class ResendInvitationResponse(BaseModel):
     """Schema para la respuesta de reenvío de invitación."""
+
     message: str
     expires_at: datetime
 
@@ -325,6 +322,15 @@ class ResendInvitationResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "message": "Invitación reenviada a invitado@ejemplo.com",
-                "expires_at": "2025-11-07T23:59:00"
+                "expires_at": "2025-11-07T23:59:00",
             }
         }
+
+
+class LogoutResponse(BaseModel):
+    """Schema para la respuesta de logout."""
+
+    message: str
+
+    class Config:
+        json_schema_extra = {"example": {"message": "Sesión cerrada exitosamente."}}

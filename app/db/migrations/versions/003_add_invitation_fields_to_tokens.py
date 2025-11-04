@@ -9,8 +9,6 @@ Create Date: 2025-11-02 22:00:00.000000
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "003_invitation_fields"
@@ -26,7 +24,7 @@ def upgrade() -> None:
     - Agrega email, full_name y client_id para invitaciones
     - Agrega tipo de token 'invitation'
     """
-    
+
     # 1️⃣ Hacer user_id nullable (para soportar tokens de invitación)
     op.execute(
         """
@@ -34,7 +32,7 @@ def upgrade() -> None:
         ALTER COLUMN user_id DROP NOT NULL
         """
     )
-    
+
     # 2️⃣ Agregar columna email (para invitaciones)
     op.execute(
         """
@@ -47,7 +45,7 @@ def upgrade() -> None:
         END $$;
         """
     )
-    
+
     # 3️⃣ Agregar columna full_name (para invitaciones)
     op.execute(
         """
@@ -60,7 +58,7 @@ def upgrade() -> None:
         END $$;
         """
     )
-    
+
     # 4️⃣ Agregar columna client_id (para invitaciones)
     op.execute(
         """
@@ -75,7 +73,7 @@ def upgrade() -> None:
         END $$;
         """
     )
-    
+
     # 5️⃣ Crear índice en client_id para mejorar el rendimiento
     op.execute(
         """
@@ -95,10 +93,10 @@ def downgrade() -> None:
     - Elimina email, full_name y client_id
     - Hace user_id NOT NULL nuevamente
     """
-    
+
     # 1️⃣ Eliminar índice de client_id
     op.execute("DROP INDEX IF EXISTS idx_tokens_confirmacion_client_id")
-    
+
     # 2️⃣ Eliminar columnas agregadas
     op.execute(
         """
@@ -111,7 +109,7 @@ def downgrade() -> None:
         END $$;
         """
     )
-    
+
     op.execute(
         """
         DO $$
@@ -123,7 +121,7 @@ def downgrade() -> None:
         END $$;
         """
     )
-    
+
     op.execute(
         """
         DO $$
@@ -135,15 +133,14 @@ def downgrade() -> None:
         END $$;
         """
     )
-    
+
     # 3️⃣ Hacer user_id NOT NULL nuevamente (solo si no hay tokens de invitación)
     # Primero eliminar tokens de invitación si existen
     op.execute("DELETE FROM tokens_confirmacion WHERE user_id IS NULL")
-    
+
     op.execute(
         """
         ALTER TABLE tokens_confirmacion 
         ALTER COLUMN user_id SET NOT NULL
         """
     )
-

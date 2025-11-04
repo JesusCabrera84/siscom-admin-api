@@ -131,81 +131,41 @@ Una vez que la API esté corriendo, puedes acceder a:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+- **📚 Documentación Completa**: [docs/README.md](docs/README.md)
 
-## Endpoints Principales
+## Guías Rápidas
 
-### Autenticación
+- **[Inicio Rápido](docs/guides/quickstart.md)** - Configuración y primeros pasos
+- **[Configuración de Cognito](docs/guides/cognito-setup.md)** - Setup de AWS Cognito
 
-Todos los endpoints (excepto `/plans`) requieren autenticación mediante token de Cognito en el header:
+## Documentación por Endpoint
 
-```
-Authorization: Bearer <ID_TOKEN_DE_COGNITO>
-```
+- **[Autenticación](docs/api/auth.md)** - Login, recuperación de contraseña
+- **[Clientes](docs/api/clients.md)** - Registro de organizaciones
+- **[Usuarios](docs/api/users.md)** - Invitaciones y gestión
+- **[Dispositivos](docs/api/devices.md)** - Registro de GPS
+- **[Servicios](docs/api/services.md)** - Activación de suscripciones
+- **[Planes](docs/api/plans.md)** - Catálogo de planes
+- **[Órdenes](docs/api/orders.md)** - Compra de dispositivos
+- **[Pagos](docs/api/payments.md)** - Historial de pagos
 
-### Clientes
-
-- `GET /api/v1/clients/` - Información del cliente autenticado
-
-### Usuarios
-
-- `GET /api/v1/users/` - Listar usuarios del cliente
-- `GET /api/v1/users/me` - Información del usuario actual
-
-### Dispositivos
-
-- `GET /api/v1/devices/` - Listar dispositivos
-- `POST /api/v1/devices/` - Registrar nuevo dispositivo
-- `GET /api/v1/devices/unassigned` - Dispositivos sin asignar a unidades
-- `GET /api/v1/devices/{device_id}` - Detalle de un dispositivo
-
-### Servicios (Device Services) 🔑
-
-- `POST /api/v1/services/activate` - Activar servicio de dispositivo
-- `GET /api/v1/services/active` - Listar servicios activos
-- `POST /api/v1/services/confirm-payment` - Confirmar pago de servicio
-- `PATCH /api/v1/services/{service_id}/cancel` - Cancelar servicio
-
-### Planes
-
-- `GET /api/v1/plans/` - Catálogo de planes (público)
-
-### Pagos
-
-- `GET /api/v1/payments/` - Listar pagos del cliente
-
-### Órdenes
-
-- `POST /api/v1/orders/` - Crear nueva orden
-- `GET /api/v1/orders/` - Listar órdenes
-- `GET /api/v1/orders/{order_id}` - Detalle de orden
-
-## Ejemplo: Activar Servicio de Dispositivo
+## Ejemplo Rápido
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/services/activate \
-  -H "Authorization: Bearer <TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "device_id": "123e4567-e89b-12d3-a456-426614174000",
-    "plan_id": "223e4567-e89b-12d3-a456-426614174000",
-    "subscription_type": "MONTHLY"
-  }'
+# 1. Crear cliente
+POST /api/v1/clients/
+
+# 2. Login
+POST /api/v1/auth/login
+
+# 3. Crear dispositivo
+POST /api/v1/devices/
+
+# 4. Activar servicio
+POST /api/v1/services/activate
 ```
 
-Respuesta:
-
-```json
-{
-  "id": "323e4567-e89b-12d3-a456-426614174000",
-  "device_id": "123e4567-e89b-12d3-a456-426614174000",
-  "plan_id": "223e4567-e89b-12d3-a456-426614174000",
-  "subscription_type": "MONTHLY",
-  "status": "ACTIVE",
-  "activated_at": "2024-01-15T10:30:00Z",
-  "expires_at": "2024-02-14T10:30:00Z",
-  "auto_renew": true
-}
-```
+Ver [documentación completa](docs/README.md) para más detalles.
 
 ## Estructura del Proyecto
 
@@ -216,13 +176,6 @@ siscom-admin-api/
 │   │   ├── deps.py              # Dependencies de autenticación
 │   │   └── v1/
 │   │       ├── endpoints/       # Endpoints de la API
-│   │       │   ├── clients.py
-│   │       │   ├── users.py
-│   │       │   ├── devices.py
-│   │       │   ├── services.py  # Servicios por dispositivo (CLAVE)
-│   │       │   ├── plans.py
-│   │       │   ├── payments.py
-│   │       │   └── orders.py
 │   │       └── router.py        # Router principal v1
 │   ├── core/
 │   │   ├── config.py            # Configuración (Settings)
@@ -233,39 +186,28 @@ siscom-admin-api/
 │   │   ├── session.py           # Engine y SessionLocal
 │   │   └── migrations/          # Migraciones de Alembic
 │   ├── models/                  # Modelos SQLModel
-│   │   ├── client.py
-│   │   ├── user.py
-│   │   ├── device.py
-│   │   ├── device_service.py    # Servicio por dispositivo (IMPORTANTE)
-│   │   ├── unit.py
-│   │   ├── plan.py
-│   │   ├── payment.py
-│   │   ├── order.py
-│   │   ├── order_item.py
-│   │   ├── subscription.py
-│   │   ├── device_installation.py
-│   │   ├── user_unit.py
-│   │   └── invitation.py
 │   ├── schemas/                 # Schemas Pydantic
-│   │   ├── client.py
-│   │   ├── user.py
-│   │   ├── device.py
-│   │   ├── device_service.py
-│   │   ├── plan.py
-│   │   ├── payment.py
-│   │   └── order.py
 │   ├── services/                # Lógica de negocio
-│   │   ├── device_activation.py # Activación de servicios
-│   │   ├── billing.py           # Confirmación de pagos
-│   │   ├── subscriptions.py     # Gestión de planes
-│   │   └── notifications.py     # Notificaciones (stub)
-│   ├── utils/
-│   │   ├── datetime.py          # Utilidades de fechas
-│   │   ├── metrics.py           # Métricas (stub)
-│   │   └── responses.py
+│   ├── utils/                   # Utilidades
 │   └── main.py                  # Aplicación FastAPI
-├── tests/                       # Tests con pytest
-├── alembic.ini                  # Configuración de Alembic
+├── docs/                        # 📚 Documentación
+│   ├── README.md               # Índice de documentación
+│   ├── api/                    # Docs de endpoints
+│   │   ├── auth.md
+│   │   ├── clients.md
+│   │   ├── users.md
+│   │   ├── devices.md
+│   │   ├── services.md
+│   │   ├── plans.md
+│   │   ├── orders.md
+│   │   └── payments.md
+│   └── guides/                 # Guías
+│       ├── quickstart.md
+│       └── cognito-setup.md
+├── scripts/
+│   └── testing/                # Scripts de prueba
+├── tests/                      # Tests con pytest
+├── alembic.ini                 # Configuración de Alembic
 ├── docker-compose.yml
 ├── Dockerfile
 ├── requirements.txt

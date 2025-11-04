@@ -145,7 +145,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if not token_record.password_temp:
         raise HTTPException(
             status_code=500,
-            detail="Token sin contraseña temporal. No se puede completar la verificación."
+            detail="Token sin contraseña temporal. No se puede completar la verificación.",
         )
 
     try:
@@ -171,14 +171,18 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
         # 8️⃣ Obtener el cognito_sub
         cognito_sub = next(
-            (attr["Value"] for attr in cognito_resp["User"]["Attributes"] if attr["Name"] == "sub"),
-            None
+            (
+                attr["Value"]
+                for attr in cognito_resp["User"]["Attributes"]
+                if attr["Name"] == "sub"
+            ),
+            None,
         )
-        
+
         if not cognito_sub:
             raise HTTPException(
                 status_code=500,
-                detail="No se pudo obtener el cognito_sub del usuario creado"
+                detail="No se pudo obtener el cognito_sub del usuario creado",
             )
 
     except ClientError as e:
@@ -189,7 +193,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
             )
         raise HTTPException(
             status_code=500,
-            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}"
+            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
         )
 
     # 9️⃣ Actualizar usuario en la base de datos
