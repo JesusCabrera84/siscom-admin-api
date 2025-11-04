@@ -166,3 +166,59 @@ class UserAcceptInvitationResponse(BaseModel):
                 }
             }
         }
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema para solicitar recuperación de contraseña."""
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@example.com"
+            }
+        }
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Schema para la respuesta de solicitud de recuperación de contraseña."""
+    message: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Se ha enviado un código de verificación al correo registrado."
+            }
+        }
+
+
+class ResetPasswordRequest(BaseModel):
+    """Schema para restablecer la contraseña."""
+    token: str = Field(..., description="Token de recuperación de contraseña")
+    new_password: str = Field(..., min_length=8, description="Nueva contraseña del usuario")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_field(cls, v: str) -> str:
+        """Valida la contraseña usando el validador reutilizable."""
+        return validate_password(v)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "abc123-def456-ghi789",
+                "new_password": "NuevaPassword123!"
+            }
+        }
+
+
+class ResetPasswordResponse(BaseModel):
+    """Schema para la respuesta de restablecimiento de contraseña."""
+    message: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Contraseña restablecida exitosamente. Ahora puede iniciar sesión con su nueva contraseña."
+            }
+        }
