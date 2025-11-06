@@ -1,7 +1,8 @@
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
+from datetime import datetime
 from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, Text, text, ForeignKey
+from sqlalchemy import Column, Text, text, ForeignKey, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 if TYPE_CHECKING:
@@ -31,6 +32,10 @@ class Unit(SQLModel, table=True):
     )
     name: str = Field(sa_column=Column(Text, nullable=False))
     description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+    )
 
     # Relationships
     client: "Client" = Relationship(back_populates="units")
