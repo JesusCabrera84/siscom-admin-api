@@ -24,6 +24,20 @@ class UserUnitCreate(BaseModel):
         }
 
 
+class UserUnitAssign(BaseModel):
+    """Schema para asignar un usuario a una unidad (endpoint jerárquico)"""
+    user_id: UUID = Field(..., description="ID del usuario a quien se otorga acceso")
+    role: UserRole = Field(default='viewer', description="Rol del usuario: viewer, editor, admin")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "abc12345-e89b-12d3-a456-426614174000",
+                "role": "editor"
+            }
+        }
+
+
 class UserUnitOut(BaseModel):
     """Schema de salida para asignación usuario→unidad"""
     id: UUID

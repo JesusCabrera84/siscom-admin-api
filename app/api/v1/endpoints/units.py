@@ -1,15 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from app.db.session import get_db
 from app.api.deps import get_current_client_id, get_current_user_full, get_current_user_id
 from app.models.unit import Unit
 from app.models.user_unit import UserUnit
 from app.models.unit_device import UnitDevice
+from app.models.device import Device, DeviceEvent
 from app.models.user import User
 from app.schemas.unit import UnitCreate, UnitUpdate, UnitOut, UnitDetail
+from app.schemas.unit_device import UnitDeviceOut, UnitDeviceAssign
+from app.schemas.device import DeviceOut
+from app.schemas.user_unit import UserUnitDetail, UserRole, UserUnitAssign
 
 router = APIRouter()
 
@@ -278,5 +282,379 @@ def delete_unit(
         "message": "Unidad eliminada exitosamente",
         "unit_id": str(unit_id),
         "deleted_at": unit.deleted_at.isoformat()
+    }
+
+
+# ============================================
+# Hierarchical Endpoints (Nested Resources)
+# ============================================
+
+def create_device_event(
+    db: Session,
+    device_id: str,
+    event_type: str,
+    old_status: str = None,
+    new_status: str = None,
+    performed_by: UUID = None,
+    event_details: str = None,
+) -> DeviceEvent:
+    """Crea un registro de evento para un dispositivo"""
+    event = DeviceEvent(
+        device_id=device_id,
+        event_type=event_type,
+        old_status=old_status,
+        new_status=new_status,
+        performed_by=performed_by,
+        event_details=event_details,
+    )
+    db.add(event)
+    return event
+
+
+@router.get("/{unit_id}/device", response_model=Optional[DeviceOut])
+def get_unit_device(
+    unit_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Devuelve el dispositivo actualmente asignado a una unidad.
+    
+    Requiere: Acceso a la unidad (maestro o en user_units).
+    
+    Retorna None si no hay dispositivo asignado actualmente.
+    """
+    # Verificar acceso a la unidad
+    check_unit_access(db, unit_id, current_user)
+    
+    # Buscar asignación activa
+    active_assignment = db.query(UnitDevice).filter(
+        UnitDevice.unit_id == unit_id,
+        UnitDevice.unassigned_at.is_(None)
+    ).first()
+    
+    if not active_assignment:
+        return None
+    
+    # Obtener información del dispositivo
+    device = db.query(Device).filter(
+        Device.device_id == active_assignment.device_id
+    ).first()
+    
+    return device
+
+
+@router.post("/{unit_id}/device", response_model=UnitDeviceOut, status_code=status.HTTP_201_CREATED)
+def assign_device_to_unit(
+    unit_id: UUID,
+    assignment: UnitDeviceAssign,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+    user_id: UUID = Depends(get_current_user_id),
+):
+    """
+    Asigna o reemplaza el dispositivo de una unidad.
+    
+    Requiere: Usuario maestro O rol 'editor'/'admin' en user_units.
+    
+    Comportamiento:
+    - Si la unidad ya tiene un dispositivo activo, lo desasigna automáticamente
+    - Asigna el nuevo dispositivo
+    - Actualiza el estado del dispositivo a 'asignado'
+    - Crea eventos en device_events
+    
+    Body (JSON):
+    {
+        "device_id": "864537040123456"
+    }
+    """
+    # Verificar acceso con rol editor o superior
+    unit = check_unit_access(db, unit_id, current_user, required_role='editor')
+    
+    # Verificar que el dispositivo existe y pertenece al cliente
+    device = db.query(Device).filter(
+        Device.device_id == assignment.device_id,
+        Device.client_id == current_user.client_id
+    ).first()
+    
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dispositivo no encontrado o no pertenece a tu cliente"
+        )
+    
+    # Validar estado del dispositivo
+    if device.status not in ['entregado', 'devuelto']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El dispositivo debe estar en estado 'entregado' o 'devuelto' (estado actual: {device.status})"
+        )
+    
+    # Si la unidad ya tiene un dispositivo activo, desasignarlo primero
+    current_assignment = db.query(UnitDevice).filter(
+        UnitDevice.unit_id == unit_id,
+        UnitDevice.unassigned_at.is_(None)
+    ).first()
+    
+    if current_assignment:
+        # Desasignar dispositivo anterior
+        current_assignment.unassigned_at = datetime.utcnow()
+        db.add(current_assignment)
+        
+        # Actualizar estado del dispositivo anterior
+        old_device = db.query(Device).filter(
+            Device.device_id == current_assignment.device_id
+        ).first()
+        
+        if old_device:
+            old_device.status = 'entregado'
+            db.add(old_device)
+            
+            create_device_event(
+                db=db,
+                device_id=old_device.device_id,
+                event_type='estado_cambiado',
+                old_status='asignado',
+                new_status='entregado',
+                performed_by=user_id,
+                event_details=f"Dispositivo desasignado de unidad '{unit.name}' (reemplazo)"
+            )
+    
+    # Verificar que el nuevo dispositivo no esté asignado en otra unidad
+    existing_assignment = db.query(UnitDevice).filter(
+        UnitDevice.device_id == assignment.device_id,
+        UnitDevice.unassigned_at.is_(None)
+    ).first()
+    
+    if existing_assignment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El dispositivo ya está asignado a otra unidad activa"
+        )
+    
+    # Crear nueva asignación
+    new_assignment = UnitDevice(
+        unit_id=unit_id,
+        device_id=assignment.device_id,
+        assigned_at=datetime.utcnow(),
+    )
+    db.add(new_assignment)
+    
+    # Actualizar estado del nuevo dispositivo
+    old_status = device.status
+    device.status = 'asignado'
+    device.last_assignment_at = datetime.utcnow()
+    db.add(device)
+    
+    # Crear evento
+    create_device_event(
+        db=db,
+        device_id=device.device_id,
+        event_type='asignado',
+        old_status=old_status,
+        new_status='asignado',
+        performed_by=user_id,
+        event_details=f"Dispositivo asignado a unidad '{unit.name}'"
+    )
+    
+    db.commit()
+    db.refresh(new_assignment)
+    
+    return new_assignment
+
+
+@router.get("/{unit_id}/users", response_model=List[UserUnitDetail])
+def list_unit_users(
+    unit_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Lista los usuarios con acceso a una unidad específica.
+    
+    Requiere: Acceso a la unidad (maestro o en user_units).
+    
+    Retorna información detallada de cada usuario con acceso.
+    """
+    # Verificar acceso a la unidad
+    unit = check_unit_access(db, unit_id, current_user)
+    
+    # Obtener asignaciones
+    assignments = db.query(UserUnit).filter(
+        UserUnit.unit_id == unit_id
+    ).order_by(UserUnit.granted_at.desc()).all()
+    
+    # Construir respuesta detallada
+    result = []
+    for assignment in assignments:
+        user = db.query(User).filter(User.id == assignment.user_id).first()
+        granted_by_user = None
+        if assignment.granted_by:
+            granted_by_user = db.query(User).filter(User.id == assignment.granted_by).first()
+        
+        detail = UserUnitDetail(
+            id=assignment.id,
+            user_id=assignment.user_id,
+            unit_id=assignment.unit_id,
+            granted_by=assignment.granted_by,
+            granted_at=assignment.granted_at,
+            role=assignment.role,
+            user_email=user.email if user else None,
+            user_full_name=user.full_name if user else None,
+            unit_name=unit.name,
+            granted_by_email=granted_by_user.email if granted_by_user else None,
+        )
+        result.append(detail)
+    
+    return result
+
+
+@router.post("/{unit_id}/users", status_code=status.HTTP_201_CREATED)
+def assign_user_to_unit(
+    unit_id: UUID,
+    assignment: UserUnitAssign,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Asigna un usuario a una unidad con un rol específico.
+    
+    Requiere: Usuario maestro del cliente.
+    
+    Body (JSON):
+    {
+        "user_id": "abc12345-e89b-12d3-a456-426614174000",
+        "role": "editor"  // opcional, default: "viewer"
+    }
+    
+    Roles disponibles: viewer, editor, admin
+    """
+    # Validar que sea maestro
+    if not current_user.is_master:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los usuarios maestros pueden asignar usuarios a unidades"
+        )
+    
+    # Verificar que la unidad existe y pertenece al cliente
+    unit = db.query(Unit).filter(
+        Unit.id == unit_id,
+        Unit.client_id == current_user.client_id,
+        Unit.deleted_at.is_(None)
+    ).first()
+    
+    if not unit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unidad no encontrada"
+        )
+    
+    # Verificar que el usuario existe y pertenece al cliente
+    target_user = db.query(User).filter(
+        User.id == assignment.user_id,
+        User.client_id == current_user.client_id
+    ).first()
+    
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado o no pertenece a tu cliente"
+        )
+    
+    # No permitir asignar a usuarios maestros
+    if target_user.is_master:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No es necesario asignar usuarios maestros (ya tienen acceso a todas las unidades)"
+        )
+    
+    # Verificar que no existe una asignación previa
+    existing = db.query(UserUnit).filter(
+        UserUnit.user_id == assignment.user_id,
+        UserUnit.unit_id == unit_id
+    ).first()
+    
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El usuario ya tiene acceso a esta unidad con rol '{existing.role}'"
+        )
+    
+    # Crear la asignación
+    user_unit = UserUnit(
+        user_id=assignment.user_id,
+        unit_id=unit_id,
+        role=assignment.role,
+        granted_by=current_user.id,
+    )
+    db.add(user_unit)
+    db.commit()
+    db.refresh(user_unit)
+    
+    return {
+        "message": "Usuario asignado exitosamente",
+        "assignment_id": str(user_unit.id),
+        "user_email": target_user.email,
+        "unit_name": unit.name,
+        "role": assignment.role
+    }
+
+
+@router.delete("/{unit_id}/users/{user_id}", status_code=status.HTTP_200_OK)
+def remove_user_from_unit(
+    unit_id: UUID,
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Revoca el acceso de un usuario a una unidad.
+    
+    Requiere: Usuario maestro del cliente.
+    
+    Elimina la asignación usuario→unidad.
+    """
+    # Validar que sea maestro
+    if not current_user.is_master:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los usuarios maestros pueden revocar accesos a unidades"
+        )
+    
+    # Verificar que la unidad pertenece al cliente
+    unit = db.query(Unit).filter(
+        Unit.id == unit_id,
+        Unit.client_id == current_user.client_id
+    ).first()
+    
+    if not unit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unidad no encontrada"
+        )
+    
+    # Buscar la asignación
+    assignment = db.query(UserUnit).filter(
+        UserUnit.user_id == user_id,
+        UserUnit.unit_id == unit_id
+    ).first()
+    
+    if not assignment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El usuario no tiene acceso a esta unidad"
+        )
+    
+    # Obtener información para el mensaje
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    # Eliminar la asignación
+    db.delete(assignment)
+    db.commit()
+    
+    return {
+        "message": "Acceso revocado exitosamente",
+        "user_email": user.email if user else None,
+        "unit_name": unit.name
     }
 

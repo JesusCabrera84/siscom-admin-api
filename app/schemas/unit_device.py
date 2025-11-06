@@ -10,6 +10,18 @@ class UnitDeviceCreate(BaseModel):
     device_id: str = Field(..., min_length=10, max_length=50, description="ID del dispositivo")
 
 
+class UnitDeviceAssign(BaseModel):
+    """Schema para asignar un dispositivo a una unidad (endpoint jerárquico)"""
+    device_id: str = Field(..., min_length=10, max_length=50, description="ID del dispositivo")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "device_id": "864537040123456"
+            }
+        }
+
+
 class UnitDeviceOut(BaseModel):
     """Schema de salida para asignación unit-device"""
     id: UUID
