@@ -4,6 +4,7 @@ Utilidades de seguridad para manejo de contraseñas y tokens.
 
 import secrets
 import warnings
+
 from passlib.context import CryptContext
 
 # Suprimir warnings de passlib sobre la versión de bcrypt

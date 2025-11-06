@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from sqlmodel import Field, SQLModel, Index
-from sqlalchemy import Column, DateTime, text, ForeignKey
+
+from sqlalchemy import Column, DateTime, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Index, SQLModel
 
 
 class DeviceInstallation(SQLModel, table=True):

@@ -1,13 +1,15 @@
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship, Index
-from sqlalchemy import Column, Text, text, ForeignKey, CheckConstraint, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, TIMESTAMP
+
+from sqlalchemy import Column, ForeignKey, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.unit import Unit
     from app.models.device import Device
+    from app.models.unit import Unit
 
 
 class UnitDevice(SQLModel, table=True):
@@ -16,6 +18,7 @@ class UnitDevice(SQLModel, table=True):
     Permite que un dispositivo se asigne a una unidad y luego se desasigne.
     El campo is_active indica si la asignación está actualmente activa.
     """
+
     __tablename__ = "unit_devices"
     __table_args__ = (
         UniqueConstraint("unit_id", "device_id", name="uq_unit_devices_unit_device"),
@@ -32,32 +35,29 @@ class UnitDevice(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    
+
     unit_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
             ForeignKey("units.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         )
     )
-    
+
     device_id: str = Field(
         sa_column=Column(
-            Text,
-            ForeignKey("devices.device_id", ondelete="CASCADE"),
-            nullable=False
+            Text, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False
         )
     )
-    
+
     assigned_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), server_default=text("now()"))
     )
-    
+
     unassigned_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+        default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
     )
-    
+
     # Nota: is_active es una columna GENERATED en SQL (definida en migración)
     # No la incluimos aquí para evitar conflictos
     # Para usar: consultar directamente desde la BD o calcular: unassigned_at IS NULL
@@ -65,4 +65,3 @@ class UnitDevice(SQLModel, table=True):
     # Relationships
     unit: "Unit" = Relationship(back_populates="unit_devices")
     device: "Device" = Relationship(back_populates="unit_devices")
-

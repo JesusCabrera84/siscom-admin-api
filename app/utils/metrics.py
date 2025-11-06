@@ -3,9 +3,9 @@ Módulo de métricas (stub).
 En el futuro, se integrará con StatsD, Telegraf, Prometheus, etc.
 """
 
-from typing import Optional, Dict
 import time
 from functools import wraps
+from typing import Dict, Optional
 
 
 def increment_counter(

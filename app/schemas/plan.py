@@ -1,8 +1,9 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel
-from decimal import Decimal
 
 
 class PlanBase(BaseModel):

@@ -1,12 +1,15 @@
-from typing import Optional, TYPE_CHECKING
-from uuid import UUID
 from datetime import datetime
-from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, Text, text, ForeignKey, TIMESTAMP
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+from sqlalchemy import TIMESTAMP, Column, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.client import Client
+    from app.models.unit_device import UnitDevice
+    from app.models.user_unit import UserUnit
 
 
 class Unit(SQLModel, table=True):
@@ -14,6 +17,7 @@ class Unit(SQLModel, table=True):
     Unidades (vehículos, maquinaria, etc.) del cliente.
     Estructura simplificada para flexibilidad.
     """
+
     __tablename__ = "units"
 
     id: UUID = Field(
@@ -31,19 +35,18 @@ class Unit(SQLModel, table=True):
         ),
     )
     name: str = Field(sa_column=Column(Text, nullable=False))
-    description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    description: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
     deleted_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+        default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
     )
 
     # Relationships
     client: "Client" = Relationship(back_populates="units")
     unit_devices: list["UnitDevice"] = Relationship(
-        back_populates="unit",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="unit", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
     user_units: list["UserUnit"] = Relationship(
-        back_populates="unit",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="unit", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )

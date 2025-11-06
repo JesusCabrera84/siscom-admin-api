@@ -1,33 +1,35 @@
+import base64
+import hashlib
+import hmac
+import uuid
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, status, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+import boto3
+from botocore.exceptions import ClientError
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
-from app.db.session import get_db
+
 from app.api.deps import get_current_user_full
-from app.models.user import User
+from app.core.config import settings
+from app.db.session import get_db
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
+from app.models.user import User
 from app.schemas.user import (
-    UserLogin,
-    UserLoginResponse,
-    ForgotPasswordRequest,
-    ForgotPasswordResponse,
-    ResetPasswordRequest,
-    ResetPasswordResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
-    ResendVerificationRequest,
-    ResendVerificationResponse,
     ConfirmEmailRequest,
     ConfirmEmailResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LogoutResponse,
+    ResendVerificationRequest,
+    ResendVerificationResponse,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
+    UserLogin,
+    UserLoginResponse,
 )
-from app.core.config import settings
-from botocore.exceptions import ClientError
-import hmac
-import hashlib
-import base64
-import boto3
-import uuid
 
 router = APIRouter()
 

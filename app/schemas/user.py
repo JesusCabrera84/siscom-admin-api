@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, field_validator, Field
-from app.utils.validators import validate_password, validate_name
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.utils.validators import validate_name, validate_password
 
 
 class UserBase(BaseModel):

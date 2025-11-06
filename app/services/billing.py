@@ -1,10 +1,12 @@
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException, status
-from app.models.payment import Payment, PaymentStatus
-from app.models.device_service import DeviceService, DeviceServiceStatus
+from sqlalchemy.orm import Session
+
 from app.models.device import Device
+from app.models.device_service import DeviceService, DeviceServiceStatus
+from app.models.payment import Payment, PaymentStatus
 
 
 def confirm_payment(

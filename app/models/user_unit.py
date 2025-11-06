@@ -1,13 +1,15 @@
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship, Index
-from sqlalchemy import Column, Text, text, ForeignKey, CheckConstraint, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, TIMESTAMP
+
+from sqlalchemy import Column, ForeignKey, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.user import User
     from app.models.unit import Unit
+    from app.models.user import User
 
 
 class UserUnit(SQLModel, table=True):
@@ -15,6 +17,7 @@ class UserUnit(SQLModel, table=True):
     Permisos de usuarios sobre unidades.
     Define qué usuarios pueden ver/editar/administrar qué unidades.
     """
+
     __tablename__ = "user_units"
     __table_args__ = (
         UniqueConstraint("user_id", "unit_id", name="uq_user_units_user_unit"),
@@ -31,7 +34,7 @@ class UserUnit(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    
+
     user_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
@@ -39,7 +42,7 @@ class UserUnit(SQLModel, table=True):
             nullable=False,
         ),
     )
-    
+
     unit_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
@@ -47,7 +50,7 @@ class UserUnit(SQLModel, table=True):
             nullable=False,
         ),
     )
-    
+
     granted_by: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
@@ -56,14 +59,14 @@ class UserUnit(SQLModel, table=True):
             nullable=True,
         ),
     )
-    
+
     granted_at: datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), server_default=text("now()"))
     )
-    
+
     role: str = Field(
         default="viewer",
-        sa_column=Column(Text, server_default="viewer", nullable=False)
+        sa_column=Column(Text, server_default="viewer", nullable=False),
     )
 
     # Relationships
@@ -72,5 +75,8 @@ class UserUnit(SQLModel, table=True):
     )
     unit: "Unit" = Relationship(back_populates="user_units")
     granted_by_user: Optional["User"] = Relationship(
-        sa_relationship_kwargs={"foreign_keys": "[UserUnit.granted_by]", "lazy": "joined"}
+        sa_relationship_kwargs={
+            "foreign_keys": "[UserUnit.granted_by]",
+            "lazy": "joined",
+        }
     )

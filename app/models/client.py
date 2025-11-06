@@ -1,18 +1,19 @@
-from datetime import datetime
-from typing import Optional, TYPE_CHECKING
-from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, String, DateTime, text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 import enum
+from datetime import datetime
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+from sqlalchemy import Column, DateTime, ForeignKey, String, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.user import User
     from app.models.device import Device
-    from app.models.unit import Unit
-    from app.models.subscription import Subscription
-    from app.models.payment import Payment
     from app.models.order import Order
+    from app.models.payment import Payment
+    from app.models.subscription import Subscription
+    from app.models.unit import Unit
+    from app.models.user import User
 
 
 class ClientStatus(str, enum.Enum):

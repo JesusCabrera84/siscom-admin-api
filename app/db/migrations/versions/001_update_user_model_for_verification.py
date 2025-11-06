@@ -1,7 +1,7 @@
 """Update user model for verification flow
 
 Revision ID: 001_update_user
-Revises: 
+Revises:
 Create Date: 2025-11-02 20:00:00.000000
 
 """

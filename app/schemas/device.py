@@ -1,35 +1,53 @@
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional
 from uuid import UUID
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 # ============================================
 # Device Schemas
 # ============================================
 
-DeviceStatus = Literal["nuevo", "enviado", "entregado", "asignado", "devuelto", "inactivo"]
+DeviceStatus = Literal[
+    "nuevo", "enviado", "entregado", "asignado", "devuelto", "inactivo"
+]
 
 
 class DeviceBase(BaseModel):
     """Schema base para dispositivos"""
-    brand: Optional[str] = Field(None, max_length=100, description="Marca del dispositivo")
-    model: Optional[str] = Field(None, max_length=100, description="Modelo del dispositivo")
+
+    brand: Optional[str] = Field(
+        None, max_length=100, description="Marca del dispositivo"
+    )
+    model: Optional[str] = Field(
+        None, max_length=100, description="Modelo del dispositivo"
+    )
     firmware_version: Optional[str] = Field(None, description="Versión de firmware")
     notes: Optional[str] = Field(None, description="Notas administrativas")
 
 
 class DeviceCreate(BaseModel):
     """Schema para crear un nuevo dispositivo (admin/inventario)"""
-    device_id: str = Field(..., min_length=10, max_length=50, description="Identificador único del dispositivo (IMEI, serial, etc)")
-    brand: str = Field(..., min_length=1, max_length=100, description="Marca del dispositivo")
-    model: str = Field(..., min_length=1, max_length=100, description="Modelo del dispositivo")
+
+    device_id: str = Field(
+        ...,
+        min_length=10,
+        max_length=50,
+        description="Identificador único del dispositivo (IMEI, serial, etc)",
+    )
+    brand: str = Field(
+        ..., min_length=1, max_length=100, description="Marca del dispositivo"
+    )
+    model: str = Field(
+        ..., min_length=1, max_length=100, description="Modelo del dispositivo"
+    )
     firmware_version: Optional[str] = Field(None, description="Versión de firmware")
     notes: Optional[str] = Field(None, description="Notas administrativas")
 
 
 class DeviceUpdate(BaseModel):
     """Schema para actualizar información básica del dispositivo"""
+
     brand: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)
     firmware_version: Optional[str] = Field(None)
@@ -38,14 +56,20 @@ class DeviceUpdate(BaseModel):
 
 class DeviceStatusUpdate(BaseModel):
     """Schema para actualizar el estado de un dispositivo"""
+
     new_status: DeviceStatus = Field(..., description="Nuevo estado del dispositivo")
-    client_id: Optional[UUID] = Field(None, description="ID del cliente (requerido para 'enviado', 'entregado')")
-    unit_id: Optional[UUID] = Field(None, description="ID de la unidad (requerido para 'asignado')")
+    client_id: Optional[UUID] = Field(
+        None, description="ID del cliente (requerido para 'enviado', 'entregado')"
+    )
+    unit_id: Optional[UUID] = Field(
+        None, description="ID de la unidad (requerido para 'asignado')"
+    )
     notes: Optional[str] = Field(None, description="Notas sobre el cambio de estado")
 
 
 class DeviceOut(BaseModel):
     """Schema de salida para dispositivos"""
+
     device_id: str
     brand: Optional[str] = None
     model: Optional[str] = None
@@ -72,7 +96,7 @@ class DeviceOut(BaseModel):
                 "created_at": "2025-11-01T10:20:00Z",
                 "updated_at": "2025-11-03T08:00:00Z",
                 "last_assignment_at": "2025-11-03T08:00:00Z",
-                "notes": "Instalado en unidad #45"
+                "notes": "Instalado en unidad #45",
             }
         }
 
@@ -82,19 +106,27 @@ class DeviceOut(BaseModel):
 # ============================================
 
 EventType = Literal[
-    "creado", "enviado", "entregado", "asignado", 
-    "devuelto", "firmware_actualizado", "nota", "estado_cambiado"
+    "creado",
+    "enviado",
+    "entregado",
+    "asignado",
+    "devuelto",
+    "firmware_actualizado",
+    "nota",
+    "estado_cambiado",
 ]
 
 
 class DeviceEventBase(BaseModel):
     """Schema base para eventos de dispositivos"""
+
     event_type: EventType
     event_details: Optional[str] = None
 
 
 class DeviceEventCreate(DeviceEventBase):
     """Schema para crear un evento de dispositivo"""
+
     device_id: str = Field(..., description="ID del dispositivo")
     old_status: Optional[str] = None
     new_status: Optional[str] = None
@@ -103,6 +135,7 @@ class DeviceEventCreate(DeviceEventBase):
 
 class DeviceEventOut(BaseModel):
     """Schema de salida para eventos de dispositivos"""
+
     id: UUID
     device_id: str
     event_type: str
@@ -123,7 +156,7 @@ class DeviceEventOut(BaseModel):
                 "new_status": "asignado",
                 "performed_by": "523e4567-e89b-12d3-a456-426614174000",
                 "event_details": "Dispositivo asignado a unidad ABC-123",
-                "created_at": "2024-01-12T14:20:00Z"
+                "created_at": "2024-01-12T14:20:00Z",
             }
         }
 

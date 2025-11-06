@@ -1,9 +1,10 @@
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-from sqlmodel import SQLModel, Relationship, Field, Index
-from sqlalchemy import Column, String, DateTime, Boolean, text, ForeignKey
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.client import Client

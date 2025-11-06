@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import Optional, List
-from uuid import UUID
-from pydantic import BaseModel
 from decimal import Decimal
+from typing import List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel
+
 from app.models.order import OrderStatus
 from app.models.order_item import OrderItemType
 

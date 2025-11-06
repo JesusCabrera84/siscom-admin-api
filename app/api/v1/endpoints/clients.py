@@ -1,17 +1,19 @@
+from datetime import datetime
+from uuid import UUID
+
+import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from uuid import UUID
-from datetime import datetime
-from app.db.session import get_db
+
 from app.api.deps import get_current_client_id
-from app.models.client import Client, ClientStatus
-from app.models.user import User
-from app.models.token_confirmacion import TokenConfirmacion, TokenType
-from app.schemas.client import ClientOut, ClientCreate
-from app.utils.security import generate_verification_token
 from app.core.config import settings
-from botocore.exceptions import ClientError
-import boto3
+from app.db.session import get_db
+from app.models.client import Client, ClientStatus
+from app.models.token_confirmacion import TokenConfirmacion, TokenType
+from app.models.user import User
+from app.schemas.client import ClientCreate, ClientOut
+from app.utils.security import generate_verification_token
 
 router = APIRouter()
 

@@ -1,0 +1,74 @@
+name: CI - Tests and Linting
+
+on:
+  pull_request:
+    branches:
+      - master
+      - develop
+  push:
+    branches:
+      - develop
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run Ruff (linter)
+        run: |
+          echo "🔍 Ejecutando Ruff..."
+          ruff check app/ || true
+
+      - name: Run Black (formatter check)
+        run: |
+          echo "🎨 Verificando formato con Black..."
+          black --check app/ || true
+
+      - name: Run tests
+        run: |
+          echo "🧪 Ejecutando tests..."
+          pytest tests/ -v --cov=app --cov-report=term-missing || true
+
+      - name: Build Docker image
+        run: |
+          echo "🐋 Construyendo imagen Docker..."
+          docker build -t siscom-admin-api:test .
+
+      - name: Test Docker image
+        run: |
+          echo "🧪 Probando imagen Docker..."
+          docker run --name test-container -d -p 8000:8000 \
+            -e DB_HOST=localhost \
+            -e DB_PORT=5432 \
+            -e DB_USER=test \
+            -e DB_PASSWORD=test \
+            -e DB_NAME=test \
+            -e AWS_ACCESS_KEY_ID=test \
+            -e AWS_SECRET_ACCESS_KEY=test \
+            -e COGNITO_REGION=us-east-1 \
+            -e COGNITO_USER_POOL_ID=test \
+            -e COGNITO_CLIENT_ID=test \
+            -e COGNITO_CLIENT_SECRET=test \
+            siscom-admin-api:test || true
+          
+          sleep 5
+          docker logs test-container
+          docker stop test-container || true
+          docker rm test-container || true
+

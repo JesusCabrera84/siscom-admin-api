@@ -1,7 +1,9 @@
 from uuid import UUID
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+
 from app.core.security import verify_cognito_token
 from app.db.session import get_db
 

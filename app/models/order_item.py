@@ -1,11 +1,12 @@
-from datetime import datetime
-from typing import Optional, TYPE_CHECKING
-from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship, Index
-from sqlalchemy import Column, String, DateTime, Integer, Text, text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from decimal import Decimal
 import enum
+from datetime import datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.order import Order
@@ -38,7 +39,9 @@ class OrderItem(SQLModel, table=True):
     # device_id ahora referencia a devices.device_id (TEXT) en lugar de devices.id (UUID)
     device_id: Optional[str] = Field(
         default=None,
-        sa_column=Column(Text, ForeignKey("devices.device_id", ondelete="SET NULL"), nullable=True),
+        sa_column=Column(
+            Text, ForeignKey("devices.device_id", ondelete="SET NULL"), nullable=True
+        ),
     )
     item_type: OrderItemType = Field(sa_column=Column(String, nullable=False))
     description: str = Field(max_length=500, nullable=False)

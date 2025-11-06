@@ -1,15 +1,16 @@
+from datetime import datetime
+from typing import List
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import List
-from datetime import datetime
-from app.db.session import get_db
+
 from app.api.deps import get_current_client_id, get_current_user_id
-from app.models.unit_device import UnitDevice
-from app.models.unit import Unit
+from app.db.session import get_db
 from app.models.device import Device, DeviceEvent
-from app.models.client import Client
-from app.schemas.unit_device import UnitDeviceCreate, UnitDeviceOut, UnitDeviceDetail
+from app.models.unit import Unit
+from app.models.unit_device import UnitDevice
+from app.schemas.unit_device import UnitDeviceCreate, UnitDeviceDetail, UnitDeviceOut
 
 router = APIRouter()
 
@@ -17,6 +18,7 @@ router = APIRouter()
 # ============================================
 # Helper Functions
 # ============================================
+
 
 def create_device_event(
     db: Session,
@@ -44,6 +46,7 @@ def create_device_event(
 # Unit-Device Endpoints
 # ============================================
 
+
 @router.get("/", response_model=List[UnitDeviceOut])
 def list_unit_devices(
     client_id: UUID = Depends(get_current_client_id),
@@ -52,20 +55,20 @@ def list_unit_devices(
 ):
     """
     Lista todas las relaciones unit-device del cliente.
-    
+
     Por defecto solo muestra las activas (unassigned_at IS NULL).
     Usa active_only=false para ver todas incluyendo históricas.
-    
+
     Requiere: Usuario maestro del cliente.
     """
     # Subconsulta para obtener units del cliente
     client_units = db.query(Unit.id).filter(Unit.client_id == client_id).subquery()
-    
+
     query = db.query(UnitDevice).filter(UnitDevice.unit_id.in_(client_units))
-    
+
     if active_only:
         query = query.filter(UnitDevice.unassigned_at.is_(None))
-    
+
     assignments = query.order_by(UnitDevice.assigned_at.desc()).all()
     return assignments
 
@@ -79,13 +82,13 @@ def create_unit_device(
 ):
     """
     Asigna un dispositivo a una unidad.
-    
+
     Validaciones:
     - La unidad debe pertenecer al cliente autenticado
     - El dispositivo debe pertenecer al cliente autenticado
     - El dispositivo debe estar en estado 'entregado' o 'devuelto'
     - No debe existir una asignación activa previa
-    
+
     Al asignar:
     - Crea registro en unit_devices
     - Actualiza device.status = 'asignado'
@@ -93,48 +96,54 @@ def create_unit_device(
     - Crea evento en device_events
     """
     # Verificar que la unidad existe y pertenece al cliente
-    unit = db.query(Unit).filter(
-        Unit.id == assignment.unit_id,
-        Unit.client_id == client_id
-    ).first()
-    
+    unit = (
+        db.query(Unit)
+        .filter(Unit.id == assignment.unit_id, Unit.client_id == client_id)
+        .first()
+    )
+
     if not unit:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Unidad no encontrada o no pertenece a tu cliente"
+            detail="Unidad no encontrada o no pertenece a tu cliente",
         )
-    
+
     # Verificar que el dispositivo existe y pertenece al cliente
-    device = db.query(Device).filter(
-        Device.device_id == assignment.device_id,
-        Device.client_id == client_id
-    ).first()
-    
+    device = (
+        db.query(Device)
+        .filter(Device.device_id == assignment.device_id, Device.client_id == client_id)
+        .first()
+    )
+
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dispositivo no encontrado o no pertenece a tu cliente"
+            detail="Dispositivo no encontrado o no pertenece a tu cliente",
         )
-    
+
     # Validar estado del dispositivo
-    if device.status not in ['entregado', 'devuelto']:
+    if device.status not in ["entregado", "devuelto"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El dispositivo debe estar en estado 'entregado' o 'devuelto' (estado actual: {device.status})"
+            detail=f"El dispositivo debe estar en estado 'entregado' o 'devuelto' (estado actual: {device.status})",
         )
-    
+
     # Verificar que no existe una asignación activa
-    existing = db.query(UnitDevice).filter(
-        UnitDevice.device_id == assignment.device_id,
-        UnitDevice.unassigned_at.is_(None)
-    ).first()
-    
+    existing = (
+        db.query(UnitDevice)
+        .filter(
+            UnitDevice.device_id == assignment.device_id,
+            UnitDevice.unassigned_at.is_(None),
+        )
+        .first()
+    )
+
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El dispositivo ya está asignado a una unidad activa"
+            detail="El dispositivo ya está asignado a una unidad activa",
         )
-    
+
     # Crear la asignación
     unit_device = UnitDevice(
         unit_id=assignment.unit_id,
@@ -142,27 +151,27 @@ def create_unit_device(
         assigned_at=datetime.utcnow(),
     )
     db.add(unit_device)
-    
+
     # Actualizar estado del dispositivo
     old_status = device.status
-    device.status = 'asignado'
+    device.status = "asignado"
     device.last_assignment_at = datetime.utcnow()
     db.add(device)
-    
+
     # Crear evento
     create_device_event(
         db=db,
         device_id=device.device_id,
-        event_type='asignado',
+        event_type="asignado",
         old_status=old_status,
-        new_status='asignado',
+        new_status="asignado",
         performed_by=user_id,
-        event_details=f"Dispositivo asignado a unidad '{unit.name}'"
+        event_details=f"Dispositivo asignado a unidad '{unit.name}'",
     )
-    
+
     db.commit()
     db.refresh(unit_device)
-    
+
     return unit_device
 
 
@@ -174,27 +183,27 @@ def get_unit_device(
 ):
     """
     Obtiene el detalle de una asignación específica.
-    
+
     Incluye información adicional de la unidad y el dispositivo.
     """
     # Subconsulta para obtener units del cliente
     client_units = db.query(Unit.id).filter(Unit.client_id == client_id).subquery()
-    
-    assignment = db.query(UnitDevice).filter(
-        UnitDevice.id == assignment_id,
-        UnitDevice.unit_id.in_(client_units)
-    ).first()
-    
+
+    assignment = (
+        db.query(UnitDevice)
+        .filter(UnitDevice.id == assignment_id, UnitDevice.unit_id.in_(client_units))
+        .first()
+    )
+
     if not assignment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Asignación no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada"
         )
-    
+
     # Obtener información adicional
     unit = db.query(Unit).filter(Unit.id == assignment.unit_id).first()
     device = db.query(Device).filter(Device.device_id == assignment.device_id).first()
-    
+
     # Construir respuesta detallada
     detail = UnitDeviceDetail(
         id=assignment.id,
@@ -207,7 +216,7 @@ def get_unit_device(
         device_model=device.model if device else None,
         device_status=device.status if device else None,
     )
-    
+
     return detail
 
 
@@ -220,71 +229,69 @@ def delete_unit_device(
 ):
     """
     Desasigna un dispositivo de una unidad.
-    
+
     No elimina el registro, solo marca unassigned_at = NOW().
     Actualiza el estado del dispositivo según corresponda.
-    
+
     Reglas:
     - Si el dispositivo no tiene otras asignaciones activas → status = 'entregado'
     - Crea evento en device_events
     """
     # Subconsulta para obtener units del cliente
     client_units = db.query(Unit.id).filter(Unit.client_id == client_id).subquery()
-    
-    assignment = db.query(UnitDevice).filter(
-        UnitDevice.id == assignment_id,
-        UnitDevice.unit_id.in_(client_units)
-    ).first()
-    
+
+    assignment = (
+        db.query(UnitDevice)
+        .filter(UnitDevice.id == assignment_id, UnitDevice.unit_id.in_(client_units))
+        .first()
+    )
+
     if not assignment:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Asignación no encontrada"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Asignación no encontrada"
         )
-    
+
     # Verificar que está activa
     if assignment.unassigned_at is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta asignación ya fue desactivada"
+            detail="Esta asignación ya fue desactivada",
         )
-    
+
     # Obtener información para el evento
     unit = db.query(Unit).filter(Unit.id == assignment.unit_id).first()
     device = db.query(Device).filter(Device.device_id == assignment.device_id).first()
-    
+
     if not device:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dispositivo no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Dispositivo no encontrado"
         )
-    
+
     # Desasignar
     assignment.unassigned_at = datetime.utcnow()
     db.add(assignment)
-    
+
     # Actualizar estado del dispositivo
     old_status = device.status
-    device.status = 'entregado'  # Vuelve a estado entregado
+    device.status = "entregado"  # Vuelve a estado entregado
     db.add(device)
-    
+
     # Crear evento
     create_device_event(
         db=db,
         device_id=device.device_id,
-        event_type='estado_cambiado',
+        event_type="estado_cambiado",
         old_status=old_status,
-        new_status='entregado',
+        new_status="entregado",
         performed_by=user_id,
-        event_details=f"Dispositivo desasignado de unidad '{unit.name if unit else 'desconocida'}'"
+        event_details=f"Dispositivo desasignado de unidad '{unit.name if unit else 'desconocida'}'",
     )
-    
+
     db.commit()
-    
+
     return {
         "message": "Dispositivo desasignado exitosamente",
         "assignment_id": str(assignment_id),
         "device_id": assignment.device_id,
-        "unassigned_at": assignment.unassigned_at.isoformat()
+        "unassigned_at": assignment.unassigned_at.isoformat(),
     }
-

@@ -1,14 +1,15 @@
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
-from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, text, JSON
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.subscription import Subscription
     from app.models.device_service import DeviceService
+    from app.models.subscription import Subscription
 
 
 class Plan(SQLModel, table=True):

@@ -1,6 +1,7 @@
 import requests
 from fastapi import HTTPException, status
-from jose import jwt, JWTError
+from jose import JWTError, jwt
+
 from app.core.config import settings
 
 JWKS_URL = f"https://cognito-idp.{settings.COGNITO_REGION}.amazonaws.com/{settings.COGNITO_USER_POOL_ID}/.well-known/jwks.json"

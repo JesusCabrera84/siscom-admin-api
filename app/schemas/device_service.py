@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel
-from app.models.device_service import SubscriptionType, DeviceServiceStatus
+
+from app.models.device_service import DeviceServiceStatus, SubscriptionType
 
 
 class DeviceServiceCreate(BaseModel):

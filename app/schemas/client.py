@@ -1,9 +1,11 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, EmailStr, field_validator, Field
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
 from app.models.client import ClientStatus
-from app.utils.validators import validate_password, validate_name
+from app.utils.validators import validate_name, validate_password
 
 
 class ClientBase(BaseModel):

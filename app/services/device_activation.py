@@ -1,17 +1,19 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
 from app.models.device import Device
 from app.models.device_service import (
     DeviceService,
     DeviceServiceStatus,
     SubscriptionType,
 )
-from app.models.plan import Plan
 from app.models.payment import Payment, PaymentStatus
+from app.models.plan import Plan
 from app.utils.datetime import calculate_expiration
-from decimal import Decimal
 
 
 def activate_device_service(

@@ -24,7 +24,7 @@ def upgrade() -> None:
     """
     # Eliminar el índice antiguo
     op.drop_index("idx_devices_imei", table_name="devices")
-    
+
     # Renombrar la columna
     op.alter_column(
         "devices",
@@ -33,7 +33,7 @@ def upgrade() -> None:
         existing_type=sa.String(length=50),
         existing_nullable=False,
     )
-    
+
     # Crear el nuevo índice
     op.create_index("idx_devices_device_id", "devices", ["device_id"])
 
@@ -45,7 +45,7 @@ def downgrade() -> None:
     """
     # Eliminar el índice nuevo
     op.drop_index("idx_devices_device_id", table_name="devices")
-    
+
     # Renombrar la columna de vuelta
     op.alter_column(
         "devices",
@@ -54,7 +54,6 @@ def downgrade() -> None:
         existing_type=sa.String(length=50),
         existing_nullable=False,
     )
-    
+
     # Crear el índice original
     op.create_index("idx_devices_imei", "devices", ["imei"])
-

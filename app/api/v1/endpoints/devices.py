@@ -1,19 +1,21 @@
+from datetime import datetime
+from typing import List, Optional
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import List, Optional
-from datetime import datetime
-from app.db.session import get_db
+
 from app.api.deps import get_current_client_id, get_current_user_id
-from app.models.device import Device, DeviceEvent
+from app.db.session import get_db
 from app.models.client import Client
+from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.schemas.device import (
-    DeviceOut, 
-    DeviceCreate, 
-    DeviceUpdate,
+    DeviceCreate,
+    DeviceOut,
     DeviceStatusUpdate,
+    DeviceUpdate,
 )
 
 router = APIRouter()
@@ -22,6 +24,7 @@ router = APIRouter()
 # ============================================
 # Helper Functions
 # ============================================
+
 
 def create_device_event(
     db: Session,
@@ -49,6 +52,7 @@ def create_device_event(
 # Device Endpoints
 # ============================================
 
+
 @router.post("/", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
 def create_device(
     device_in: DeviceCreate,
@@ -57,7 +61,7 @@ def create_device(
 ):
     """
     Registra un nuevo dispositivo en el inventario.
-    
+
     Regla: El dispositivo se crea con status='nuevo' y sin cliente asignado.
     """
     # Verificar que el device_id no exista
@@ -79,7 +83,7 @@ def create_device(
         client_id=None,  # Sin cliente asignado
     )
     db.add(device)
-    
+
     # Registrar evento de creación
     create_device_event(
         db=db,
@@ -89,7 +93,7 @@ def create_device(
         performed_by=user_id,
         event_details=f"Dispositivo {device.brand} {device.model} registrado en inventario",
     )
-    
+
     db.commit()
     db.refresh(device)
 
@@ -105,7 +109,7 @@ def list_devices(
 ):
     """
     Lista todos los dispositivos.
-    
+
     Filtros disponibles:
     - status_filter: Filtrar por estado específico
     - client_id: Filtrar por cliente
@@ -115,10 +119,10 @@ def list_devices(
 
     if status_filter:
         query = query.filter(Device.status == status_filter)
-    
+
     if client_id:
         query = query.filter(Device.client_id == client_id)
-    
+
     if brand:
         query = query.filter(Device.brand.ilike(f"%{brand}%"))
 
@@ -153,7 +157,7 @@ def list_unassigned_devices(
     """
     Lista dispositivos del cliente que no están asignados a ninguna unidad activamente.
     Estados válidos: 'entregado' o 'devuelto'
-    
+
     Verifica que no exista una asignación activa en unit_devices.
     """
     # Subquery para obtener device_ids que tienen asignación activa
@@ -163,13 +167,13 @@ def list_unassigned_devices(
         .filter(UnitDevice.unassigned_at.is_(None))
         .subquery()
     )
-    
+
     devices = (
         db.query(Device)
         .filter(
             Device.client_id == client_id,
             Device.status.in_(["entregado", "devuelto"]),
-            ~Device.device_id.in_(active_assignments_subquery)
+            ~Device.device_id.in_(active_assignments_subquery),
         )
         .all()
     )
@@ -206,7 +210,7 @@ def update_device(
     Actualiza información básica del dispositivo.
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
-    
+
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -214,9 +218,12 @@ def update_device(
         )
 
     update_data = device_update.model_dump(exclude_unset=True)
-    
+
     # Si se actualiza firmware, registrar evento
-    if "firmware_version" in update_data and update_data["firmware_version"] != device.firmware_version:
+    if (
+        "firmware_version" in update_data
+        and update_data["firmware_version"] != device.firmware_version
+    ):
         old_version = device.firmware_version
         new_version = update_data["firmware_version"]
         create_device_event(
@@ -226,15 +233,15 @@ def update_device(
             performed_by=user_id,
             event_details=f"Firmware actualizado de {old_version} a {new_version}",
         )
-    
+
     for key, value in update_data.items():
         setattr(device, key, value)
-    
+
     device.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(device)
-    
+
     return device
 
 
@@ -247,7 +254,7 @@ def update_device_status(
 ):
     """
     Actualiza el estado del dispositivo siguiendo las reglas de negocio.
-    
+
     Reglas:
     - 'enviado': Requiere client_id, crea evento
     - 'entregado': Valida que esté en 'enviado', actualiza client_id
@@ -256,20 +263,20 @@ def update_device_status(
     - 'inactivo': Baja definitiva, no puede reasignarse
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
-    
+
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dispositivo no encontrado",
         )
-    
+
     old_status = device.status
     new_status = status_update.new_status
-    
+
     # ============================================
     # Validaciones según el nuevo estado
     # ============================================
-    
+
     if new_status == "enviado":
         # Requiere client_id
         if not status_update.client_id:
@@ -277,7 +284,7 @@ def update_device_status(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Se requiere client_id para enviar el dispositivo",
             )
-        
+
         # Verificar que el cliente existe
         client = db.query(Client).filter(Client.id == status_update.client_id).first()
         if not client:
@@ -285,12 +292,12 @@ def update_device_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Cliente no encontrado",
             )
-        
+
         device.client_id = status_update.client_id
         device.status = "enviado"
-        
+
         event_details = f"Dispositivo enviado a cliente {client.name}"
-    
+
     elif new_status == "entregado":
         # Debe tener client_id
         if not device.client_id:
@@ -298,10 +305,10 @@ def update_device_status(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El dispositivo debe tener un cliente asignado",
             )
-        
+
         device.status = "entregado"
         event_details = "Dispositivo entregado y confirmado por el cliente"
-    
+
     elif new_status == "asignado":
         # Requiere unit_id
         if not status_update.unit_id:
@@ -309,7 +316,7 @@ def update_device_status(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Se requiere unit_id para asignar el dispositivo",
             )
-        
+
         # Verificar que la unidad existe y pertenece al cliente del dispositivo
         unit = db.query(Unit).filter(Unit.id == status_update.unit_id).first()
         if not unit:
@@ -317,29 +324,29 @@ def update_device_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Unidad no encontrada",
             )
-        
+
         if device.client_id and unit.client_id != device.client_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="La unidad no pertenece al cliente del dispositivo",
             )
-        
+
         # Verificar si ya existe una asignación activa para este device
         # Una asignación es activa si unassigned_at es NULL
         existing_assignment = (
             db.query(UnitDevice)
             .filter(
                 UnitDevice.device_id == device.device_id,
-                UnitDevice.unassigned_at.is_(None)
+                UnitDevice.unassigned_at.is_(None),
             )
             .first()
         )
-        
+
         if existing_assignment:
             # Desasignar de la unidad anterior
             existing_assignment.unassigned_at = datetime.utcnow()
             db.add(existing_assignment)
-        
+
         # Crear nueva asignación en unit_devices
         unit_device = UnitDevice(
             unit_id=status_update.unit_id,
@@ -347,12 +354,12 @@ def update_device_status(
             assigned_at=datetime.utcnow(),
         )
         db.add(unit_device)
-        
+
         device.status = "asignado"
         device.last_assignment_at = datetime.utcnow()
-        
+
         event_details = f"Dispositivo asignado a unidad {unit.name}"
-    
+
     elif new_status == "devuelto":
         # Desasignar de cualquier unidad activa
         # Una asignación es activa si unassigned_at es NULL
@@ -360,37 +367,37 @@ def update_device_status(
             db.query(UnitDevice)
             .filter(
                 UnitDevice.device_id == device.device_id,
-                UnitDevice.unassigned_at.is_(None)
+                UnitDevice.unassigned_at.is_(None),
             )
             .first()
         )
-        
+
         if active_assignment:
             active_assignment.unassigned_at = datetime.utcnow()
             db.add(active_assignment)
-        
+
         # Quitar cliente
         device.client_id = None
         device.status = "devuelto"
-        
+
         event_details = "Dispositivo devuelto al inventario"
-    
+
     elif new_status == "inactivo":
         # Baja definitiva
         device.status = "inactivo"
-        
+
         event_details = "Dispositivo dado de baja (inactivo)"
-    
+
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Estado '{new_status}' no válido",
         )
-    
+
     # Agregar notas si se proporcionaron
     if status_update.notes:
         event_details += f" - {status_update.notes}"
-    
+
     # Registrar evento
     create_device_event(
         db=db,
@@ -401,12 +408,12 @@ def update_device_status(
         performed_by=user_id,
         event_details=event_details,
     )
-    
+
     device.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(device)
-    
+
     return device
 
 
@@ -421,13 +428,13 @@ def add_device_note(
     Agrega una nota administrativa al dispositivo.
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
-    
+
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dispositivo no encontrado",
         )
-    
+
     # Registrar evento de nota
     create_device_event(
         db=db,
@@ -436,16 +443,16 @@ def add_device_note(
         performed_by=user_id,
         event_details=note,
     )
-    
+
     # Agregar a las notas del dispositivo
     if device.notes:
         device.notes += f"\n\n{datetime.utcnow().isoformat()}: {note}"
     else:
         device.notes = f"{datetime.utcnow().isoformat()}: {note}"
-    
+
     device.updated_at = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(device)
-    
+
     return device

@@ -1,8 +1,9 @@
 from datetime import datetime
 from uuid import UUID
-from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, String, DateTime, Boolean, text, ForeignKey
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, SQLModel
 
 
 class Invitation(SQLModel, table=True):

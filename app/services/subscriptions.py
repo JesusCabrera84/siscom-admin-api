@@ -1,8 +1,10 @@
 from uuid import UUID
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException, status
-from app.models.plan import Plan
+from sqlalchemy.orm import Session
+
 from app.models.device_service import DeviceService, DeviceServiceStatus
+from app.models.plan import Plan
 
 
 def get_plan_by_id(db: Session, plan_id: UUID) -> Plan:

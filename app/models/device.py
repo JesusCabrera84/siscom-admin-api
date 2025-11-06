@@ -1,21 +1,23 @@
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship, Index
-from sqlalchemy import Column, Text, text, ForeignKey, CheckConstraint
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, TIMESTAMP
+
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Text, text
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.client import Client
     from app.models.device_service import DeviceService
-    from app.models.user import User
     from app.models.unit_device import UnitDevice
+    from app.models.user import User
 
 
 class Device(SQLModel, table=True):
     """
     Modelo de dispositivos GPS/telemetría.
-    
+
     Estados del ciclo de vida:
     - nuevo: Recién ingresado al inventario
     - enviado: En camino al cliente
@@ -24,6 +26,7 @@ class Device(SQLModel, table=True):
     - devuelto: Devuelto al inventario
     - inactivo: Fuera de uso o dado de baja
     """
+
     __tablename__ = "devices"
     __table_args__ = (
         Index("idx_devices_status", "status"),
@@ -31,19 +34,19 @@ class Device(SQLModel, table=True):
         Index("idx_devices_brand_model", "brand", "model"),
         CheckConstraint(
             "status IN ('nuevo', 'enviado', 'entregado', 'asignado', 'devuelto', 'inactivo')",
-            name="check_device_status"
+            name="check_device_status",
         ),
     )
 
     # device_id es ahora PRIMARY KEY
-    device_id: str = Field(
-        sa_column=Column(Text, primary_key=True)
-    )
-    
+    device_id: str = Field(sa_column=Column(Text, primary_key=True))
+
     brand: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     model: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    firmware_version: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    
+    firmware_version: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+
     # client_id ahora es nullable (se asigna al enviar)
     client_id: Optional[UUID] = Field(
         default=None,
@@ -53,19 +56,19 @@ class Device(SQLModel, table=True):
             nullable=True,
         ),
     )
-    
+
     status: str = Field(
-        default="nuevo",
-        sa_column=Column(Text, nullable=False, server_default="nuevo")
+        default="nuevo", sa_column=Column(Text, nullable=False, server_default="nuevo")
     )
-    
+
     last_comm_at: Optional[datetime] = Field(
-        default=None, 
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+        default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
     )
-    
+
     created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), server_default=text("now()"), nullable=False)
+        sa_column=Column(
+            TIMESTAMP(timezone=True), server_default=text("now()"), nullable=False
+        )
     )
     updated_at: datetime = Field(
         sa_column=Column(
@@ -76,10 +79,9 @@ class Device(SQLModel, table=True):
         )
     )
     last_assignment_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+        default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
     )
-    
+
     notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
     # Relationships
@@ -87,18 +89,18 @@ class Device(SQLModel, table=True):
     device_services: list["DeviceService"] = Relationship(back_populates="device")
     device_events: list["DeviceEvent"] = Relationship(
         back_populates="device",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
     unit_devices: list["UnitDevice"] = Relationship(
         back_populates="device",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
 
 class DeviceEvent(SQLModel, table=True):
     """
     Historial de eventos y cambios de estado de dispositivos.
-    
+
     Tipos de eventos:
     - creado: Dispositivo registrado en el sistema
     - enviado: Dispositivo enviado al cliente
@@ -109,6 +111,7 @@ class DeviceEvent(SQLModel, table=True):
     - nota: Nota administrativa
     - estado_cambiado: Cambio de estado genérico
     """
+
     __tablename__ = "device_events"
     __table_args__ = (
         Index("idx_device_events_device_id", "device_id"),
@@ -116,7 +119,7 @@ class DeviceEvent(SQLModel, table=True):
         Index("idx_device_events_event_type", "event_type"),
         CheckConstraint(
             "event_type IN ('creado', 'enviado', 'entregado', 'asignado', 'devuelto', 'firmware_actualizado', 'nota', 'estado_cambiado')",
-            name="check_event_type"
+            name="check_event_type",
         ),
     )
 
@@ -127,32 +130,38 @@ class DeviceEvent(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    
+
     device_id: str = Field(
         sa_column=Column(
-            Text,
-            ForeignKey("devices.device_id", ondelete="CASCADE"),
-            nullable=False
+            Text, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False
         )
     )
-    
+
     event_type: str = Field(sa_column=Column(Text, nullable=False))
-    old_status: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    new_status: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    
+    old_status: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    new_status: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+
     performed_by: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
             PGUUID(as_uuid=True),
             ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True
-        )
+            nullable=True,
+        ),
     )
-    
-    event_details: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    
+
+    event_details: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+
     created_at: datetime = Field(
-        sa_column=Column(TIMESTAMP(timezone=True), server_default=text("now()"), nullable=False)
+        sa_column=Column(
+            TIMESTAMP(timezone=True), server_default=text("now()"), nullable=False
+        )
     )
 
     # Relationships

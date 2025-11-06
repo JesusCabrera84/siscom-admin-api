@@ -1,0 +1,44 @@
+services:
+  siscom-admin-api:
+    image: siscom-admin-api:latest
+    container_name: siscom-admin-api
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    environment:
+      # Configuración General
+      PROJECT_NAME: ${PROJECT_NAME:-SISCOM Admin API}
+      
+      # Configuración de Base de Datos
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      
+      # AWS Cognito Configuration
+      COGNITO_REGION: ${COGNITO_REGION}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      COGNITO_CLIENT_SECRET: ${COGNITO_CLIENT_SECRET}
+      
+      # User Configuration
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - siscom-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  siscom-network:
+    external: true
+

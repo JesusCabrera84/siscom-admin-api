@@ -1,10 +1,12 @@
+import enum
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
-from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, String, DateTime, Boolean, text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID as PGUUID, TIMESTAMP
-import enum
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, text
+from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.user import User

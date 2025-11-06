@@ -1,19 +1,21 @@
+from typing import List
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import List
-from app.db.session import get_db
+
 from app.api.deps import get_current_client_id
-from app.models.device_service import DeviceService, DeviceServiceStatus
+from app.db.session import get_db
 from app.models.device import Device
+from app.models.device_service import DeviceService, DeviceServiceStatus
 from app.models.plan import Plan
 from app.schemas.device_service import (
+    DeviceServiceConfirmPayment,
     DeviceServiceCreate,
     DeviceServiceOut,
-    DeviceServiceConfirmPayment,
 )
+from app.services.billing import cancel_device_service, confirm_payment
 from app.services.device_activation import activate_device_service
-from app.services.billing import confirm_payment, cancel_device_service
 
 router = APIRouter()
 
