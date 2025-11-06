@@ -160,7 +160,7 @@ curl -X POST http://localhost:8000/api/v1/devices/ \
   -d '{
     "serial_number": "GPS-2024-001",
     "model": "TK103",
-    "imei": "353451234567890"
+    "device_id": "353451234567890"
   }'
 ```
 

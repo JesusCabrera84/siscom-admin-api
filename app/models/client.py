@@ -9,6 +9,7 @@ import enum
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.device import Device
+    from app.models.unit import Unit
     from app.models.subscription import Subscription
     from app.models.payment import Payment
     from app.models.order import Order
@@ -57,6 +58,7 @@ class Client(SQLModel, table=True):
     # Relationships
     users: list["User"] = Relationship(back_populates="client")
     devices: list["Device"] = Relationship(back_populates="client")
+    units: list["Unit"] = Relationship(back_populates="client")
     subscriptions: list["Subscription"] = Relationship(
         back_populates="client",
         sa_relationship_kwargs={"foreign_keys": "[Subscription.client_id]"},

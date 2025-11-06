@@ -1,15 +1,18 @@
-from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
 from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, DateTime, text, ForeignKey
+from sqlalchemy import Column, Text, text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 if TYPE_CHECKING:
-    from app.models.device import Device
+    from app.models.client import Client
 
 
 class Unit(SQLModel, table=True):
+    """
+    Unidades (vehículos, maquinaria, etc.) del cliente.
+    Estructura simplificada para flexibilidad.
+    """
     __tablename__ = "units"
 
     id: UUID = Field(
@@ -22,29 +25,20 @@ class Unit(SQLModel, table=True):
     client_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
-            ForeignKey("clients.id"),
+            ForeignKey("clients.id", ondelete="CASCADE"),
             nullable=False,
         ),
     )
-    name: str = Field(max_length=255, nullable=False)
-    plate: Optional[str] = Field(default=None, max_length=50)
-    type: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=500)
-
-    created_at: datetime = Field(
-        sa_column=Column(DateTime, default=datetime.utcnow, nullable=False)
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(
-            DateTime,
-            default=datetime.utcnow,
-            onupdate=datetime.utcnow,
-            nullable=False,
-        )
-    )
+    name: str = Field(sa_column=Column(Text, nullable=False))
+    description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
     # Relationships
-    devices: list["Device"] = Relationship(
-        back_populates="installed_unit",
-        sa_relationship_kwargs={"foreign_keys": "Device.installed_in_unit_id"},
+    client: "Client" = Relationship(back_populates="units")
+    unit_devices: list["UnitDevice"] = Relationship(
+        back_populates="unit",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    user_units: list["UserUnit"] = Relationship(
+        back_populates="unit",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )

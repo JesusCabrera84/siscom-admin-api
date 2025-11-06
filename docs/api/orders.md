@@ -289,7 +289,7 @@ Cada item representa un tipo de dispositivo:
 {
   "device_serial": "GPS-2024-001",  // Número de serie del dispositivo
   "device_model": "TK103",          // Modelo del hardware
-  "device_imei": "353451234567890", // IMEI único del dispositivo
+  "device_id": "353451234567890",   // Device ID único del dispositivo
   "unit_price": 1500.00,            // Precio unitario
   "quantity": 2,                    // Cantidad de dispositivos
   "subtotal": 3000.00               // unit_price * quantity

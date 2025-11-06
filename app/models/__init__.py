@@ -1,7 +1,8 @@
 from app.models.client import Client, ClientStatus
 from app.models.user import User
 from app.models.unit import Unit
-from app.models.device import Device
+from app.models.device import Device, DeviceEvent
+from app.models.unit_device import UnitDevice
 from app.models.plan import Plan
 from app.models.payment import Payment, PaymentStatus
 from app.models.order import Order, OrderStatus
@@ -23,6 +24,8 @@ __all__ = [
     "User",
     "Unit",
     "Device",
+    "DeviceEvent",
+    "UnitDevice",
     "Plan",
     "Payment",
     "PaymentStatus",

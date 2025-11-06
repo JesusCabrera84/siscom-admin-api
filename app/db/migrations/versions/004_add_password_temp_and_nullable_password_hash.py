@@ -1,7 +1,7 @@
 """Add password_temp to tokens_confirmacion and make password_hash nullable
 
-Revision ID: 004
-Revises: 003
+Revision ID: 004_password_temp
+Revises: 003_invitation_fields
 Create Date: 2025-11-03
 
 """
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "004"
-down_revision = "003"
+revision = "004_password_temp"
+down_revision = "003_invitation_fields"
 branch_labels = None
 depends_on = None
 
@@ -22,19 +22,29 @@ def upgrade() -> None:
     1. Hace password_hash nullable en users (ya que usamos Cognito)
     2. Agrega password_temp a tokens_confirmacion para guardar contraseñas temporalmente
     """
-    # 1. Hacer password_hash nullable en users
-    op.alter_column(
-        "users",
-        "password_hash",
-        existing_type=sa.String(length=255),
-        nullable=True,
-        existing_nullable=False,
+    # 1. Hacer password_hash nullable en users (idempotente)
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+        EXCEPTION
+            WHEN others THEN NULL;
+        END $$;
+        """
     )
 
-    # 2. Agregar password_temp a tokens_confirmacion
-    op.add_column(
-        "tokens_confirmacion",
-        sa.Column("password_temp", sa.String(length=255), nullable=True),
+    # 2. Agregar password_temp a tokens_confirmacion (idempotente)
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='tokens_confirmacion' AND column_name='password_temp') THEN
+                ALTER TABLE tokens_confirmacion ADD COLUMN password_temp VARCHAR(255);
+            END IF;
+        END $$;
+        """
     )
 
 

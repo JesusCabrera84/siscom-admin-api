@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     clients,
     users,
     devices,
+    device_events,
     services,
     plans,
     payments,
@@ -16,6 +17,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(clients.router, prefix="/clients", tags=["clients"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
+api_router.include_router(device_events.router, prefix="/device-events", tags=["device-events"])
 api_router.include_router(services.router, prefix="/services", tags=["services"])
 api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])

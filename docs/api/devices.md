@@ -2,17 +2,150 @@
 
 ## Descripción
 
-Endpoints para gestionar dispositivos GPS/IoT del cliente. Incluye registro, consulta y gestión de dispositivos.
+Endpoints para gestionar el ciclo de vida completo de dispositivos GPS/IoT con seguimiento de estados, historial de eventos y trazabilidad administrativa.
+
+---
+
+## Modelo de Datos
+
+### Device
+
+```json
+{
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
+  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "status": "asignado",
+  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
+  "last_comm_at": "2024-01-15T10:30:00Z",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-15T10:30:00Z",
+  "last_assignment_at": "2024-01-15T09:00:00Z",
+  "notes": "Dispositivo en óptimas condiciones"
+}
+```
+
+### DeviceEvent
+
+```json
+{
+  "id": "abc12345-e89b-12d3-a456-426614174000",
+  "device_id": "123456789012345",
+  "event_type": "asignado",
+  "old_status": "entregado",
+  "new_status": "asignado",
+  "performed_by": "def45678-e89b-12d3-a456-426614174000",
+  "event_details": "Dispositivo asignado a unidad ABC-123",
+  "created_at": "2024-01-15T09:00:00Z"
+}
+```
+
+---
+
+## Estados del Dispositivo
+
+El campo `status` representa el estado actual del dispositivo en su ciclo de vida:
+
+| Estado | Descripción | `client_id` | Puede asignarse |
+|--------|-------------|-------------|-----------------|
+| `nuevo` | Recién ingresado al inventario | NULL | No |
+| `enviado` | En camino al cliente | Asignado | No |
+| `entregado` | Recibido y confirmado por cliente | Asignado | Sí |
+| `asignado` | Instalado en una unidad | Asignado | No |
+| `devuelto` | Devuelto al inventario | NULL | Sí |
+| `inactivo` | Baja definitiva, fuera de uso | Asignado | No |
+
+---
+
+## Reglas de Negocio
+
+### Por Evento
+
+| Evento | Regla | Acción |
+|--------|-------|--------|
+| Registrar nuevo dispositivo | `status='nuevo'` y sin cliente asignado | Insertar registro en `devices` |
+| Enviar dispositivo | Cambiar `status='enviado'` y crear registro en `device_events` | `PATCH /devices/{device_id}/status` |
+| Confirmar entrega | `status='entregado'`, actualizar `client_id` | Cliente o maestro lo valida |
+| Asignar a unidad | `status='asignado'`, actualizar `last_assignment_at` | Se crea relación con unidad |
+| Devolución | `status='devuelto'`, quitar `client_id` | Puede reintegrarse al inventario |
+| Baja definitiva | `status='inactivo'` | No puede reasignarse |
+| Eliminación | ❌ **Prohibida** | Trigger impide `DELETE` |
+
+### Consideraciones Importantes
+
+- ✅ **SIEMPRE** registrar eventos administrativos para trazabilidad
+- ✅ Mantener `client_id = NULL` hasta que se realice el envío
+- ✅ Actualizar `last_assignment_at` cada vez que el dispositivo se asigne a una unidad
+- ✅ Sincronizar `status='asignado'` con la existencia de una fila activa en unidades
+- ✅ `firmware_version` puede actualizarse y genera un evento `firmware_actualizado`
+- ❌ **NUNCA** eliminar registros de dispositivos (usar estados y bitácora)
 
 ---
 
 ## Endpoints
 
-### 1. Listar Dispositivos
+### 1. Crear Dispositivo (Registrar en Inventario)
+
+**POST** `/api/v1/devices/`
+
+Registra un nuevo dispositivo en el inventario con estado `nuevo` y sin cliente asignado.
+
+#### Headers
+
+```
+Authorization: Bearer <admin_token>
+```
+
+#### Request Body
+
+```json
+{
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
+  "notes": "Lote 2024-01"
+}
+```
+
+#### Validaciones
+
+- `device_id`: Único, 10-50 caracteres (IMEI, serial, etc)
+- `brand`: Obligatorio, máximo 100 caracteres
+- `model`: Obligatorio, máximo 100 caracteres
+- `firmware_version`: Opcional
+- `notes`: Opcional
+
+#### Response 201 Created
+
+```json
+{
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
+  "client_id": null,
+  "status": "nuevo",
+  "installed_in_unit_id": null,
+  "last_comm_at": null,
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-15T08:00:00Z",
+  "last_assignment_at": null,
+  "notes": "Lote 2024-01"
+}
+```
+
+**Evento generado**: `creado` con `new_status='nuevo'`
+
+---
+
+### 2. Listar Todos los Dispositivos
 
 **GET** `/api/v1/devices/`
 
-Lista todos los dispositivos del cliente autenticado, con opción de filtrar por estado.
+Lista todos los dispositivos del inventario con filtros opcionales.
 
 #### Headers
 
@@ -22,21 +155,27 @@ Authorization: Bearer <access_token>
 
 #### Query Parameters
 
-- `active` (opcional): `true` o `false` para filtrar por estado activo/inactivo
+- `status_filter` (opcional): Filtrar por estado específico (`nuevo`, `enviado`, `entregado`, `asignado`, `devuelto`, `inactivo`)
+- `client_id` (opcional): Filtrar por cliente específico
+- `brand` (opcional): Buscar por marca (búsqueda parcial)
 
 #### Response 200 OK
 
 ```json
 [
   {
-    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "device_id": "123456789012345",
+    "brand": "Queclink",
+    "model": "GV300",
+    "firmware_version": "1.2.3",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
-    "serial_number": "GPS-2024-001",
-    "model": "TK103",
-    "imei": "353451234567890",
-    "active": true,
+    "status": "asignado",
     "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
-    "created_at": "2024-01-15T10:30:00Z"
+    "last_comm_at": "2024-01-15T10:30:00Z",
+    "created_at": "2024-01-15T08:00:00Z",
+    "updated_at": "2024-01-15T10:30:00Z",
+    "last_assignment_at": "2024-01-15T09:00:00Z",
+    "notes": "Dispositivo en óptimas condiciones"
   }
 ]
 ```
@@ -44,28 +183,71 @@ Authorization: Bearer <access_token>
 #### Ejemplos
 
 ```bash
-# Listar todos los dispositivos
+# Todos los dispositivos
 GET /api/v1/devices/
 
-# Solo dispositivos activos
-GET /api/v1/devices/?active=true
+# Solo dispositivos nuevos
+GET /api/v1/devices/?status_filter=nuevo
 
-# Solo dispositivos inactivos
-GET /api/v1/devices/?active=false
+# Dispositivos de un cliente específico
+GET /api/v1/devices/?client_id=456e4567-e89b-12d3-a456-426614174000
+
+# Dispositivos por marca
+GET /api/v1/devices/?brand=Queclink
 ```
 
 ---
 
-### 2. Listar Dispositivos No Asignados
+### 3. Listar Mis Dispositivos (Cliente)
 
-**GET** `/api/v1/devices/unassigned`
+**GET** `/api/v1/devices/my-devices`
 
-Lista dispositivos que no están instalados en ninguna unidad (vehículo).
+Lista todos los dispositivos del cliente autenticado.
 
 #### Headers
 
 ```
-Authorization: Bearer <access_token>
+Authorization: Bearer <client_token>
+```
+
+#### Query Parameters
+
+- `status_filter` (opcional): Filtrar por estado
+
+#### Response 200 OK
+
+```json
+[
+  {
+    "device_id": "123456789012345",
+    "brand": "Queclink",
+    "model": "GV300",
+    "firmware_version": "1.2.3",
+    "client_id": "456e4567-e89b-12d3-a456-426614174000",
+    "status": "asignado",
+    "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
+    "last_comm_at": "2024-01-15T10:30:00Z",
+    "created_at": "2024-01-15T08:00:00Z",
+    "updated_at": "2024-01-15T10:30:00Z",
+    "last_assignment_at": "2024-01-15T09:00:00Z",
+    "notes": null
+  }
+]
+```
+
+---
+
+### 4. Listar Dispositivos No Asignados
+
+**GET** `/api/v1/devices/unassigned`
+
+Lista dispositivos del cliente que NO están instalados en ninguna unidad.  
+Solo incluye dispositivos con estado `entregado` o `devuelto`.
+
+#### Headers
+
+```
+Authorization: Bearer <client_token>
 ```
 
 #### Response 200 OK
@@ -73,25 +255,29 @@ Authorization: Bearer <access_token>
 ```json
 [
   {
-    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "device_id": "987654321098765",
+    "brand": "Teltonika",
+    "model": "FMB920",
+    "firmware_version": "1.0.5",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
-    "serial_number": "GPS-2024-002",
-    "model": "TK103",
-    "imei": "353451234567891",
-    "active": false,
+    "status": "entregado",
     "installed_in_unit_id": null,
-    "created_at": "2024-01-15T11:00:00Z"
+    "last_comm_at": null,
+    "created_at": "2024-01-15T08:00:00Z",
+    "updated_at": "2024-01-15T08:00:00Z",
+    "last_assignment_at": null,
+    "notes": null
   }
 ]
 ```
 
 ---
 
-### 3. Obtener Dispositivo Específico
+### 5. Obtener Dispositivo Específico
 
 **GET** `/api/v1/devices/{device_id}`
 
-Obtiene el detalle de un dispositivo específico.
+Obtiene el detalle completo de un dispositivo.
 
 #### Headers
 
@@ -101,34 +287,38 @@ Authorization: Bearer <access_token>
 
 #### Path Parameters
 
-- `device_id`: UUID del dispositivo
+- `device_id`: Identificador único del dispositivo (IMEI, serial, etc)
 
 #### Response 200 OK
 
 ```json
 {
-  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
-  "serial_number": "GPS-2024-001",
-  "model": "TK103",
-  "imei": "353451234567890",
-  "active": true,
+  "status": "asignado",
   "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
-  "created_at": "2024-01-15T10:30:00Z"
+  "last_comm_at": "2024-01-15T10:30:00Z",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-15T10:30:00Z",
+  "last_assignment_at": "2024-01-15T09:00:00Z",
+  "notes": "Dispositivo en óptimas condiciones"
 }
 ```
 
 #### Errores
 
-- **404 Not Found**: Dispositivo no encontrado o no pertenece al cliente
+- **404 Not Found**: Dispositivo no encontrado
 
 ---
 
-### 4. Crear Dispositivo
+### 6. Actualizar Información del Dispositivo
 
-**POST** `/api/v1/devices/`
+**PATCH** `/api/v1/devices/{device_id}`
 
-Registra un nuevo dispositivo GPS para el cliente.
+Actualiza información básica del dispositivo (marca, modelo, firmware, notas).
 
 #### Headers
 
@@ -136,168 +326,384 @@ Registra un nuevo dispositivo GPS para el cliente.
 Authorization: Bearer <access_token>
 ```
 
+#### Path Parameters
+
+- `device_id`: Identificador único del dispositivo
+
 #### Request Body
 
 ```json
 {
-  "serial_number": "GPS-2024-003",
-  "model": "TK103",
-  "imei": "353451234567892"
+  "brand": "Queclink",
+  "model": "GV300W",
+  "firmware_version": "1.3.0",
+  "notes": "Actualizado a nueva versión"
 }
 ```
 
-#### Validaciones
+Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
 
-- El `serial_number` debe ser único en el sistema
-- El `imei` debe ser único y tener 15 dígitos
-- El `model` es obligatorio
-
-#### Response 201 Created
+#### Response 200 OK
 
 ```json
 {
-  "id": "abc12345-e89b-12d3-a456-426614174000",
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300W",
+  "firmware_version": "1.3.0",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
-  "serial_number": "GPS-2024-003",
-  "model": "TK103",
-  "imei": "353451234567892",
-  "active": false,
-  "installed_in_unit_id": null,
-  "created_at": "2024-01-16T09:15:00Z"
+  "status": "asignado",
+  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
+  "last_comm_at": "2024-01-15T10:30:00Z",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-16T11:00:00Z",
+  "last_assignment_at": "2024-01-15T09:00:00Z",
+  "notes": "Actualizado a nueva versión"
 }
 ```
 
----
-
-## Estados del Dispositivo
-
-### Campo `active`
-
-- **`true`**: Dispositivo tiene un servicio activo
-- **`false`**: Dispositivo sin servicio activo o nunca activado
-
-El campo `active` se actualiza automáticamente cuando:
-- Se activa un servicio → `active = true`
-- Se cancela el último servicio activo → `active = false`
+**Evento generado**: Si se actualiza `firmware_version`, se crea evento `firmware_actualizado`
 
 ---
 
-## Relaciones del Dispositivo
+### 7. Cambiar Estado del Dispositivo
 
-### Unit (Unidad/Vehículo)
+**PATCH** `/api/v1/devices/{device_id}/status`
 
-- Campo: `installed_in_unit_id`
-- Un dispositivo puede estar instalado en una unidad (vehículo)
-- `null` = dispositivo no instalado aún
+Actualiza el estado del dispositivo siguiendo las reglas de negocio.
 
-### Device Services (Servicios)
+#### Headers
 
-- Un dispositivo puede tener múltiples servicios a lo largo del tiempo
-- Solo puede tener UN servicio ACTIVE simultáneamente
-- Historial completo de activaciones/cancelaciones
+```
+Authorization: Bearer <access_token>
+```
 
-### Installations (Instalaciones)
+#### Path Parameters
 
-- Historial de todas las instalaciones del dispositivo
-- Incluye fecha de instalación y desinstalación
-- Permite rastrear en qué unidades estuvo el dispositivo
+- `device_id`: Identificador único del dispositivo
+
+#### Request Body
+
+##### Enviar Dispositivo (`nuevo` → `enviado`)
+
+```json
+{
+  "new_status": "enviado",
+  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "notes": "Enviado via FedEx - Tracking: 1234567890"
+}
+```
+
+**Validaciones**:
+- Requiere `client_id` válido
+- El cliente debe existir en el sistema
+
+##### Confirmar Entrega (`enviado` → `entregado`)
+
+```json
+{
+  "new_status": "entregado",
+  "notes": "Recibido por Juan Pérez"
+}
+```
+
+**Validaciones**:
+- El dispositivo debe tener `client_id` asignado
+
+##### Asignar a Unidad (`entregado` → `asignado`)
+
+```json
+{
+  "new_status": "asignado",
+  "unit_id": "789e4567-e89b-12d3-a456-426614174000",
+  "notes": "Instalado en camión ABC-123"
+}
+```
+
+**Validaciones**:
+- Requiere `unit_id` válido
+- La unidad debe pertenecer al cliente del dispositivo
+- Actualiza `installed_in_unit_id` y `last_assignment_at`
+
+##### Devolver Dispositivo (`cualquier estado` → `devuelto`)
+
+```json
+{
+  "new_status": "devuelto",
+  "notes": "Dispositivo devuelto por cliente, funciona correctamente"
+}
+```
+
+**Efecto**:
+- Quita `client_id` (vuelve a NULL)
+- Quita `installed_in_unit_id` (vuelve a NULL)
+- Puede reintegrarse al inventario
+
+##### Dar de Baja (`cualquier estado` → `inactivo`)
+
+```json
+{
+  "new_status": "inactivo",
+  "notes": "Dispositivo dañado, no reparable"
+}
+```
+
+**Efecto**:
+- Baja definitiva
+- No puede reasignarse
+
+#### Response 200 OK
+
+```json
+{
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
+  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "status": "asignado",
+  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
+  "last_comm_at": "2024-01-15T10:30:00Z",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-16T11:00:00Z",
+  "last_assignment_at": "2024-01-16T11:00:00Z",
+  "notes": "Instalado en camión ABC-123"
+}
+```
+
+**Evento generado**: Se crea evento con tipo igual al nuevo estado
+
+#### Errores
+
+- **400 Bad Request**: Estado inválido o falta parámetro requerido
+- **404 Not Found**: Dispositivo, cliente o unidad no encontrados
 
 ---
 
-## Ciclo de Vida del Dispositivo
+### 8. Obtener Historial de Eventos
 
-### 1. Adquisición
+**GET** `/api/v1/devices/{device_id}/events`
 
-```
-Cliente → POST /api/v1/orders/ (compra dispositivos)
-        ↓
-  Dispositivos creados automáticamente
-        ↓
-  Estado: active=false, installed_in_unit_id=null
-```
+Obtiene el historial completo de eventos de un dispositivo.
 
-### 2. Registro Manual
+#### Headers
 
 ```
-Cliente → POST /api/v1/devices/ (registra dispositivo existente)
-        ↓
-  Dispositivo creado
-        ↓
-  Estado: active=false, installed_in_unit_id=null
+Authorization: Bearer <access_token>
 ```
 
-### 3. Instalación
+#### Path Parameters
 
-```
-Cliente → Instala físicamente el dispositivo en vehículo
-        ↓
-  (Actualizar installed_in_unit_id manualmente o via endpoint)
-        ↓
-  Estado: active=false, installed_in_unit_id=<unit_id>
-```
+- `device_id`: Identificador único del dispositivo
 
-### 4. Activación de Servicio
+#### Response 200 OK
 
-```
-Cliente → POST /api/v1/services/activate
-        ↓
-  Servicio creado y activado
-        ↓
-  Estado: active=true, installed_in_unit_id=<unit_id>
-```
-
-### 5. Cancelación de Servicio
-
-```
-Cliente → PATCH /api/v1/services/{service_id}/cancel
-        ↓
-  Servicio cancelado
-        ↓
-  Estado: active=false, installed_in_unit_id=<unit_id>
+```json
+[
+  {
+    "id": "abc12345-e89b-12d3-a456-426614174000",
+    "device_id": "123456789012345",
+    "event_type": "asignado",
+    "old_status": "entregado",
+    "new_status": "asignado",
+    "performed_by": "def45678-e89b-12d3-a456-426614174000",
+    "event_details": "Dispositivo asignado a unidad ABC-123",
+    "created_at": "2024-01-15T09:00:00Z"
+  },
+  {
+    "id": "def45678-e89b-12d3-a456-426614174000",
+    "device_id": "123456789012345",
+    "event_type": "entregado",
+    "old_status": "enviado",
+    "new_status": "entregado",
+    "performed_by": "def45678-e89b-12d3-a456-426614174000",
+    "event_details": "Dispositivo entregado y confirmado por el cliente",
+    "created_at": "2024-01-14T15:30:00Z"
+  },
+  {
+    "id": "ghi78901-e89b-12d3-a456-426614174000",
+    "device_id": "123456789012345",
+    "event_type": "enviado",
+    "old_status": "nuevo",
+    "new_status": "enviado",
+    "performed_by": "def45678-e89b-12d3-a456-426614174000",
+    "event_details": "Dispositivo enviado a cliente ACME Corp",
+    "created_at": "2024-01-10T10:00:00Z"
+  },
+  {
+    "id": "jkl01234-e89b-12d3-a456-426614174000",
+    "device_id": "123456789012345",
+    "event_type": "creado",
+    "old_status": null,
+    "new_status": "nuevo",
+    "performed_by": "def45678-e89b-12d3-a456-426614174000",
+    "event_details": "Dispositivo Queclink GV300 registrado en inventario",
+    "created_at": "2024-01-10T08:00:00Z"
+  }
+]
 ```
 
 ---
 
-## Validaciones Importantes
+### 9. Agregar Nota al Dispositivo
 
-### IMEI
+**POST** `/api/v1/devices/{device_id}/notes`
 
-- Debe tener exactamente 15 dígitos
-- Debe ser único en todo el sistema
-- Es el identificador oficial del dispositivo GSM/GPS
+Agrega una nota administrativa al dispositivo y registra un evento.
 
-### Serial Number
+#### Headers
 
-- Identificador interno del dispositivo
-- Debe ser único en todo el sistema
-- Puede incluir letras y números
+```
+Authorization: Bearer <access_token>
+```
 
-### Modelo
+#### Path Parameters
 
-- Identifica el tipo de hardware GPS
-- Ejemplos: TK103, TK303, GT06, etc.
-- Usado para determinar protocolo de comunicación
+- `device_id`: Identificador único del dispositivo
 
----
+#### Query Parameters
 
-## Consultas Útiles
+- `note`: La nota a agregar (string)
 
-### Dispositivos Activos con Servicio
+#### Request Example
 
 ```bash
-GET /api/v1/devices/?active=true
+POST /api/v1/devices/123456789012345/notes?note=Dispositivo%20revisado%20y%20funcionando%20correctamente
 ```
 
-### Dispositivos Sin Instalar
+#### Response 200 OK
 
-```bash
-GET /api/v1/devices/unassigned
+```json
+{
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
+  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "status": "asignado",
+  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
+  "last_comm_at": "2024-01-15T10:30:00Z",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-16T11:00:00Z",
+  "last_assignment_at": "2024-01-15T09:00:00Z",
+  "notes": "2024-01-16T11:00:00: Dispositivo revisado y funcionando correctamente"
+}
 ```
 
-### Dispositivos Inactivos
+**Evento generado**: `nota` con el contenido de la nota
+
+---
+
+## Tipos de Eventos
+
+| Tipo | Descripción | Cuándo se genera |
+|------|-------------|------------------|
+| `creado` | Dispositivo registrado | Al crear dispositivo |
+| `enviado` | Dispositivo enviado a cliente | Al cambiar a estado `enviado` |
+| `entregado` | Dispositivo recibido | Al confirmar entrega |
+| `asignado` | Dispositivo instalado en unidad | Al asignar a unidad |
+| `devuelto` | Dispositivo devuelto | Al marcar como devuelto |
+| `firmware_actualizado` | Actualización de firmware | Al actualizar `firmware_version` |
+| `nota` | Nota administrativa | Al agregar nota |
+| `estado_cambiado` | Cambio de estado genérico | En cambios no específicos |
+
+---
+
+## Protección de Datos
+
+### Trigger: Impedir Eliminación
+
+Un trigger en la base de datos **impide** eliminar dispositivos:
+
+```sql
+CREATE TRIGGER trg_no_delete_devices
+BEFORE DELETE ON devices
+FOR EACH ROW EXECUTE FUNCTION prevent_device_delete();
+```
+
+**Motivo**: Mantener historial completo e integridad de auditoría.
+
+**Alternativa**: Usar estado `inactivo` para dar de baja dispositivos.
+
+---
+
+## Flujo Completo de Ciclo de Vida
+
+```
+1. REGISTRAR
+   POST /devices/ → status='nuevo'
+   
+2. ENVIAR
+   PATCH /devices/{id}/status → status='enviado', client_id=<cliente>
+   
+3. CONFIRMAR ENTREGA
+   PATCH /devices/{id}/status → status='entregado'
+   
+4. ASIGNAR A UNIDAD
+   PATCH /devices/{id}/status → status='asignado', unit_id=<unidad>
+   
+5a. DEVOLVER (opcional)
+    PATCH /devices/{id}/status → status='devuelto', client_id=NULL
+    
+5b. DAR DE BAJA (opcional)
+    PATCH /devices/{id}/status → status='inactivo'
+```
+
+---
+
+## Ejemplos Completos
+
+### Caso 1: Nuevo Dispositivo a Cliente
 
 ```bash
-GET /api/v1/devices/?active=false
+# 1. Registrar dispositivo
+POST /api/v1/devices/
+{
+  "device_id": "353451234567890",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3"
+}
+
+# 2. Enviar a cliente
+PATCH /api/v1/devices/353451234567890/status
+{
+  "new_status": "enviado",
+  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "notes": "Enviado via DHL - Tracking: ABC123"
+}
+
+# 3. Confirmar entrega
+PATCH /api/v1/devices/353451234567890/status
+{
+  "new_status": "entregado",
+  "notes": "Recibido por María González"
+}
+
+# 4. Asignar a unidad
+PATCH /api/v1/devices/353451234567890/status
+{
+  "new_status": "asignado",
+  "unit_id": "789e4567-e89b-12d3-a456-426614174000",
+  "notes": "Instalado en camión XYZ-789"
+}
+
+# 5. Ver historial
+GET /api/v1/devices/353451234567890/events
+```
+
+### Caso 2: Dispositivo Devuelto
+
+```bash
+# Cliente devuelve dispositivo
+PATCH /api/v1/devices/353451234567890/status
+{
+  "new_status": "devuelto",
+  "notes": "Cliente canceló servicio"
+}
+
+# El dispositivo queda disponible para reasignación
+GET /api/v1/devices/?status_filter=devuelto
 ```
 
 ---
@@ -306,54 +712,42 @@ GET /api/v1/devices/?active=false
 
 ### Multi-tenant
 
-- Todos los dispositivos están aislados por `client_id`
-- Un cliente solo puede ver sus propios dispositivos
-- No es posible transferir dispositivos entre clientes
+- Validación de `client_id` en todas las operaciones
+- Aislamiento de datos por cliente
+- No es posible acceder a dispositivos de otros clientes
 
-### Validación de Ownership
+### Auditoría
 
-- Cada endpoint valida automáticamente que el dispositivo pertenezca al cliente
-- El `client_id` se extrae del token JWT
-- 404 si el dispositivo no existe o no pertenece al cliente
+- Todos los cambios registrados en `device_events`
+- `performed_by` identifica quién realizó la acción
+- Timestamps automáticos
 
----
+### Integridad
 
-## Integración con Otros Módulos
-
-### Servicios
-
-```
-Dispositivo → Activa servicio → Device.active = true
-          → Cancela servicio → Device.active = false
-```
-
-### Órdenes
-
-```
-Orden → Contiene dispositivos como items
-     → Dispositivos creados automáticamente al confirmar orden
-```
-
-### Unidades
-
-```
-Unit → device_installations → Dispositivo
-                           → Historial de instalaciones
-```
+- Relaciones con clientes y unidades validadas
+- Estados controlados por CHECK constraints
+- Eliminación bloqueada por trigger
 
 ---
 
-## Notas Adicionales
+## Consultas Útiles
 
-### Hardware Físico vs Registro Digital
+```bash
+# Dispositivos nuevos en inventario
+GET /api/v1/devices/?status_filter=nuevo
 
-- El dispositivo físico existe antes del registro digital
-- El registro digital permite rastrear y gestionar el dispositivo
-- Un dispositivo puede estar físicamente instalado pero no activado digitalmente
+# Dispositivos en tránsito
+GET /api/v1/devices/?status_filter=enviado
 
-### Activación vs Instalación
+# Dispositivos de un cliente
+GET /api/v1/devices/?client_id=456e4567-e89b-12d3-a456-426614174000
 
-- **Instalación**: Dispositivo físicamente montado en el vehículo
-- **Activación**: Servicio mensual/anual pagado y activo
-- Un dispositivo puede estar instalado sin estar activo (sin servicio pagado)
+# Dispositivos activos (asignados)
+GET /api/v1/devices/?status_filter=asignado
 
+# Dispositivos disponibles para asignación (cliente específico)
+GET /api/v1/devices/unassigned
+
+# Historial completo de un dispositivo
+GET /api/v1/devices/353451234567890/events
+```

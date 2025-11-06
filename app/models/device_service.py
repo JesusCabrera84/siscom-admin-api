@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
 from sqlmodel import Field, SQLModel, Relationship, Index
-from sqlalchemy import Column, String, DateTime, Boolean, text, ForeignKey
+from sqlalchemy import Column, String, DateTime, Boolean, Text, text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 import enum
 
@@ -38,10 +38,11 @@ class DeviceService(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    device_id: UUID = Field(
+    # device_id ahora referencia a devices.device_id (TEXT) en lugar de devices.id (UUID)
+    device_id: str = Field(
         sa_column=Column(
-            PGUUID(as_uuid=True),
-            ForeignKey("devices.id"),
+            Text,
+            ForeignKey("devices.device_id"),
             nullable=False,
         ),
     )

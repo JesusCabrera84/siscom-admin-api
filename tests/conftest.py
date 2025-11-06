@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from app.main import app
 from app.db.session import get_db
-from app.api.deps import get_current_client_id, get_current_user_full
+from app.api.deps import get_current_client_id, get_current_user_full, get_current_user_id
 from app.models.client import Client
 from app.models.user import User
 from app.models.device import Device
@@ -94,22 +94,42 @@ def test_user_data(db_session, test_client_data):
 
 
 @pytest.fixture(scope="function")
-def test_device_data(db_session, test_client_data):
+def test_device_data(db_session):
     """
-    Crea un dispositivo de prueba.
+    Crea un dispositivo de prueba en estado 'nuevo' sin cliente asignado.
     """
     device = Device(
-        id=uuid4(),
-        client_id=test_client_data.id,
-        imei="123456789012345",
+        device_id="123456789012345",
         brand="Queclink",
         model="GV300",
-        active=False,
+        firmware_version="1.0.0",
+        status="nuevo",
+        client_id=None,  # Sin cliente asignado inicialmente
+        notes="Dispositivo de prueba",
     )
     db_session.add(device)
     db_session.commit()
     db_session.refresh(device)
     return device
+
+
+@pytest.fixture(scope="function")
+def test_unit_data(db_session, test_client_data):
+    """
+    Crea una unidad (vehículo) de prueba.
+    """
+    unit = Unit(
+        id=uuid4(),
+        client_id=test_client_data.id,
+        name="Camión Test",
+        plate="ABC-123",
+        type="Camión",
+        description="Unidad de prueba",
+    )
+    db_session.add(unit)
+    db_session.commit()
+    db_session.refresh(unit)
+    return unit
 
 
 @pytest.fixture(scope="function")
@@ -145,8 +165,12 @@ def authenticated_client(client, test_client_data, test_user_data):
     def override_get_current_user_full():
         return test_user_data
     
+    def override_get_current_user_id():
+        return test_user_data.id
+    
     app.dependency_overrides[get_current_client_id] = override_get_current_client_id
     app.dependency_overrides[get_current_user_full] = override_get_current_user_full
+    app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     
     yield client
     

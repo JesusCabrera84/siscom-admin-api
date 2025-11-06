@@ -148,7 +148,7 @@ POST /api/v1/devices/
 {
   "serial_number": "GPS-001",
   "model": "TK103",
-  "imei": "353451234567890"
+  "device_id": "353451234567890"
 }
 
 # 4. Activar servicio
@@ -218,7 +218,7 @@ id: UUID
 client_id: UUID
 serial_number: str
 model: str
-imei: str
+device_id: str
 active: bool
 installed_in_unit_id: UUID | None
 created_at: datetime

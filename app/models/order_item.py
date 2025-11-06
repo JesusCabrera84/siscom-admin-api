@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 from uuid import UUID
 from sqlmodel import Field, SQLModel, Relationship, Index
-from sqlalchemy import Column, String, DateTime, Integer, text, ForeignKey
+from sqlalchemy import Column, String, DateTime, Integer, Text, text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from decimal import Decimal
 import enum
@@ -35,9 +35,10 @@ class OrderItem(SQLModel, table=True):
             nullable=False,
         ),
     )
-    device_id: Optional[UUID] = Field(
+    # device_id ahora referencia a devices.device_id (TEXT) en lugar de devices.id (UUID)
+    device_id: Optional[str] = Field(
         default=None,
-        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("devices.id"), nullable=True),
+        sa_column=Column(Text, ForeignKey("devices.device_id", ondelete="SET NULL"), nullable=True),
     )
     item_type: OrderItemType = Field(sa_column=Column(String, nullable=False))
     description: str = Field(max_length=500, nullable=False)

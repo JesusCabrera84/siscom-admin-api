@@ -128,7 +128,7 @@ def test_list_active_services(
     
     service = data[0]
     assert service["status"] == "ACTIVE"
-    assert service["device_imei"] == test_device_data.imei
+    assert service["device_device_id"] == test_device_data.device_id
     assert service["plan_name"] == test_plan_data.name
 
 

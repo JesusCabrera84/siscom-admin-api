@@ -97,7 +97,7 @@ def list_active_services(
     services = (
         db.query(
             DeviceService,
-            Device.imei,
+            Device.device_id,
             Device.brand,
             Device.model,
             Plan.name.label("plan_name"),
@@ -112,7 +112,7 @@ def list_active_services(
     )
 
     result = []
-    for service, imei, brand, model, plan_name in services:
+    for service, device_id, brand, model, plan_name in services:
         service_dict = {
             "id": str(service.id),
             "device_id": str(service.device_id),
@@ -126,7 +126,7 @@ def list_active_services(
                 service.expires_at.isoformat() if service.expires_at else None
             ),
             "auto_renew": service.auto_renew,
-            "device_imei": imei,
+            "device_device_id": device_id,
             "device_brand": brand,
             "device_model": model,
             "plan_name": plan_name,

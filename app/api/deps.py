@@ -72,3 +72,23 @@ def get_current_user_full(
         )
 
     return user
+
+
+def get_current_user_id(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> UUID:
+    """
+    Retorna el UUID del usuario autenticado.
+    """
+    from app.models.user import User
+
+    cognito_sub = current_user.get("sub")
+    user = db.query(User).filter(User.cognito_sub == cognito_sub).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+
+    return user.id

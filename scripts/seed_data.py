@@ -120,7 +120,7 @@ def seed_test_client(db: Session):
         Device(
             id=uuid4(),
             client_id=client.id,
-            imei="123456789012345",
+            device_id="123456789012345",
             brand="Queclink",
             model="GV300",
             active=True,
@@ -128,7 +128,7 @@ def seed_test_client(db: Session):
         Device(
             id=uuid4(),
             client_id=client.id,
-            imei="234567890123456",
+            device_id="234567890123456",
             brand="Teltonika",
             model="FMB920",
             active=True,
@@ -136,7 +136,7 @@ def seed_test_client(db: Session):
         Device(
             id=uuid4(),
             client_id=client.id,
-            imei="345678901234567",
+            device_id="345678901234567",
             brand="Queclink",
             model="GV500",
             active=True,
@@ -145,7 +145,7 @@ def seed_test_client(db: Session):
     
     for device in devices:
         db.add(device)
-        print(f"✓ Dispositivo creado: {device.imei}")
+        print(f"✓ Dispositivo creado: {device.device_id}")
     
     db.commit()
     
