@@ -13,6 +13,7 @@ from app.models.client import Client, ClientStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.user import User
 from app.schemas.client import ClientCreate, ClientOut
+from app.services.notifications import send_verification_email
 from app.utils.security import generate_verification_token
 
 router = APIRouter()
@@ -84,10 +85,10 @@ def create_client(data: ClientCreate, db: Session = Depends(get_db)):
     db.refresh(client)
     db.refresh(user)
 
-    # TODO: 5️⃣ Enviar correo de verificación
-    # Aquí se enviará un correo con el verification_token_str
-    # URL ejemplo: https://tu-app.com/verify-email?token={verification_token_str}
-    # await send_verification_email(user.email, verification_token_str)
+    # 5️⃣ Enviar correo de verificación
+    email_sent = send_verification_email(user.email, verification_token_str)
+    if not email_sent:
+        print(f"[WARNING] No se pudo enviar el correo de verificación a {user.email}")
 
     return client
 

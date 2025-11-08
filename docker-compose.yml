@@ -32,8 +32,16 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       DB_NAME: ${DB_NAME:-siscom_admin}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      COGNITO_USERPOOL_ID: ${COGNITO_USERPOOL_ID}
+      COGNITO_REGION: ${COGNITO_REGION:-us-east-1}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
       COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      COGNITO_CLIENT_SECRET: ${COGNITO_CLIENT_SECRET}
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD:-TempPass123!}
+      # AWS SES - Email Configuration
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL}
+      SES_REGION: ${SES_REGION:-us-east-1}
+      # Frontend URL
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     ports:
       - "8100:8100"
     volumes:

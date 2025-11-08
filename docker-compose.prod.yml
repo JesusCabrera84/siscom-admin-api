@@ -24,6 +24,13 @@ services:
       
       # User Configuration
       DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD}
+      
+      # AWS SES - Email Configuration
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL}
+      SES_REGION: ${SES_REGION}
+      
+      # Frontend URL
+      FRONTEND_URL: ${FRONTEND_URL}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()"]
       interval: 30s

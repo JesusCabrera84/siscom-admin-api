@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     COGNITO_CLIENT_SECRET: str
     DEFAULT_USER_PASSWORD: str = "TempPass123!"
 
+    # AWS SES - Email configuration
+    SES_FROM_EMAIL: str
+    SES_REGION: Optional[str] = None  # Si es None, usa COGNITO_REGION
+
+    # Frontend URL - Para construir las URLs de acción en emails
+    FRONTEND_URL: str
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

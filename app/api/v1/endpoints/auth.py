@@ -30,6 +30,10 @@ from app.schemas.user import (
     UserLogin,
     UserLoginResponse,
 )
+from app.services.notifications import (
+    send_password_reset_email,
+    send_verification_email,
+)
 
 router = APIRouter()
 
@@ -216,12 +220,12 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
         db.add(token_record)
         db.commit()
 
-        # 4️⃣ TODO: Enviar correo electrónico con el token
-        # Aquí irá la lógica de envío de correo cuando esté implementado el servicio
-        # Por ahora, solo registramos en logs (en producción usar un logger apropiado)
-        print(f"[PASSWORD RESET] Token generado para {user.email}: {reset_token}")
-        print("[PASSWORD RESET] El token expira en 1 hora")
-        print("[PASSWORD RESET] TODO: Enviar correo electrónico con el token")
+        # 4️⃣ Enviar correo electrónico con el token
+        email_sent = send_password_reset_email(user.email, reset_token)
+        if email_sent:
+            print(f"[PASSWORD RESET] Correo enviado a {user.email}")
+        else:
+            print(f"[PASSWORD RESET ERROR] No se pudo enviar el correo a {user.email}")
     else:
         # Por seguridad, no revelar que el usuario no existe
         print(
@@ -533,12 +537,12 @@ def resend_verification(
     db.add(token_record)
     db.commit()
 
-    # d) TODO: Enviar correo electrónico con el token
-    print(
-        f"[RESEND VERIFICATION] Token generado para {user.email}: {verification_token}"
-    )
-    print("[RESEND VERIFICATION] El token expira en 24 horas")
-    print("[RESEND VERIFICATION] TODO: Enviar correo electrónico con el token")
+    # d) Enviar correo electrónico con el token
+    email_sent = send_verification_email(user.email, verification_token)
+    if email_sent:
+        print(f"[RESEND VERIFICATION] Correo enviado a {user.email}")
+    else:
+        print(f"[RESEND VERIFICATION ERROR] No se pudo enviar el correo a {user.email}")
 
     # 4️⃣ Retornar mensaje genérico
     return ResendVerificationResponse(

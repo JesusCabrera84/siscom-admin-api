@@ -21,6 +21,7 @@ from app.schemas.user import (
     UserInviteResponse,
     UserOut,
 )
+from app.services.notifications import send_invitation_email
 from app.utils.security import generate_verification_token
 
 router = APIRouter()
@@ -123,9 +124,10 @@ def invite_user(
     db.add(token_record)
     db.commit()
 
-    # TODO: 5️⃣ Enviar correo con la URL de invitación
-    # URL ejemplo: https://tu-app.com/accept-invitation?token={invitation_token}
-    # await send_invitation_email(data.email, invitation_token, data.full_name)
+    # 5️⃣ Enviar correo con la URL de invitación
+    email_sent = send_invitation_email(data.email, invitation_token, data.full_name)
+    if not email_sent:
+        print(f"[WARNING] No se pudo enviar el correo de invitación a {data.email}")
 
     return UserInviteResponse(
         detail=f"Invitación enviada a {data.email}", expires_at=expires_at
@@ -369,13 +371,12 @@ def resend_invitation(
     db.commit()
     db.refresh(new_invitation)
 
-    # 7️⃣ TODO: Enviar email con la nueva URL de invitación
-    print(
-        f"[RESEND INVITATION] Nueva invitación generada para {data.email} por {current_user.email}"
-    )
-    print(f"[RESEND INVITATION] Token: {new_token}")
-    print(f"[RESEND INVITATION] Expira: {expires_at}")
-    print("[RESEND INVITATION] TODO: Enviar correo electrónico con el token")
+    # 7️⃣ Enviar email con la nueva URL de invitación
+    email_sent = send_invitation_email(data.email, new_token, full_name)
+    if email_sent:
+        print(f"[RESEND INVITATION] Correo enviado a {data.email}")
+    else:
+        print(f"[RESEND INVITATION ERROR] No se pudo enviar el correo a {data.email}")
 
     return ResendInvitationResponse(
         message=f"Invitación reenviada a {data.email}", expires_at=expires_at

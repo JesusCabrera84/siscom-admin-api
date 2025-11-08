@@ -61,9 +61,20 @@ DB_NAME=siscom_admin
 AWS_REGION=us-east-1
 COGNITO_USERPOOL_ID=us-east-1_XXXXXXXXX
 COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+COGNITO_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# AWS SES - Configuración de emails
+SES_FROM_EMAIL=noreply@tudominio.com
+SES_REGION=us-east-1
+
+# Frontend URL - Para links en emails
+FRONTEND_URL=https://app.tudominio.com
 ```
 
-**Importante**: Reemplaza los valores de `COGNITO_USERPOOL_ID` y `COGNITO_CLIENT_ID` con los valores reales de tu User Pool de AWS Cognito.
+**Importante**: 
+- Reemplaza los valores de `COGNITO_*` con los valores reales de tu User Pool de AWS Cognito
+- `SES_FROM_EMAIL` debe estar verificado en AWS SES
+- Ver [Guía de configuración de emails](docs/guides/email-configuration.md) para más detalles
 
 ### 3. Levantar los servicios con Docker
 
@@ -203,7 +214,8 @@ siscom-admin-api/
 │   │   └── payments.md
 │   └── guides/                 # Guías
 │       ├── quickstart.md
-│       └── cognito-setup.md
+│       ├── cognito-setup.md
+│       └── email-configuration.md
 ├── scripts/
 │   └── testing/                # Scripts de prueba
 ├── tests/                      # Tests con pytest
