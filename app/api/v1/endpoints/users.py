@@ -204,25 +204,72 @@ def accept_invitation(
             detail=f"Ya existe un usuario con el email {email}.",
         )
 
+    # 6️⃣ Verificar si el usuario ya existe en Cognito
+    cognito_sub = None
+    user_exists = False
+
     try:
-        # 6️⃣ Crear usuario en Cognito con email verificado
-        user_attributes = [
-            {"Name": "email", "Value": email},
-            {"Name": "email_verified", "Value": "true"},
-        ]
+        # Intentar obtener el usuario de Cognito
+        existing_cognito_user = cognito.admin_get_user(
+            UserPoolId=settings.COGNITO_USER_POOL_ID, Username=email
+        )
+        user_exists = True
 
-        # Agregar nombre si está disponible
-        if full_name:
-            user_attributes.append({"Name": "name", "Value": full_name})
-
-        cognito_resp = cognito.admin_create_user(
-            UserPoolId=settings.COGNITO_USER_POOL_ID,
-            Username=email,
-            UserAttributes=user_attributes,
-            MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
+        # Obtener el cognito_sub del usuario existente
+        cognito_sub = next(
+            (
+                attr["Value"]
+                for attr in existing_cognito_user["UserAttributes"]
+                if attr["Name"] == "sub"
+            ),
+            None,
         )
 
-        # 7️⃣ Establecer contraseña proporcionada por el usuario (permanente)
+        print(f"[ACCEPT INVITATION] Usuario ya existe en Cognito: {email}")
+
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "UserNotFoundException":
+            # Usuario no existe, continuar con la creación
+            user_exists = False
+        else:
+            # Otro error, re-lanzarlo
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al verificar usuario en Cognito: {e.response['Error'].get('Message', str(e))}",
+            )
+
+    try:
+        if not user_exists:
+            # 7️⃣ Crear usuario en Cognito con email verificado
+            user_attributes = [
+                {"Name": "email", "Value": email},
+                {"Name": "email_verified", "Value": "true"},
+            ]
+
+            # Agregar nombre si está disponible
+            if full_name:
+                user_attributes.append({"Name": "name", "Value": full_name})
+
+            cognito_resp = cognito.admin_create_user(
+                UserPoolId=settings.COGNITO_USER_POOL_ID,
+                Username=email,
+                UserAttributes=user_attributes,
+                MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
+            )
+
+            # Obtener el cognito_sub del usuario creado
+            cognito_sub = next(
+                (
+                    attr["Value"]
+                    for attr in cognito_resp["User"]["Attributes"]
+                    if attr["Name"] == "sub"
+                ),
+                None,
+            )
+
+            print(f"[ACCEPT INVITATION] Usuario creado en Cognito: {email}")
+
+        # 8️⃣ Establecer contraseña proporcionada por el usuario (permanente)
         cognito.admin_set_user_password(
             UserPoolId=settings.COGNITO_USER_POOL_ID,
             Username=email,
@@ -230,15 +277,15 @@ def accept_invitation(
             Permanent=True,  # Esto evita el estado FORCE_CHANGE_PASSWORD
         )
 
-        # 8️⃣ Obtener el cognito_sub
-        cognito_sub = next(
-            (
-                attr["Value"]
-                for attr in cognito_resp["User"]["Attributes"]
-                if attr["Name"] == "sub"
-            ),
-            None,
-        )
+        # 9️⃣ Asegurarse de que el email esté verificado en Cognito
+        if user_exists:
+            cognito.admin_update_user_attributes(
+                UserPoolId=settings.COGNITO_USER_POOL_ID,
+                Username=email,
+                UserAttributes=[
+                    {"Name": "email_verified", "Value": "true"},
+                ],
+            )
 
         if not cognito_sub:
             raise HTTPException(
@@ -248,14 +295,9 @@ def accept_invitation(
 
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
-        if error_code == "UsernameExistsException":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El usuario ya existe en Cognito.",
-            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
+            detail=f"Error al configurar usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
         )
 
     # 9️⃣ Crear usuario en la base de datos

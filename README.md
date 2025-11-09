@@ -138,11 +138,22 @@ La API estará disponible en http://localhost:8000
 
 ## Documentación de la API
 
+### 📘 Documentación Completa para Compartir
+
+**[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - Guía exhaustiva de la API para desarrolladores:
+- 📋 Todos los endpoints explicados con ejemplos
+- 🔐 Sistema de autenticación y permisos
+- 🔄 Flujos de negocio completos
+- 🚨 Códigos de error y troubleshooting
+- 🎯 Mejores prácticas de integración
+
+### Documentación Interactiva
+
 Una vez que la API esté corriendo, puedes acceder a:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
-- **📚 Documentación Completa**: [docs/README.md](docs/README.md)
+- **📚 Documentación Técnica**: [docs/README.md](docs/README.md)
 
 ## Guías Rápidas
 

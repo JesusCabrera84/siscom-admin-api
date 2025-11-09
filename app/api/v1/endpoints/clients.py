@@ -151,20 +151,67 @@ def verify_email(token: str, db: Session = Depends(get_db)):
             detail="Token sin contraseña temporal. No se puede completar la verificación.",
         )
 
+    # 6️⃣ Verificar si el usuario ya existe en Cognito
+    cognito_sub = None
+    user_exists = False
+
     try:
-        # 6️⃣ Crear usuario en Cognito con email verificado
-        cognito_resp = cognito.admin_create_user(
-            UserPoolId=settings.COGNITO_USER_POOL_ID,
-            Username=user.email,
-            UserAttributes=[
-                {"Name": "email", "Value": user.email},
-                {"Name": "email_verified", "Value": "true"},
-                {"Name": "name", "Value": user.full_name or ""},
-            ],
-            MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
+        # Intentar obtener el usuario de Cognito
+        existing_cognito_user = cognito.admin_get_user(
+            UserPoolId=settings.COGNITO_USER_POOL_ID, Username=user.email
+        )
+        user_exists = True
+
+        # Obtener el cognito_sub del usuario existente
+        cognito_sub = next(
+            (
+                attr["Value"]
+                for attr in existing_cognito_user["UserAttributes"]
+                if attr["Name"] == "sub"
+            ),
+            None,
         )
 
-        # 7️⃣ Establecer contraseña permanente del usuario
+        print(f"[VERIFY EMAIL] Usuario ya existe en Cognito: {user.email}")
+
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "UserNotFoundException":
+            # Usuario no existe, continuar con la creación
+            user_exists = False
+        else:
+            # Otro error, re-lanzarlo
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error al verificar usuario en Cognito: {e.response['Error'].get('Message', str(e))}",
+            )
+
+    try:
+        if not user_exists:
+            # 7️⃣ Crear usuario en Cognito con email verificado
+            cognito_resp = cognito.admin_create_user(
+                UserPoolId=settings.COGNITO_USER_POOL_ID,
+                Username=user.email,
+                UserAttributes=[
+                    {"Name": "email", "Value": user.email},
+                    {"Name": "email_verified", "Value": "true"},
+                    {"Name": "name", "Value": user.full_name or ""},
+                ],
+                MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
+            )
+
+            # Obtener el cognito_sub del usuario creado
+            cognito_sub = next(
+                (
+                    attr["Value"]
+                    for attr in cognito_resp["User"]["Attributes"]
+                    if attr["Name"] == "sub"
+                ),
+                None,
+            )
+
+            print(f"[VERIFY EMAIL] Usuario creado en Cognito: {user.email}")
+
+        # 8️⃣ Establecer contraseña permanente del usuario (ya sea nuevo o existente)
         cognito.admin_set_user_password(
             UserPoolId=settings.COGNITO_USER_POOL_ID,
             Username=user.email,
@@ -172,31 +219,27 @@ def verify_email(token: str, db: Session = Depends(get_db)):
             Permanent=True,  # Contraseña permanente, no temporal
         )
 
-        # 8️⃣ Obtener el cognito_sub
-        cognito_sub = next(
-            (
-                attr["Value"]
-                for attr in cognito_resp["User"]["Attributes"]
-                if attr["Name"] == "sub"
-            ),
-            None,
-        )
+        # 9️⃣ Asegurarse de que el email esté verificado en Cognito
+        if user_exists:
+            cognito.admin_update_user_attributes(
+                UserPoolId=settings.COGNITO_USER_POOL_ID,
+                Username=user.email,
+                UserAttributes=[
+                    {"Name": "email_verified", "Value": "true"},
+                ],
+            )
 
         if not cognito_sub:
             raise HTTPException(
                 status_code=500,
-                detail="No se pudo obtener el cognito_sub del usuario creado",
+                detail="No se pudo obtener el cognito_sub del usuario",
             )
 
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
-        if error_code == "UsernameExistsException":
-            raise HTTPException(
-                status_code=400, detail="El usuario ya existe en Cognito."
-            )
         raise HTTPException(
             status_code=500,
-            detail=f"Error al crear usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
+            detail=f"Error al configurar usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
         )
 
     # 9️⃣ Actualizar usuario en la base de datos
