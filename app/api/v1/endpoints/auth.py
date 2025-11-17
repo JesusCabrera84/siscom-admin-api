@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import random
 import uuid
 from datetime import datetime, timedelta
 
@@ -191,9 +192,9 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 
     Proceso:
     1. Verifica que el usuario exista en la base de datos
-    2. Genera un token único (UUID)
-    3. Guarda el token en la tabla tokens_confirmacion con tipo PASSWORD_RESET
-    4. TODO: Envía un correo electrónico con el token (pendiente de implementar)
+    2. Genera un código de 6 dígitos aleatorio
+    3. Guarda el código en la tabla tokens_confirmacion con tipo PASSWORD_RESET
+    4. Envía un correo electrónico con el código de 6 dígitos
     5. Retorna un mensaje de éxito (siempre, incluso si el email no existe, por seguridad)
 
     Notas de seguridad:
@@ -205,12 +206,12 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
     user = db.query(User).filter(User.email == request.email).first()
 
     if user:
-        # 2️⃣ Generar un token único
-        reset_token = str(uuid.uuid4())
+        # 2️⃣ Generar un código de 6 dígitos aleatorio
+        reset_code = str(random.randint(100000, 999999))
 
-        # 3️⃣ Guardar el token en la base de datos
+        # 3️⃣ Guardar el código en la base de datos
         token_record = TokenConfirmacion(
-            token=reset_token,
+            token=reset_code,
             type=TokenType.PASSWORD_RESET,
             user_id=user.id,
             email=user.email,
@@ -220,10 +221,10 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
         db.add(token_record)
         db.commit()
 
-        # 4️⃣ Enviar correo electrónico con el token
-        email_sent = send_password_reset_email(user.email, reset_token)
+        # 4️⃣ Enviar correo electrónico con el código de 6 dígitos
+        email_sent = send_password_reset_email(user.email, reset_code)
         if email_sent:
-            print(f"[PASSWORD RESET] Correo enviado a {user.email}")
+            print(f"[PASSWORD RESET] Correo enviado a {user.email} con código: {reset_code}")
         else:
             print(f"[PASSWORD RESET ERROR] No se pudo enviar el correo a {user.email}")
     else:
@@ -239,7 +240,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 
 
 # ------------------------------------------
-# Reset Password - Restablecimiento de contraseña con token
+# Reset Password - Restablecimiento de contraseña con código
 # ------------------------------------------
 @router.post(
     "/reset-password",
@@ -248,29 +249,38 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 )
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
-    Restablece la contraseña de un usuario utilizando un token de recuperación.
+    Restablece la contraseña de un usuario utilizando un código de verificación de 6 dígitos.
 
     Proceso:
-    1. Busca y valida el token en la base de datos
-    2. Verifica que el token no haya expirado
-    3. Verifica que el token no haya sido usado
-    4. Busca el usuario asociado al token
+    1. Busca el usuario por email
+    2. Busca y valida el código en la base de datos
+    3. Verifica que el código no haya expirado
+    4. Verifica que el código no haya sido usado
     5. Actualiza la contraseña en AWS Cognito usando AdminSetUserPassword
-    6. Marca el token como usado
+    6. Marca el código como usado
     7. Retorna un mensaje de éxito
 
     Códigos de error:
-    - 400: Token inválido, expirado o ya usado
+    - 400: Código inválido, expirado o ya usado
     - 404: Usuario no encontrado
     - 500: Error al actualizar la contraseña en Cognito
     """
 
-    # 1️⃣ Buscar el token en la base de datos
+    # 1️⃣ Buscar el usuario en la base de datos
+    user = db.query(User).filter(User.email == request.email).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
+        )
+
+    # 2️⃣ Buscar el código en la base de datos
     token_record = (
         db.query(TokenConfirmacion)
         .filter(
-            TokenConfirmacion.token == request.token,
+            TokenConfirmacion.token == request.code,
             TokenConfirmacion.type == TokenType.PASSWORD_RESET,
+            TokenConfirmacion.email == request.email,
         )
         .first()
     )
@@ -278,29 +288,21 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     if not token_record:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token de recuperación inválido",
+            detail="Código de verificación inválido",
         )
 
-    # 2️⃣ Verificar que el token no haya expirado
+    # 3️⃣ Verificar que el código no haya expirado
     if token_record.expires_at < datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El token de recuperación ha expirado. Por favor, solicita uno nuevo.",
+            detail="El código de verificación ha expirado. Por favor, solicita uno nuevo.",
         )
 
-    # 3️⃣ Verificar que el token no haya sido usado
+    # 4️⃣ Verificar que el código no haya sido usado
     if token_record.used:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este token de recuperación ya ha sido utilizado",
-        )
-
-    # 4️⃣ Buscar el usuario asociado al token
-    user = db.query(User).filter(User.id == token_record.user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
+            detail="Este código de verificación ya ha sido utilizado",
         )
 
     # 5️⃣ Actualizar la contraseña en AWS Cognito
@@ -343,7 +345,7 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
                 detail=f"Error al actualizar la contraseña [{error_code}]: {error_message}",
             )
 
-    # 6️⃣ Marcar el token como usado
+    # 6️⃣ Marcar el código como usado
     token_record.used = True
     db.commit()
 

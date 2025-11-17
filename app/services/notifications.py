@@ -110,25 +110,23 @@ def send_invitation_email(to: str, token: str, full_name: Optional[str] = None) 
     return _send_email(to=to, subject="Invitación a SISCOM", html_body=html_body)
 
 
-def send_password_reset_email(to: str, token: str) -> bool:
+def send_password_reset_email(to: str, code: str) -> bool:
     """
-    Envía un correo de restablecimiento de contraseña.
+    Envía un correo de restablecimiento de contraseña con código de 6 dígitos.
 
     Args:
         to: Email del destinatario
-        token: Token de restablecimiento
+        code: Código de verificación de 6 dígitos
 
     Returns:
         True si se envió correctamente
     """
-    action_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-
     template = jinja_env.get_template("password_reset.html")
     html_body = template.render(
         subject="Restablece tu contraseña",
         title="Restablecimiento de contraseña",
-        message="Has solicitado restablecer tu contraseña. Haz clic en el siguiente botón para crear una nueva contraseña. Este enlace expirará en 1 hora.",
-        action_url=action_url,
+        message="Has solicitado restablecer tu contraseña. Utiliza el siguiente código de verificación en la aplicación para crear una nueva contraseña.",
+        verification_code=code,
     )
 
     return _send_email(

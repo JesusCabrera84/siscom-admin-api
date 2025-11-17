@@ -192,10 +192,19 @@ class ForgotPasswordResponse(BaseModel):
 class ResetPasswordRequest(BaseModel):
     """Schema para restablecer la contraseña."""
 
-    token: str = Field(..., description="Token de recuperación de contraseña")
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
+    code: str = Field(..., min_length=6, max_length=6, description="Código de verificación de 6 dígitos")
     new_password: str = Field(
         ..., min_length=8, description="Nueva contraseña del usuario"
     )
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        """Valida que el código sea numérico."""
+        if not v.isdigit():
+            raise ValueError("El código debe contener solo dígitos")
+        return v
 
     @field_validator("new_password")
     @classmethod
@@ -206,7 +215,8 @@ class ResetPasswordRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "token": "abc123-def456-ghi789",
+                "email": "usuario@example.com",
+                "code": "123456",
                 "new_password": "NuevaPassword123!",
             }
         }

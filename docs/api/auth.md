@@ -50,7 +50,7 @@ Autentica un usuario y devuelve tokens de acceso.
 
 **POST** `/api/v1/auth/forgot-password`
 
-Inicia el proceso de recuperación de contraseña enviando un código al email del usuario.
+Inicia el proceso de recuperación de contraseña. El sistema genera un código de 6 dígitos y lo envía al email del usuario.
 
 #### Request Body
 
@@ -64,10 +64,16 @@ Inicia el proceso de recuperación de contraseña enviando un código al email d
 
 ```json
 {
-  "message": "Si el email existe, recibirás un código de recuperación.",
-  "email": "usuario@ejemplo.com"
+  "message": "Se ha enviado un código de verificación al correo registrado."
 }
 ```
+
+#### Notas
+
+- El código de verificación es de **6 dígitos numéricos** (ej: `123456`)
+- El código se envía por correo electrónico
+- El código expira en **1 hora**
+- Por seguridad, siempre retorna el mismo mensaje, independientemente de si el email existe
 
 ---
 
@@ -75,7 +81,7 @@ Inicia el proceso de recuperación de contraseña enviando un código al email d
 
 **POST** `/api/v1/auth/reset-password`
 
-Restablece la contraseña usando el código enviado por email.
+Restablece la contraseña usando el código de 6 dígitos enviado por email.
 
 #### Request Body
 
@@ -91,15 +97,16 @@ Restablece la contraseña usando el código enviado por email.
 
 ```json
 {
-  "message": "Contraseña restablecida exitosamente.",
-  "email": "usuario@ejemplo.com"
+  "message": "Contraseña restablecida exitosamente. Ahora puede iniciar sesión con su nueva contraseña."
 }
 ```
 
 #### Errores Comunes
 
 - **400 Bad Request**: Código inválido o expirado
+- **400 Bad Request**: Código ya utilizado
 - **400 Bad Request**: Contraseña no cumple requisitos de seguridad
+- **404 Not Found**: Usuario no encontrado
 
 ---
 
@@ -249,20 +256,23 @@ Las contraseñas deben cumplir con los siguientes requisitos de AWS Cognito:
 
 1. Usuario hace clic en "Olvidé mi contraseña" en el frontend
 2. Frontend llama a `POST /api/v1/auth/forgot-password` con el email
-3. AWS Cognito envía un código de 6 dígitos al email del usuario
-4. Usuario ingresa el código y nueva contraseña en el frontend
-5. Frontend llama a `POST /api/v1/auth/reset-password` con email, código y nueva contraseña
-6. Sistema valida el código y actualiza la contraseña
-7. Usuario puede iniciar sesión con la nueva contraseña
+3. **Backend genera un código de 6 dígitos** y lo envía por correo electrónico
+4. Usuario recibe el email con el **código numérico de 6 dígitos** (ej: `123456`)
+5. Usuario ingresa el código y nueva contraseña en el frontend
+6. Frontend llama a `POST /api/v1/auth/reset-password` con email, código y nueva contraseña
+7. Sistema valida el código y actualiza la contraseña en AWS Cognito
+8. Usuario puede iniciar sesión con la nueva contraseña
 
 ---
 
 ## Notas de Seguridad
 
 - Los tokens de acceso expiran en 1 hora
-- Los códigos de verificación expiran en 24 horas
-- Los códigos de recuperación expiran en 1 hora
+- Los códigos de verificación de email expiran en 24 horas
+- Los códigos de recuperación de contraseña expiran en 1 hora
+- Los códigos son de 6 dígitos numéricos y se pueden usar solo una vez
 - El refresh token puede usarse para obtener nuevos access tokens sin reautenticar
 - Los endpoints públicos (no requieren autenticación): login, forgot-password, reset-password, resend-verification, confirm-email
 - Los endpoints protegidos (requieren autenticación): password (cambiar contraseña), logout
+- Por seguridad, los endpoints forgot-password y resend-verification siempre retornan el mismo mensaje sin revelar si el email existe
 
