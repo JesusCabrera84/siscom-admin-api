@@ -193,7 +193,12 @@ class ResetPasswordRequest(BaseModel):
     """Schema para restablecer la contraseña."""
 
     email: EmailStr = Field(..., description="Correo electrónico del usuario")
-    code: str = Field(..., min_length=6, max_length=6, description="Código de verificación de 6 dígitos")
+    code: str = Field(
+        ...,
+        min_length=6,
+        max_length=6,
+        description="Código de verificación de 6 dígitos",
+    )
     new_password: str = Field(
         ..., min_length=8, description="Nueva contraseña del usuario"
     )

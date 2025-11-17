@@ -224,7 +224,9 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
         # 4️⃣ Enviar correo electrónico con el código de 6 dígitos
         email_sent = send_password_reset_email(user.email, reset_code)
         if email_sent:
-            print(f"[PASSWORD RESET] Correo enviado a {user.email} con código: {reset_code}")
+            print(
+                f"[PASSWORD RESET] Correo enviado a {user.email} con código: {reset_code}"
+            )
         else:
             print(f"[PASSWORD RESET ERROR] No se pudo enviar el correo a {user.email}")
     else:
