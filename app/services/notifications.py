@@ -68,6 +68,8 @@ def send_verification_email(to: str, token: str) -> bool:
     Returns:
         True si se envió correctamente
     """
+    from datetime import datetime
+
     action_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
 
     template = jinja_env.get_template("verification_email.html")
@@ -76,6 +78,7 @@ def send_verification_email(to: str, token: str) -> bool:
         title="¡Bienvenido a SISCOM!",
         message="Por favor verifica tu correo electrónico haciendo clic en el siguiente botón para activar tu cuenta.",
         action_url=action_url,
+        year=datetime.now().year,
     )
 
     return _send_email(
@@ -95,6 +98,8 @@ def send_invitation_email(to: str, token: str, full_name: Optional[str] = None) 
     Returns:
         True si se envió correctamente
     """
+    from datetime import datetime
+
     action_url = f"{settings.FRONTEND_URL}/accept-invitation?token={token}"
 
     greeting = f"¡Hola {full_name}!" if full_name else "¡Hola!"
@@ -105,6 +110,7 @@ def send_invitation_email(to: str, token: str, full_name: Optional[str] = None) 
         title=greeting,
         message="Has sido invitado a unirte a SISCOM. Haz clic en el siguiente botón para aceptar la invitación y crear tu cuenta.",
         action_url=action_url,
+        year=datetime.now().year,
     )
 
     return _send_email(to=to, subject="Invitación a SISCOM", html_body=html_body)
@@ -121,12 +127,15 @@ def send_password_reset_email(to: str, code: str) -> bool:
     Returns:
         True si se envió correctamente
     """
+    from datetime import datetime
+
     template = jinja_env.get_template("password_reset.html")
     html_body = template.render(
         subject="Restablece tu contraseña",
         title="Restablecimiento de contraseña",
         message="Has solicitado restablecer tu contraseña. Utiliza el siguiente código de verificación en la aplicación para crear una nueva contraseña.",
         verification_code=code,
+        year=datetime.now().year,
     )
 
     return _send_email(
