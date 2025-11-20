@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
@@ -7,6 +7,30 @@ from app.core.config import settings
 app = FastAPI(
     title=settings.PROJECT_NAME, version="1.0.0", docs_url="/docs", redoc_url="/redoc"
 )
+
+
+# Middleware para limitar el tamaño del body y prevenir ataques DoS
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    """
+    Middleware para limitar el tamaño del body de las peticiones.
+    Previene ataques de denegación de servicio (DoS) con payloads grandes.
+
+    Límite: 50KB (50,000 bytes)
+    """
+    max_body_size = 50000  # 50KB
+
+    if request.headers.get("content-length"):
+        content_length = int(request.headers["content-length"])
+        if content_length > max_body_size:
+            return Response(
+                content="Payload demasiado grande. Máximo permitido: 50KB",
+                status_code=413,
+                media_type="text/plain",
+            )
+
+    return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,

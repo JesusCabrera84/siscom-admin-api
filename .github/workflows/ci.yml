@@ -65,6 +65,9 @@ jobs:
             -e COGNITO_USER_POOL_ID=test \
             -e COGNITO_CLIENT_ID=test \
             -e COGNITO_CLIENT_SECRET=test \
+            -e SES_FROM_EMAIL=test@test.com \
+            -e FRONTEND_URL=http://localhost:3000 \
+            -e CONTACT_EMAIL=test@test.com \
             siscom-admin-api:test || true
           
           sleep 5

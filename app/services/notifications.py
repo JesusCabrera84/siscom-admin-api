@@ -180,3 +180,39 @@ def send_push_notification(
     # TODO: Implementar push notifications (Firebase, OneSignal, etc.)
     print(f"[STUB] Push notification enviada a {user_id}: {title}")
     return True
+
+
+def send_contact_email(
+    nombre: str,
+    correo_electronico: Optional[str],
+    telefono: Optional[str],
+    mensaje: str,
+) -> bool:
+    """
+    Envía un correo electrónico con un mensaje de contacto.
+
+    Args:
+        nombre: Nombre de la persona que envía el mensaje
+        correo_electronico: Email de contacto (opcional)
+        telefono: Teléfono de contacto (opcional)
+        mensaje: Contenido del mensaje
+
+    Returns:
+        True si se envió correctamente, False en caso de error
+    """
+    from datetime import datetime
+
+    template = jinja_env.get_template("contact_message.html")
+    html_body = template.render(
+        nombre=nombre,
+        correo_electronico=correo_electronico or "No proporcionado",
+        telefono=telefono or "No proporcionado",
+        mensaje=mensaje,
+        year=datetime.now().year,
+    )
+
+    return _send_email(
+        to=settings.CONTACT_EMAIL,
+        subject=f"Nuevo mensaje de contacto desde la página web - {nombre}",
+        html_body=html_body,
+    )

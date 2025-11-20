@@ -2,6 +2,7 @@
 Validadores reutilizables para diferentes campos de los modelos.
 """
 
+import html
 import re
 
 
@@ -66,3 +67,102 @@ def validate_name(name: str) -> str:
         raise ValueError("El nombre debe tener al menos 2 caracteres")
 
     return name
+
+
+def sanitize_html(text: str, max_length: int = 5000) -> str:
+    """
+    Sanitiza texto escapando HTML y scripts para prevenir XSS.
+
+    Args:
+        text: El texto a sanitizar
+        max_length: Longitud máxima permitida del texto
+
+    Returns:
+        str: El texto sanitizado y escapado
+
+    Raises:
+        ValueError: Si el texto excede la longitud máxima
+    """
+    if not text:
+        return text
+
+    # Limpiar espacios
+    text = text.strip()
+
+    # Validar longitud
+    if len(text) > max_length:
+        raise ValueError(f"El texto no puede exceder {max_length} caracteres")
+
+    # Escapar HTML para prevenir XSS
+    sanitized = html.escape(text)
+
+    return sanitized
+
+
+def sanitize_contact_field(text: str, field_name: str, max_length: int = 1000) -> str:
+    """
+    Sanitiza campos de formulario de contacto.
+
+    Args:
+        text: El texto a sanitizar
+        field_name: Nombre del campo (para mensajes de error)
+        max_length: Longitud máxima permitida
+
+    Returns:
+        str: El texto sanitizado
+
+    Raises:
+        ValueError: Si el texto es inválido
+    """
+    if not text:
+        return text
+
+    text = text.strip()
+
+    if not text:
+        raise ValueError(f"El campo {field_name} no puede estar vacío")
+
+    if len(text) > max_length:
+        raise ValueError(
+            f"El campo {field_name} no puede exceder {max_length} caracteres"
+        )
+
+    # Escapar HTML
+    return html.escape(text)
+
+
+def validate_phone(phone: str) -> str:
+    """
+    Valida y sanitiza un número de teléfono.
+    Permite números con espacios, guiones, paréntesis y signo +
+
+    Args:
+        phone: El teléfono a validar
+
+    Returns:
+        str: El teléfono sanitizado
+
+    Raises:
+        ValueError: Si el teléfono es inválido
+    """
+    if not phone:
+        return phone
+
+    phone = phone.strip()
+
+    # Permitir solo caracteres válidos en números de teléfono
+    if not re.match(r"^[\d\s\+\-\(\)]+$", phone):
+        raise ValueError(
+            "El teléfono solo puede contener números, espacios, +, -, ( y )"
+        )
+
+    # Validar longitud razonable (mínimo 7, máximo 20 caracteres)
+    digits_only = re.sub(r"\D", "", phone)
+    if len(digits_only) < 7:
+        raise ValueError("El teléfono debe tener al menos 7 dígitos")
+
+    if len(digits_only) > 20:
+        raise ValueError("El teléfono no puede tener más de 20 dígitos")
+
+    # Escapar cualquier HTML por seguridad
+    return html.escape(phone)

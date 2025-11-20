@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Frontend URL - Para construir las URLs de acción en emails
     FRONTEND_URL: str
 
+    # Contact Email - Email donde se reciben los mensajes de contacto
+    CONTACT_EMAIL: Optional[str] = None
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

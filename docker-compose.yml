@@ -42,6 +42,8 @@ services:
       SES_REGION: ${SES_REGION:-us-east-1}
       # Frontend URL
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Contact Email - Email donde se reciben los mensajes de contacto
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-contacto@geminislabs.com}
     ports:
       - "8100:8100"
     volumes:

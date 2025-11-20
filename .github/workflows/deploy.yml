@@ -89,12 +89,13 @@ jobs:
           SES_FROM_EMAIL: ${{ vars.SES_FROM_EMAIL }}
           SES_REGION: ${{ vars.SES_REGION }}
           FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+          CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
-          envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL
+          envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,CONTACT_EMAIL
           script: |
             cd /home/${{ secrets.EC2_USERNAME }}/siscom-admin-api
             
@@ -122,6 +123,7 @@ jobs:
             SES_FROM_EMAIL=${SES_FROM_EMAIL}
             SES_REGION=${SES_REGION}
             FRONTEND_URL=${FRONTEND_URL}
+            CONTACT_EMAIL=${CONTACT_EMAIL}
             EOF
             
             # Detener y eliminar el contenedor existente de forma robusta
