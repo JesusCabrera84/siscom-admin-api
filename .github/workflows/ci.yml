@@ -68,6 +68,7 @@ jobs:
             -e SES_FROM_EMAIL=test@test.com \
             -e FRONTEND_URL=http://localhost:3000 \
             -e CONTACT_EMAIL=test@test.com \
+            -e RECAPTCHA_SECRET_KEY=test_key \
             siscom-admin-api:test || true
           
           sleep 5

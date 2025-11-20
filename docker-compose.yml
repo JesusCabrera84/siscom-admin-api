@@ -44,6 +44,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # Contact Email - Email donde se reciben los mensajes de contacto
       CONTACT_EMAIL: ${CONTACT_EMAIL:-contacto@geminislabs.com}
+      # Google reCAPTCHA v3
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     ports:
       - "8100:8100"
     volumes:

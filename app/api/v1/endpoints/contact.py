@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.core.config import settings
 from app.schemas.contact import ContactMessageCreate, ContactMessageResponse
 from app.services.notifications import send_contact_email
+from app.utils.recaptcha import verify_recaptcha
 
 router = APIRouter()
 
@@ -16,7 +17,7 @@ router = APIRouter()
     response_model=ContactMessageResponse,
     status_code=status.HTTP_200_OK,
 )
-def send_contact_message(message: ContactMessageCreate):
+async def send_contact_message(message: ContactMessageCreate):
     """
     Envía un mensaje de contacto al email configurado.
 
@@ -32,6 +33,19 @@ def send_contact_message(message: ContactMessageCreate):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="El servicio de contacto no está configurado. Por favor contacte al administrador.",
+        )
+
+    # Verificar reCAPTCHA v3
+    try:
+        await verify_recaptcha(message.recaptcha_token, min_score=0.5)
+    except HTTPException as e:
+        # Re-raise la excepción de reCAPTCHA
+        raise e
+    except Exception as e:
+        print(f"[CONTACT ERROR] Error al verificar reCAPTCHA: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error al verificar la seguridad. Por favor intenta más tarde.",
         )
 
     try:

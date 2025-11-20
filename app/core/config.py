@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Contact Email - Email donde se reciben los mensajes de contacto
     CONTACT_EMAIL: Optional[str] = None
 
+    # reCAPTCHA v3 - Secret key para validación
+    RECAPTCHA_SECRET_KEY: Optional[str] = None
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

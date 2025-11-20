@@ -34,6 +34,9 @@ services:
       
       # Contact Email - Email donde se reciben los mensajes de contacto
       CONTACT_EMAIL: ${CONTACT_EMAIL}
+      
+      # Google reCAPTCHA v3 - Secret key
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()"]
       interval: 30s

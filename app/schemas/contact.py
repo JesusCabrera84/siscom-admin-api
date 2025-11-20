@@ -16,6 +16,7 @@ class ContactMessageCreate(BaseModel):
     correo_electronico: Optional[EmailStr] = None
     telefono: Optional[str] = None
     mensaje: str
+    recaptcha_token: Optional[str] = None  # Token de reCAPTCHA v3
 
     @field_validator("nombre")
     @classmethod
