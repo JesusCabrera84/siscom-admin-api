@@ -20,6 +20,7 @@ class Device(SQLModel, table=True):
 
     Estados del ciclo de vida:
     - nuevo: Recién ingresado al inventario
+    - preparado: Asignado a un cliente, listo para envío
     - enviado: En camino al cliente
     - entregado: Recibido por el cliente
     - asignado: Vinculado a una unidad (vehículo)
@@ -33,7 +34,7 @@ class Device(SQLModel, table=True):
         Index("idx_devices_client_id", "client_id"),
         Index("idx_devices_brand_model", "brand", "model"),
         CheckConstraint(
-            "status IN ('nuevo', 'enviado', 'entregado', 'asignado', 'devuelto', 'inactivo')",
+            "status IN ('nuevo', 'preparado', 'enviado', 'entregado', 'asignado', 'devuelto', 'inactivo')",
             name="check_device_status",
         ),
     )
@@ -103,6 +104,7 @@ class DeviceEvent(SQLModel, table=True):
 
     Tipos de eventos:
     - creado: Dispositivo registrado en el sistema
+    - preparado: Dispositivo asignado a cliente y listo para envío
     - enviado: Dispositivo enviado al cliente
     - entregado: Dispositivo recibido por el cliente
     - asignado: Dispositivo asignado a una unidad
@@ -118,7 +120,7 @@ class DeviceEvent(SQLModel, table=True):
         Index("idx_device_events_created_at", "created_at"),
         Index("idx_device_events_event_type", "event_type"),
         CheckConstraint(
-            "event_type IN ('creado', 'enviado', 'entregado', 'asignado', 'devuelto', 'firmware_actualizado', 'nota', 'estado_cambiado')",
+            "event_type IN ('creado', 'preparado', 'enviado', 'entregado', 'asignado', 'devuelto', 'firmware_actualizado', 'nota', 'estado_cambiado')",
             name="check_event_type",
         ),
     )

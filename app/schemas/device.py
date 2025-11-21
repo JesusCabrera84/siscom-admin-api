@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 # ============================================
 
 DeviceStatus = Literal[
-    "nuevo", "enviado", "entregado", "asignado", "devuelto", "inactivo"
+    "nuevo", "preparado", "enviado", "entregado", "asignado", "devuelto", "inactivo"
 ]
 
 
@@ -59,7 +59,7 @@ class DeviceStatusUpdate(BaseModel):
 
     new_status: DeviceStatus = Field(..., description="Nuevo estado del dispositivo")
     client_id: Optional[UUID] = Field(
-        None, description="ID del cliente (requerido para 'enviado', 'entregado')"
+        None, description="ID del cliente (requerido para 'preparado')"
     )
     unit_id: Optional[UUID] = Field(
         None, description="ID de la unidad (requerido para 'asignado')"
@@ -107,6 +107,7 @@ class DeviceOut(BaseModel):
 
 EventType = Literal[
     "creado",
+    "preparado",
     "enviado",
     "entregado",
     "asignado",

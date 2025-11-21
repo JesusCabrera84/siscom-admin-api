@@ -256,8 +256,9 @@ def update_device_status(
     Actualiza el estado del dispositivo siguiendo las reglas de negocio.
 
     Reglas:
-    - 'enviado': Requiere client_id, crea evento
-    - 'entregado': Valida que esté en 'enviado', actualiza client_id
+    - 'preparado': Requiere client_id, asigna el cliente al dispositivo
+    - 'enviado': Debe estar en estado 'preparado', marca el dispositivo como enviado
+    - 'entregado': Valida que tenga client_id asignado
     - 'asignado': Requiere unit_id, actualiza last_assignment_at
     - 'devuelto': Quita client_id, puede reintegrarse al inventario
     - 'inactivo': Baja definitiva, no puede reasignarse
@@ -277,12 +278,12 @@ def update_device_status(
     # Validaciones según el nuevo estado
     # ============================================
 
-    if new_status == "enviado":
+    if new_status == "preparado":
         # Requiere client_id
         if not status_update.client_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Se requiere client_id para enviar el dispositivo",
+                detail="Se requiere client_id para preparar el dispositivo",
             )
 
         # Verificar que el cliente existe
@@ -294,9 +295,20 @@ def update_device_status(
             )
 
         device.client_id = status_update.client_id
-        device.status = "enviado"
+        device.status = "preparado"
 
-        event_details = f"Dispositivo enviado a cliente {client.name}"
+        event_details = f"Dispositivo preparado para cliente {client.name}"
+
+    elif new_status == "enviado":
+        # Debe estar en estado 'preparado' antes de ser enviado
+        if device.status != "preparado":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El dispositivo debe estar en estado 'preparado' antes de ser enviado",
+            )
+
+        device.status = "enviado"
+        event_details = "Dispositivo enviado al cliente"
 
     elif new_status == "entregado":
         # Debe tener client_id

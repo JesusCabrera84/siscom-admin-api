@@ -51,6 +51,7 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 | Estado | Descripción | `client_id` | Puede asignarse |
 |--------|-------------|-------------|-----------------|
 | `nuevo` | Recién ingresado al inventario | NULL | No |
+| `preparado` | Asignado a un cliente, listo para envío | Asignado | No |
 | `enviado` | En camino al cliente | Asignado | No |
 | `entregado` | Recibido y confirmado por cliente | Asignado | Sí |
 | `asignado` | Instalado en una unidad | Asignado | No |
@@ -66,7 +67,8 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 | Evento | Regla | Acción |
 |--------|-------|--------|
 | Registrar nuevo dispositivo | `status='nuevo'` y sin cliente asignado | Insertar registro en `devices` |
-| Enviar dispositivo | Cambiar `status='enviado'` y crear registro en `device_events` | `PATCH /devices/{device_id}/status` |
+| Preparar dispositivo | Cambiar `status='preparado'` y asignar `client_id` | `PATCH /devices/{device_id}/status` |
+| Enviar dispositivo | Cambiar `status='enviado'`, debe estar en estado `preparado` | `PATCH /devices/{device_id}/status` |
 | Confirmar entrega | `status='entregado'`, actualizar `client_id` | Cliente o maestro lo valida |
 | Asignar a unidad | `status='asignado'`, actualizar `last_assignment_at` | Se crea relación con unidad |
 | Devolución | `status='devuelto'`, quitar `client_id` | Puede reintegrarse al inventario |
@@ -384,19 +386,31 @@ Authorization: Bearer <access_token>
 
 #### Request Body
 
-##### Enviar Dispositivo (`nuevo` → `enviado`)
+##### Preparar Dispositivo (`nuevo` → `preparado`)
 
 ```json
 {
-  "new_status": "enviado",
+  "new_status": "preparado",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
-  "notes": "Enviado via FedEx - Tracking: 1234567890"
+  "notes": "Dispositivo asignado y listo para envío"
 }
 ```
 
 **Validaciones**:
 - Requiere `client_id` válido
 - El cliente debe existir en el sistema
+
+##### Enviar Dispositivo (`preparado` → `enviado`)
+
+```json
+{
+  "new_status": "enviado",
+  "notes": "Enviado via FedEx - Tracking: 1234567890"
+}
+```
+
+**Validaciones**:
+- El dispositivo debe estar en estado `preparado`
 
 ##### Confirmar Entrega (`enviado` → `entregado`)
 
@@ -599,6 +613,7 @@ POST /api/v1/devices/123456789012345/notes?note=Dispositivo%20revisado%20y%20fun
 | Tipo | Descripción | Cuándo se genera |
 |------|-------------|------------------|
 | `creado` | Dispositivo registrado | Al crear dispositivo |
+| `preparado` | Dispositivo preparado para envío | Al cambiar a estado `preparado` |
 | `enviado` | Dispositivo enviado a cliente | Al cambiar a estado `enviado` |
 | `entregado` | Dispositivo recibido | Al confirmar entrega |
 | `asignado` | Dispositivo instalado en unidad | Al asignar a unidad |
@@ -633,19 +648,22 @@ FOR EACH ROW EXECUTE FUNCTION prevent_device_delete();
 1. REGISTRAR
    POST /devices/ → status='nuevo'
    
-2. ENVIAR
-   PATCH /devices/{id}/status → status='enviado', client_id=<cliente>
+2. PREPARAR
+   PATCH /devices/{id}/status → status='preparado', client_id=<cliente>
    
-3. CONFIRMAR ENTREGA
+3. ENVIAR
+   PATCH /devices/{id}/status → status='enviado'
+   
+4. CONFIRMAR ENTREGA
    PATCH /devices/{id}/status → status='entregado'
    
-4. ASIGNAR A UNIDAD
+5. ASIGNAR A UNIDAD
    PATCH /devices/{id}/status → status='asignado', unit_id=<unidad>
    
-5a. DEVOLVER (opcional)
+6a. DEVOLVER (opcional)
     PATCH /devices/{id}/status → status='devuelto', client_id=NULL
     
-5b. DAR DE BAJA (opcional)
+6b. DAR DE BAJA (opcional)
     PATCH /devices/{id}/status → status='inactivo'
 ```
 
@@ -665,22 +683,29 @@ POST /api/v1/devices/
   "firmware_version": "1.2.3"
 }
 
-# 2. Enviar a cliente
+# 2. Preparar para cliente
+PATCH /api/v1/devices/353451234567890/status
+{
+  "new_status": "preparado",
+  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "notes": "Dispositivo asignado y listo para envío"
+}
+
+# 3. Enviar al cliente
 PATCH /api/v1/devices/353451234567890/status
 {
   "new_status": "enviado",
-  "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "notes": "Enviado via DHL - Tracking: ABC123"
 }
 
-# 3. Confirmar entrega
+# 4. Confirmar entrega
 PATCH /api/v1/devices/353451234567890/status
 {
   "new_status": "entregado",
   "notes": "Recibido por María González"
 }
 
-# 4. Asignar a unidad
+# 5. Asignar a unidad
 PATCH /api/v1/devices/353451234567890/status
 {
   "new_status": "asignado",
@@ -688,7 +713,7 @@ PATCH /api/v1/devices/353451234567890/status
   "notes": "Instalado en camión XYZ-789"
 }
 
-# 5. Ver historial
+# 6. Ver historial
 GET /api/v1/devices/353451234567890/events
 ```
 
@@ -735,6 +760,9 @@ GET /api/v1/devices/?status_filter=devuelto
 ```bash
 # Dispositivos nuevos en inventario
 GET /api/v1/devices/?status_filter=nuevo
+
+# Dispositivos preparados para envío
+GET /api/v1/devices/?status_filter=preparado
 
 # Dispositivos en tránsito
 GET /api/v1/devices/?status_filter=enviado
