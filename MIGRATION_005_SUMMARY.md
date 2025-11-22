@@ -5,6 +5,7 @@
 La migración para renombrar `imei` a `device_id` se ha completado exitosamente.
 
 ### Base de Datos ✅
+
 - ✅ Columna `imei` renombrada a `device_id`
 - ✅ Índice `idx_devices_imei` actualizado a `idx_devices_device_id`
 - ✅ Todos los datos preservados intactos
@@ -12,24 +13,30 @@ La migración para renombrar `imei` a `device_id` se ha completado exitosamente.
 ### Código Actualizado ✅
 
 #### Modelos
+
 - `app/models/device.py` - Campo y índice actualizados
 
 #### Schemas
+
 - `app/schemas/device.py` - DeviceBase, DeviceCreate, DeviceOut actualizados
 
 #### Endpoints
+
 - `app/api/v1/endpoints/devices.py` - Validación y creación actualizadas
 - `app/api/v1/endpoints/services.py` - Respuesta actualizada a `device_device_id`
 
 #### Tests
+
 - `tests/test_devices.py` - Todas las aserciones actualizadas
 - `tests/test_services.py` - Validación actualizada
 - `tests/conftest.py` - Fixture actualizado
 
 #### Scripts
+
 - `scripts/seed_data.py` - Datos de prueba actualizados
 
 #### Documentación
+
 - `docs/api/devices.md` - Ejemplos y validaciones actualizadas
 - `docs/api/orders.md` - Ejemplos actualizados
 - `docs/README.md` - Definición del modelo actualizada
@@ -53,11 +60,14 @@ La migración para renombrar `imei` a `device_id` se ha completado exitosamente.
 ## Problemas Resueltos
 
 ### Cadena de Revisiones Rota
+
 **Problema:** Había archivos de migración duplicados y referencias inconsistentes:
+
 - Dos archivos con prefijo `003`
 - Referencias a IDs de revisión inexistentes
 
 **Solución:**
+
 1. Eliminado `003_make_password_hash_nullable.py` (duplicado)
 2. Actualizado `004_add_password_temp_and_nullable_password_hash.py`:
    - Revision ID: `004_password_temp`
@@ -65,8 +75,9 @@ La migración para renombrar `imei` a `device_id` se ha completado exitosamente.
 3. Hecho la migración 004 idempotente para evitar errores en re-ejecuciones
 
 ### Cadena Final Correcta
+
 ```
-<base> → 001_update_user → 002_tokens_table → 003_invitation_fields 
+<base> → 001_update_user → 002_tokens_table → 003_invitation_fields
 → 004_password_temp → 005_rename_device_id (head) ✅
 ```
 
@@ -79,6 +90,7 @@ python scripts/verify_device_id_migration.py
 ```
 
 Resultado esperado:
+
 ```
 ✅ Migración aplicada correctamente!
   ✓ device_id: text (nullable: NO)
@@ -88,12 +100,14 @@ Resultado esperado:
 ## Estado Actual del Sistema
 
 ### Revisión de Alembic
+
 ```bash
 $ alembic current
 005_rename_device_id (head)
 ```
 
 ### Columnas en la tabla devices
+
 - ✅ `device_id` - text, NOT NULL, unique, indexed
 - ✅ Índice: `idx_devices_device_id`
 - ❌ `imei` - NO EXISTE (como se esperaba)
@@ -102,6 +116,7 @@ $ alembic current
 ## Comandos Útiles
 
 ### Verificar Estado
+
 ```bash
 # Ver revisión actual
 alembic current
@@ -114,6 +129,7 @@ python scripts/verify_device_id_migration.py
 ```
 
 ### Revertir (si es necesario)
+
 ```bash
 # Revertir a la migración anterior
 alembic downgrade 004_password_temp
@@ -123,6 +139,7 @@ alembic downgrade 004_password_temp --sql
 ```
 
 ### Tests
+
 ```bash
 # Ejecutar tests de dispositivos
 pytest tests/test_devices.py -v
@@ -136,6 +153,7 @@ pytest -v
 Si tienes aplicaciones frontend o clientes que consumen esta API:
 
 ### Cambios en Request Body
+
 ```json
 // ANTES
 {
@@ -153,6 +171,7 @@ Si tienes aplicaciones frontend o clientes que consumen esta API:
 ```
 
 ### Cambios en Response
+
 ```json
 // ANTES
 {
@@ -170,6 +189,7 @@ Si tienes aplicaciones frontend o clientes que consumen esta API:
 ```
 
 ### Servicios Activos
+
 ```json
 // ANTES
 {
@@ -211,4 +231,3 @@ Todos los cambios necesarios para renombrar `imei` a `device_id` han sido implem
 **Fecha de Migración:** 2025-11-04  
 **Revisión Actual:** 005_rename_device_id  
 **Estado:** ✅ Completado
-

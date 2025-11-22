@@ -15,32 +15,33 @@ Esta migración implementa un **ciclo de vida completo** para dispositivos GPS/I
 ### 1. Tabla `devices` - Nueva Estructura
 
 #### Cambios en Primary Key
+
 - **Antes**: `id` (UUID) como PRIMARY KEY
 - **Ahora**: `device_id` (TEXT) como PRIMARY KEY
 
 #### Cambios en Campos
 
-| Campo | Antes | Ahora | Descripción |
-|-------|-------|-------|-------------|
-| `id` | UUID PRIMARY KEY | ❌ **Eliminado** | Ya no se usa UUID |
-| `device_id` | VARCHAR(50) UNIQUE | TEXT PRIMARY KEY | Ahora es la clave principal |
-| `client_id` | UUID NOT NULL | UUID **NULLABLE** | NULL hasta envío |
-| `active` | BOOLEAN | ❌ **Eliminado** | Reemplazado por `status` |
-| `status` | ❌ N/A | TEXT NOT NULL | Nuevo campo con estados |
-| `firmware_version` | ❌ N/A | TEXT | Nuevo campo |
-| `last_assignment_at` | ❌ N/A | TIMESTAMP | Nuevo campo |
-| `notes` | ❌ N/A | TEXT | Nuevo campo |
+| Campo                | Antes              | Ahora             | Descripción                 |
+| -------------------- | ------------------ | ----------------- | --------------------------- |
+| `id`                 | UUID PRIMARY KEY   | ❌ **Eliminado**  | Ya no se usa UUID           |
+| `device_id`          | VARCHAR(50) UNIQUE | TEXT PRIMARY KEY  | Ahora es la clave principal |
+| `client_id`          | UUID NOT NULL      | UUID **NULLABLE** | NULL hasta envío            |
+| `active`             | BOOLEAN            | ❌ **Eliminado**  | Reemplazado por `status`    |
+| `status`             | ❌ N/A             | TEXT NOT NULL     | Nuevo campo con estados     |
+| `firmware_version`   | ❌ N/A             | TEXT              | Nuevo campo                 |
+| `last_assignment_at` | ❌ N/A             | TIMESTAMP         | Nuevo campo                 |
+| `notes`              | ❌ N/A             | TEXT              | Nuevo campo                 |
 
 #### Estados Disponibles
 
-| Estado | Descripción | client_id |
-|--------|-------------|-----------|
-| `nuevo` | Recién ingresado al inventario | NULL |
-| `enviado` | En camino al cliente | Asignado |
-| `entregado` | Recibido por el cliente | Asignado |
-| `asignado` | Instalado en una unidad | Asignado |
-| `devuelto` | Devuelto al inventario | NULL |
-| `inactivo` | Baja definitiva | Asignado |
+| Estado      | Descripción                    | client_id |
+| ----------- | ------------------------------ | --------- |
+| `nuevo`     | Recién ingresado al inventario | NULL      |
+| `enviado`   | En camino al cliente           | Asignado  |
+| `entregado` | Recibido por el cliente        | Asignado  |
+| `asignado`  | Instalado en una unidad        | Asignado  |
+| `devuelto`  | Devuelto al inventario         | NULL      |
+| `inactivo`  | Baja definitiva                | Asignado  |
 
 ### 2. Nueva Tabla `device_events`
 
@@ -95,14 +96,14 @@ La tabla `device_services` también se actualizó:
 
 ### Por Evento
 
-| Evento | Acción en API | Estado Resultante | Validaciones |
-|--------|--------------|-------------------|--------------|
-| Registrar dispositivo | `POST /devices/` | `status='nuevo'`, `client_id=NULL` | device_id único |
-| Enviar dispositivo | `PATCH /devices/{id}/status` | `status='enviado'`, asigna client_id | Requiere client_id válido |
-| Confirmar entrega | `PATCH /devices/{id}/status` | `status='entregado'` | Debe tener client_id |
-| Asignar a unidad | `PATCH /devices/{id}/status` | `status='asignado'`, actualiza `last_assignment_at` | Requiere unit_id válido |
-| Devolver | `PATCH /devices/{id}/status` | `status='devuelto'`, quita client_id | Puede reintegrarse |
-| Dar de baja | `PATCH /devices/{id}/status` | `status='inactivo'` | Baja definitiva |
+| Evento                | Acción en API                | Estado Resultante                                   | Validaciones              |
+| --------------------- | ---------------------------- | --------------------------------------------------- | ------------------------- |
+| Registrar dispositivo | `POST /devices/`             | `status='nuevo'`, `client_id=NULL`                  | device_id único           |
+| Enviar dispositivo    | `PATCH /devices/{id}/status` | `status='enviado'`, asigna client_id                | Requiere client_id válido |
+| Confirmar entrega     | `PATCH /devices/{id}/status` | `status='entregado'`                                | Debe tener client_id      |
+| Asignar a unidad      | `PATCH /devices/{id}/status` | `status='asignado'`, actualiza `last_assignment_at` | Requiere unit_id válido   |
+| Devolver              | `PATCH /devices/{id}/status` | `status='devuelto'`, quita client_id                | Puede reintegrarse        |
+| Dar de baja           | `PATCH /devices/{id}/status` | `status='inactivo'`                                 | Baja definitiva           |
 
 ### Consideraciones Importantes
 
@@ -122,10 +123,10 @@ La tabla `device_services` también se actualizó:
 La migración convierte el campo booleano `active` al nuevo sistema de estados:
 
 ```sql
-CASE 
-    WHEN active = true AND installed_in_unit_id IS NOT NULL 
+CASE
+    WHEN active = true AND installed_in_unit_id IS NOT NULL
         THEN 'asignado'
-    WHEN active = true AND installed_in_unit_id IS NULL 
+    WHEN active = true AND installed_in_unit_id IS NULL
         THEN 'entregado'
     ELSE 'inactivo'
 END as status
@@ -137,7 +138,7 @@ Para cada dispositivo migrado se crea un evento inicial:
 
 ```sql
 INSERT INTO device_events (device_id, event_type, new_status, event_details)
-SELECT 
+SELECT
     device_id,
     'creado',
     status,
@@ -157,7 +158,7 @@ FROM devices
 {
   "new_status": "enviado",
   "client_id": "uuid-del-cliente",
-  "unit_id": "uuid-de-unidad",  // solo para 'asignado'
+  "unit_id": "uuid-de-unidad", // solo para 'asignado'
   "notes": "Notas opcionales"
 }
 ```
@@ -185,28 +186,35 @@ Lista dispositivos del cliente autenticado.
 ## Archivos Modificados
 
 ### Modelos
+
 - ✅ `app/models/device.py` - Actualizado con nueva estructura
 - ✅ `app/models/device.py` - Agregada clase `DeviceEvent`
 - ✅ `app/models/device_service.py` - Actualizado device_id a TEXT
 
 ### Schemas
+
 - ✅ `app/schemas/device.py` - Nuevos schemas para estados y eventos
 
 ### Endpoints
+
 - ✅ `app/api/v1/endpoints/devices.py` - Reescrito completamente con reglas de negocio
 - ✅ `app/api/deps.py` - Agregada función `get_current_user_id()`
 
 ### Tests
+
 - ✅ `tests/test_devices.py` - Actualizados con nuevos escenarios
 - ✅ `tests/conftest.py` - Fixtures actualizadas
 
 ### Documentación
+
 - ✅ `docs/api/devices.md` - Documentación completa actualizada
 
 ### Migraciones
+
 - ✅ `app/db/migrations/versions/006_restructure_devices_add_events.py`
 
 ### Scripts
+
 - ✅ `scripts/apply_006_migration.py` - Script de aplicación
 
 ---
@@ -257,8 +265,8 @@ SELECT tgname FROM pg_trigger WHERE tgrelid = 'devices'::regclass;
 
 ```sql
 -- Distribución de estados
-SELECT status, COUNT(*) 
-FROM devices 
+SELECT status, COUNT(*)
+FROM devices
 GROUP BY status;
 
 -- Verificar eventos creados
@@ -298,6 +306,7 @@ alembic downgrade 005_rename_device_id
 ```
 
 **⚠️ ADVERTENCIA**: El downgrade puede causar pérdida de datos:
+
 - Se perderá toda la tabla `device_events`
 - Se perderán los campos `firmware_version`, `last_assignment_at`, `notes`
 - Los estados se mapearán de vuelta a booleano `active`
@@ -338,26 +347,31 @@ alembic downgrade 005_rename_device_id
 ## Beneficios de Esta Migración
 
 ### 1. Trazabilidad Completa
+
 - Historial completo de cambios
 - Auditoría de quién hizo qué y cuándo
 - No se puede eliminar información histórica
 
 ### 2. Flujo de Trabajo Claro
+
 - Estados bien definidos
 - Validaciones de negocio implementadas
 - Transiciones controladas
 
 ### 3. Mejor Gestión de Inventario
+
 - Dispositivos sin cliente (inventario)
 - Seguimiento de envíos y entregas
 - Control de devoluciones
 
 ### 4. Flexibilidad
+
 - Fácil agregar nuevos estados
 - Eventos personalizables
 - Notas administrativas
 
 ### 5. Integridad de Datos
+
 - Trigger previene eliminaciones accidentales
 - Foreign keys actualizadas
 - Validaciones a nivel de base de datos
@@ -367,6 +381,7 @@ alembic downgrade 005_rename_device_id
 ## Soporte y Contacto
 
 Para problemas o preguntas sobre esta migración, consultar:
+
 - Documentación completa: `docs/api/devices.md`
 - Guía de migración: Este documento
 - Tests de referencia: `tests/test_devices.py`
@@ -376,4 +391,3 @@ Para problemas o preguntas sobre esta migración, consultar:
 **Fecha de Creación**: 6 de noviembre de 2025  
 **Versión de Migración**: 006_devices_events  
 **Estado**: ✅ Completada y documentada
-

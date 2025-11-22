@@ -368,4 +368,3 @@ Ver [CHANGELOG](../CHANGELOG.md) para cambios recientes en la API.
 ---
 
 **Última actualización**: Noviembre 2025
-

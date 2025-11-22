@@ -122,11 +122,13 @@ COGNITO_REGION=us-east-1
 3. Personaliza el mensaje:
 
 **Subject:**
+
 ```
 Verifica tu cuenta en SISCOM
 ```
 
 **Message:**
+
 ```
 Hola,
 
@@ -145,11 +147,13 @@ Equipo SISCOM
 ### Email de Recuperación de Contraseña
 
 **Subject:**
+
 ```
 Recuperación de contraseña - SISCOM
 ```
 
 **Message:**
+
 ```
 Hola,
 
@@ -188,12 +192,14 @@ function validatePassword(password) {
   const hasLowerCase = /[a-z]/.test(password);
   const hasNumbers = /\d/.test(password);
   const hasSpecialChar = /[!@#$%^&*]/.test(password);
-  
-  return password.length >= minLength &&
-         hasUpperCase &&
-         hasLowerCase &&
-         hasNumbers &&
-         hasSpecialChar;
+
+  return (
+    password.length >= minLength &&
+    hasUpperCase &&
+    hasLowerCase &&
+    hasNumbers &&
+    hasSpecialChar
+  );
 }
 ```
 
@@ -230,15 +236,15 @@ Validar email o dominio antes de registro:
 ```javascript
 exports.handler = async (event) => {
   const email = event.request.userAttributes.email;
-  
+
   // Bloquear emails temporales
-  const blockedDomains = ['tempmail.com', '10minutemail.com'];
-  const domain = email.split('@')[1];
-  
+  const blockedDomains = ["tempmail.com", "10minutemail.com"];
+  const domain = email.split("@")[1];
+
   if (blockedDomains.includes(domain)) {
-    throw new Error('Email domain not allowed');
+    throw new Error("Email domain not allowed");
   }
-  
+
   return event;
 };
 ```
@@ -250,13 +256,13 @@ Enviar notificación al admin cuando nuevo usuario se registre:
 ```javascript
 exports.handler = async (event) => {
   const email = event.request.userAttributes.email;
-  
+
   // Enviar notificación
   await sendNotification({
-    subject: 'Nuevo usuario registrado',
-    body: `Usuario ${email} se ha registrado exitosamente`
+    subject: "Nuevo usuario registrado",
+    body: `Usuario ${email} se ha registrado exitosamente`,
   });
-  
+
   return event;
 };
 ```
@@ -347,21 +353,21 @@ Si tienes usuarios existentes en otro sistema:
 exports.handler = async (event) => {
   const email = event.userName;
   const password = event.request.password;
-  
+
   // Validar contra sistema antiguo
   const isValid = await validateInOldSystem(email, password);
-  
+
   if (isValid) {
     event.response.userAttributes = {
       email: email,
-      email_verified: 'true'
+      email_verified: "true",
     };
-    event.response.finalUserStatus = 'CONFIRMED';
-    event.response.messageAction = 'SUPPRESS';
+    event.response.finalUserStatus = "CONFIRMED";
+    event.response.messageAction = "SUPPRESS";
   } else {
-    throw new Error('Invalid credentials');
+    throw new Error("Invalid credentials");
   }
-  
+
   return event;
 };
 ```
@@ -406,4 +412,3 @@ exports.handler = async (event) => {
 - [Documentación oficial de Cognito](https://docs.aws.amazon.com/cognito/)
 - [Boto3 Cognito Documentation](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/cognito-idp.html)
 - [JWT Debugger](https://jwt.io/) para inspeccionar tokens
-

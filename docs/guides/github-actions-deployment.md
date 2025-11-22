@@ -17,12 +17,15 @@ Esta guía te ayudará a configurar y utilizar GitHub Actions para deployments a
 ### 🚀 Deploy (deploy.yml)
 
 **Se ejecuta automáticamente cuando:**
+
 - Haces push a la rama `master`
 
 **Puedes ejecutarlo manualmente:**
+
 - Desde GitHub Actions → Deploy to EC2 → Run workflow
 
 **Qué hace:**
+
 1. ✅ Verifica el código (Ruff + Black)
 2. 🐋 Construye la imagen Docker
 3. 📦 Comprime y copia la imagen al servidor EC2
@@ -32,10 +35,12 @@ Esta guía te ayudará a configurar y utilizar GitHub Actions para deployments a
 ### 🧪 CI (ci.yml)
 
 **Se ejecuta automáticamente cuando:**
+
 - Creas o actualizas un Pull Request hacia `master` o `develop`
 - Haces push a la rama `develop`
 
 **Qué hace:**
+
 1. 🔍 Ejecuta linters (Ruff + Black)
 2. 🧪 Ejecuta tests con pytest
 3. 🐋 Construye y prueba la imagen Docker
@@ -71,42 +76,42 @@ Crea los siguientes secrets:
 
 #### Secrets de EC2
 
-| Secret | Descripción | Ejemplo |
-|--------|-------------|---------|
-| `EC2_HOST` | IP o hostname del servidor | `3.85.123.45` o `api.siscom.com` |
-| `EC2_USERNAME` | Usuario SSH | `ubuntu` o `ec2-user` |
-| `EC2_SSH_KEY` | Clave privada SSH completa | Contenido de `~/.ssh/id_rsa` |
-| `EC2_SSH_PORT` | Puerto SSH | `22` |
+| Secret         | Descripción                | Ejemplo                          |
+| -------------- | -------------------------- | -------------------------------- |
+| `EC2_HOST`     | IP o hostname del servidor | `3.85.123.45` o `api.siscom.com` |
+| `EC2_USERNAME` | Usuario SSH                | `ubuntu` o `ec2-user`            |
+| `EC2_SSH_KEY`  | Clave privada SSH completa | Contenido de `~/.ssh/id_rsa`     |
+| `EC2_SSH_PORT` | Puerto SSH                 | `22`                             |
 
 #### Secrets de Base de Datos
 
-| Secret | Descripción | Ejemplo |
-|--------|-------------|---------|
+| Secret        | Descripción              | Ejemplo             |
+| ------------- | ------------------------ | ------------------- |
 | `DB_PASSWORD` | Contraseña de PostgreSQL | `secretpassword123` |
 
 #### Secrets de AWS
 
-| Secret | Descripción | Dónde obtenerlo |
-|--------|-------------|-----------------|
-| `AWS_ACCESS_KEY_ID` | Access Key de AWS | AWS Console → IAM → Users |
-| `AWS_SECRET_ACCESS_KEY` | Secret Key de AWS | AWS Console → IAM → Users |
-| `COGNITO_USER_POOL_ID` | ID del User Pool | AWS Console → Cognito |
-| `COGNITO_CLIENT_ID` | Client ID de Cognito | AWS Console → Cognito → App clients |
-| `COGNITO_CLIENT_SECRET` | Client Secret de Cognito | AWS Console → Cognito → App clients |
-| `DEFAULT_USER_PASSWORD` | Password temporal para nuevos usuarios | `TempPass123!` |
+| Secret                  | Descripción                            | Dónde obtenerlo                     |
+| ----------------------- | -------------------------------------- | ----------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | Access Key de AWS                      | AWS Console → IAM → Users           |
+| `AWS_SECRET_ACCESS_KEY` | Secret Key de AWS                      | AWS Console → IAM → Users           |
+| `COGNITO_USER_POOL_ID`  | ID del User Pool                       | AWS Console → Cognito               |
+| `COGNITO_CLIENT_ID`     | Client ID de Cognito                   | AWS Console → Cognito → App clients |
+| `COGNITO_CLIENT_SECRET` | Client Secret de Cognito               | AWS Console → Cognito → App clients |
+| `DEFAULT_USER_PASSWORD` | Password temporal para nuevos usuarios | `TempPass123!`                      |
 
 ### 🔧 Configurar Variables
 
 Ve a: **Settings → Secrets and variables → Actions → Variables → New repository variable**
 
-| Variable | Descripción | Ejemplo |
-|----------|-------------|---------|
-| `PROJECT_NAME` | Nombre del proyecto | `SISCOM Admin API` |
-| `DB_HOST` | Hostname de PostgreSQL | `siscom-db.xxxxx.us-east-1.rds.amazonaws.com` |
-| `DB_PORT` | Puerto de PostgreSQL | `5432` |
-| `DB_USER` | Usuario de PostgreSQL | `siscom_admin` |
-| `DB_NAME` | Nombre de la base de datos | `siscom_admin` |
-| `COGNITO_REGION` | Región de AWS Cognito | `us-east-1` |
+| Variable         | Descripción                | Ejemplo                                       |
+| ---------------- | -------------------------- | --------------------------------------------- |
+| `PROJECT_NAME`   | Nombre del proyecto        | `SISCOM Admin API`                            |
+| `DB_HOST`        | Hostname de PostgreSQL     | `siscom-db.xxxxx.us-east-1.rds.amazonaws.com` |
+| `DB_PORT`        | Puerto de PostgreSQL       | `5432`                                        |
+| `DB_USER`        | Usuario de PostgreSQL      | `siscom_admin`                                |
+| `DB_NAME`        | Nombre de la base de datos | `siscom_admin`                                |
+| `COGNITO_REGION` | Región de AWS Cognito      | `us-east-1`                                   |
 
 ## Preparación del Servidor EC2
 
@@ -175,6 +180,7 @@ sudo ufw enable
 ### 7. Configurar Security Group en AWS
 
 Asegúrate de que tu EC2 Security Group permita:
+
 - **Puerto 22** (SSH) desde tu IP
 - **Puerto 8100** (API) desde donde sea necesario
 - **Puerto 5432** (PostgreSQL) si la base de datos está en la misma VPC
@@ -230,6 +236,7 @@ curl http://localhost:8100/health
 **Problema:** La clave SSH no tiene los permisos correctos o no es la correcta.
 
 **Solución:**
+
 1. Verifica que copiaste toda la clave privada (incluyendo `-----BEGIN` y `-----END`)
 2. Asegúrate de que sea la clave privada, no la pública
 3. Verifica que el usuario SSH sea correcto (`ubuntu` para Ubuntu, `ec2-user` para Amazon Linux)
@@ -239,6 +246,7 @@ curl http://localhost:8100/health
 **Problema:** No se puede conectar al servidor EC2.
 
 **Solución:**
+
 1. Verifica que el Security Group permita conexiones SSH desde GitHub Actions IPs
 2. O mejor aún, usa AWS Systems Manager Session Manager
 3. Verifica que la IP del servidor sea correcta
@@ -248,6 +256,7 @@ curl http://localhost:8100/health
 **Problema:** El contenedor no pasa el health check.
 
 **Solución:**
+
 ```bash
 # Ver logs del contenedor
 docker logs siscom-admin-api
@@ -260,6 +269,7 @@ docker exec -it siscom-admin-api /bin/bash
 ```
 
 Causas comunes:
+
 - Endpoint `/health` no implementado
 - Base de datos no accesible
 - Variables de entorno incorrectas
@@ -269,12 +279,15 @@ Causas comunes:
 **Problema:** La aplicación no puede conectarse a PostgreSQL.
 
 **Solución:**
+
 1. Verifica que el Security Group de RDS permita conexiones desde el EC2
 2. Prueba la conexión manualmente:
+
 ```bash
 # Desde el servidor EC2
 psql -h tu-rds-endpoint.rds.amazonaws.com -U siscom_admin -d siscom_admin
 ```
+
 3. Verifica las variables de entorno en `.env`
 
 ### ⚠️ Linter failures
@@ -282,6 +295,7 @@ psql -h tu-rds-endpoint.rds.amazonaws.com -U siscom_admin -d siscom_admin
 **Problema:** Ruff o Black encuentran problemas en el código.
 
 **Solución:**
+
 ```bash
 # En local, antes de hacer push
 make format      # Formatear con Black
@@ -427,4 +441,3 @@ Si tienes problemas con el deployment:
 ---
 
 **Última actualización:** Noviembre 2025
-

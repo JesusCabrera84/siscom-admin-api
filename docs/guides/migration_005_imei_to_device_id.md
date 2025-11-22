@@ -54,21 +54,21 @@ Después de aplicar la migración, verifica que el cambio se realizó correctame
 
 ```sql
 -- Verificar que la columna device_id existe
-SELECT column_name, data_type, is_nullable 
-FROM information_schema.columns 
-WHERE table_name = 'devices' 
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'devices'
   AND column_name = 'device_id';
 
 -- Verificar que el índice existe
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename = 'devices' 
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename = 'devices'
   AND indexname = 'idx_devices_device_id';
 
 -- Verificar que la columna antigua no existe
-SELECT column_name 
-FROM information_schema.columns 
-WHERE table_name = 'devices' 
+SELECT column_name
+FROM information_schema.columns
+WHERE table_name = 'devices'
   AND column_name = 'imei';
 -- Debe retornar 0 filas
 ```
@@ -195,4 +195,3 @@ alembic current
 # Ver SQL que se ejecutará (sin aplicar)
 alembic upgrade 005 --sql
 ```
-

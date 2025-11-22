@@ -8,37 +8,43 @@ services:
     environment:
       # Configuración General
       PROJECT_NAME: ${PROJECT_NAME:-SISCOM Admin API}
-      
+
       # Configuración de Base de Datos
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
-      
+
       # AWS Cognito Configuration
       COGNITO_REGION: ${COGNITO_REGION}
       COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
       COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
       COGNITO_CLIENT_SECRET: ${COGNITO_CLIENT_SECRET}
-      
+
       # User Configuration
       DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD}
-      
+
       # AWS SES - Email Configuration
       SES_FROM_EMAIL: ${SES_FROM_EMAIL}
       SES_REGION: ${SES_REGION}
-      
+
       # Frontend URL
       FRONTEND_URL: ${FRONTEND_URL}
-      
+
       # Contact Email - Email donde se reciben los mensajes de contacto
       CONTACT_EMAIL: ${CONTACT_EMAIL}
-      
+
       # Google reCAPTCHA v3 - Secret key
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -54,4 +60,3 @@ services:
 networks:
   siscom-network:
     external: true
-

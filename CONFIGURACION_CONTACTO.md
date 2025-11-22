@@ -108,7 +108,8 @@ Si todo está bien, deberías ver en los logs:
 
 **Causa**: La variable está vacía o no se cargó correctamente
 
-**Solución**: 
+**Solución**:
+
 1. Verifica que la variable esté en el `.env`
 2. Reinicia el servidor
 3. Verifica que no haya espacios extra en el `.env`
@@ -122,6 +123,7 @@ Si todo está bien, deberías ver en los logs:
 ### Los emails no llegan
 
 **Checklist**:
+
 1. ✅ Variable `CONTACT_EMAIL` en el `.env`
 2. ✅ Email verificado en AWS SES
 3. ✅ Permisos IAM correctos para SES
@@ -132,6 +134,7 @@ Si todo está bien, deberías ver en los logs:
 ## 📚 Documentación Adicional
 
 Para más información sobre el endpoint, consulta:
+
 - [Documentación del API de Contacto](docs/api/contact.md)
 - [Configuración de Email con AWS SES](docs/guides/email-configuration.md)
 
@@ -163,9 +166,9 @@ env:
 ## 📧 Email de Contacto Recomendado
 
 Para uso profesional, se recomienda usar:
+
 - `contacto@geminislabs.com` (español)
 - `contact@geminislabs.com` (inglés)
 - `info@geminislabs.com` (genérico)
 
 **IMPORTANTE**: El email debe ser de un dominio que controles y debe estar verificado en AWS SES.
-

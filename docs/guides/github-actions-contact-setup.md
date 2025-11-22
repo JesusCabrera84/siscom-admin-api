@@ -48,32 +48,32 @@ Asegúrate de tener **todas** estas variables configuradas:
 
 ### Variables (Public - No Secrets)
 
-| Variable | Ejemplo | Descripción |
-|----------|---------|-------------|
-| `CONTACT_EMAIL` | `contacto@geminislabs.com` | Email para recibir mensajes de contacto |
-| `SES_FROM_EMAIL` | `noreply@geminislabs.com` | Email remitente de SES |
-| `SES_REGION` | `us-east-1` | Región de AWS SES |
-| `FRONTEND_URL` | `https://app.geminislabs.com` | URL del frontend |
-| `PROJECT_NAME` | `SISCOM Admin API` | Nombre del proyecto |
-| `DB_HOST` | `localhost` | Host de la base de datos |
-| `DB_PORT` | `5432` | Puerto de la base de datos |
-| `DB_USER` | `siscom` | Usuario de la base de datos |
-| `DB_NAME` | `siscom_admin` | Nombre de la base de datos |
-| `COGNITO_REGION` | `us-east-1` | Región de AWS Cognito |
+| Variable         | Ejemplo                       | Descripción                             |
+| ---------------- | ----------------------------- | --------------------------------------- |
+| `CONTACT_EMAIL`  | `contacto@geminislabs.com`    | Email para recibir mensajes de contacto |
+| `SES_FROM_EMAIL` | `noreply@geminislabs.com`     | Email remitente de SES                  |
+| `SES_REGION`     | `us-east-1`                   | Región de AWS SES                       |
+| `FRONTEND_URL`   | `https://app.geminislabs.com` | URL del frontend                        |
+| `PROJECT_NAME`   | `SISCOM Admin API`            | Nombre del proyecto                     |
+| `DB_HOST`        | `localhost`                   | Host de la base de datos                |
+| `DB_PORT`        | `5432`                        | Puerto de la base de datos              |
+| `DB_USER`        | `siscom`                      | Usuario de la base de datos             |
+| `DB_NAME`        | `siscom_admin`                | Nombre de la base de datos              |
+| `COGNITO_REGION` | `us-east-1`                   | Región de AWS Cognito                   |
 
 ### Secrets (Private - Encrypted)
 
-| Secret | Descripción |
-|--------|-------------|
-| `DB_PASSWORD` | Contraseña de la base de datos |
-| `COGNITO_USER_POOL_ID` | ID del User Pool de Cognito |
-| `COGNITO_CLIENT_ID` | Client ID de Cognito |
-| `COGNITO_CLIENT_SECRET` | Client Secret de Cognito |
+| Secret                  | Descripción                     |
+| ----------------------- | ------------------------------- |
+| `DB_PASSWORD`           | Contraseña de la base de datos  |
+| `COGNITO_USER_POOL_ID`  | ID del User Pool de Cognito     |
+| `COGNITO_CLIENT_ID`     | Client ID de Cognito            |
+| `COGNITO_CLIENT_SECRET` | Client Secret de Cognito        |
 | `DEFAULT_USER_PASSWORD` | Contraseña temporal por defecto |
-| `EC2_HOST` | IP o hostname del servidor EC2 |
-| `EC2_USERNAME` | Usuario SSH del servidor |
-| `EC2_SSH_KEY` | Clave privada SSH |
-| `EC2_SSH_PORT` | Puerto SSH (usualmente 22) |
+| `EC2_HOST`              | IP o hostname del servidor EC2  |
+| `EC2_USERNAME`          | Usuario SSH del servidor        |
+| `EC2_SSH_KEY`           | Clave privada SSH               |
+| `EC2_SSH_PORT`          | Puerto SSH (usualmente 22)      |
 
 ## 🔍 Verificar la Configuración
 
@@ -122,7 +122,8 @@ Luego verifica que el deployment se complete exitosamente y que la variable est�
 
 **Causa**: La variable no está configurada en GitHub Actions
 
-**Solución**: 
+**Solución**:
+
 1. Verifica que agregaste la variable en **Variables** (no en Secrets)
 2. Verifica que el nombre sea exactamente `CONTACT_EMAIL` (case-sensitive)
 3. Verifica que el valor no esté vacío
@@ -132,6 +133,7 @@ Luego verifica que el deployment se complete exitosamente y que la variable est�
 **Causa**: El workflow de deployment no se actualizó
 
 **Solución**:
+
 1. Asegúrate de haber hecho pull del último código:
    ```bash
    git pull origin master
@@ -146,14 +148,17 @@ Luego verifica que el deployment se complete exitosamente y que la variable est�
 **Causa**: La variable no llegó al contenedor o está vacía
 
 **Solución**:
+
 1. Conéctate al servidor EC2:
    ```bash
    ssh user@server
    ```
 2. Verifica que el contenedor tenga la variable:
+
    ```bash
    docker exec siscom-admin-api env | grep CONTACT_EMAIL
    ```
+
    Debería mostrar: `CONTACT_EMAIL=contacto@geminislabs.com`
 
 3. Si no aparece, verifica el archivo `.env` en el servidor:
@@ -218,7 +223,7 @@ Luego en el workflow:
 
 ```yaml
 env:
-  CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL_PROD }}  # o _DEV, _STAGING
+  CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL_PROD }} # o _DEV, _STAGING
 ```
 
 ## ✅ Checklist Final
@@ -252,8 +257,8 @@ Antes de hacer deployment, verifica:
 
 ---
 
-**¿Necesitas ayuda?** 
+**¿Necesitas ayuda?**
+
 - Revisa los logs del workflow en la pestaña **Actions**
 - Verifica la configuración en **Settings** → **Secrets and variables**
 - Consulta la documentación en `/docs/guides/`
-

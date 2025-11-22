@@ -65,11 +65,13 @@ Authorization: Bearer <access_token>
 #### Uso con Filtros
 
 **Ejemplo: Ver todos los usuarios asignados a una unidad específica**
+
 ```
 GET /api/v1/user-units/?unit_id=abc12345-e89b-12d3-a456-426614174000
 ```
 
 **Ejemplo: Ver todas las unidades asignadas a un usuario específico**
+
 ```
 GET /api/v1/user-units/?user_id=user123-e89b-12d3-a456-426614174000
 ```
@@ -107,11 +109,13 @@ Authorization: Bearer <access_token>
 ```
 
 **Campos:**
+
 - `user_id` (UUID, requerido): ID del usuario a quien se otorga acceso
 - `unit_id` (UUID, requerido): ID de la unidad
 - `role` (string, opcional): Rol del usuario. Default: `"viewer"`
 
 **Roles disponibles:**
+
 - `viewer`: Solo lectura - puede ver la unidad y sus datos
 - `editor`: Lectura y edición - puede modificar datos básicos de la unidad
 - `admin`: Control completo - puede gestionar dispositivos y configuraciones
@@ -216,7 +220,7 @@ La respuesta incluye información enriquecida:
   "granted_by": UUID,
   "granted_at": DateTime,
   "role": String,
-  
+
   // Información adicional (para respuestas detalladas)
   "user_email": String,          // Email del usuario asignado
   "user_full_name": String,      // Nombre completo del usuario
@@ -285,6 +289,7 @@ POST /api/v1/user-units/
 ```
 
 Ahora el operador puede:
+
 - Ver los datos de la camioneta
 - Ver el dispositivo GPS instalado
 - Consultar el historial de ubicaciones
@@ -314,6 +319,7 @@ POST /api/v1/user-units/
 ```
 
 Ahora el supervisor puede:
+
 - Editar información de ambas unidades
 - Asignar/cambiar dispositivos GPS en ambas
 - No puede eliminar las unidades
@@ -405,5 +411,3 @@ Estos endpoints son equivalentes pero organizados jerárquicamente. La elección
 
 - **Usar `/user-units/`** cuando se gestiona desde la perspectiva de permisos globales
 - **Usar `/units/{id}/users`** cuando se gestiona desde la perspectiva de una unidad específica
-
-

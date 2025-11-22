@@ -16,7 +16,7 @@ jobs:
     name: Build and Deploy
     runs-on: ubuntu-latest
     environment: test
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,8 +24,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install linting dependencies
         run: |
@@ -99,14 +99,14 @@ jobs:
           envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,CONTACT_EMAIL,RECAPTCHA_SECRET_KEY
           script: |
             cd /home/${{ secrets.EC2_USERNAME }}/siscom-admin-api
-            
+
             # Cargar la nueva imagen
             echo "📦 Cargando nueva imagen Docker..."
             docker load < siscom-admin-api.tar.gz
-            
+
             # Crear la red si no existe
             docker network inspect siscom-network >/dev/null 2>&1 || docker network create siscom-network
-            
+
             # Crear archivo .env con las variables
             echo "🔧 Configurando variables de entorno..."
             cat > .env << EOF
@@ -127,20 +127,20 @@ jobs:
             CONTACT_EMAIL=${CONTACT_EMAIL}
             RECAPTCHA_SECRET_KEY=${RECAPTCHA_SECRET_KEY}
             EOF
-            
+
             # Detener y eliminar el contenedor existente de forma robusta
             echo "🛑 Deteniendo contenedores anteriores..."
-            
+
             # Intentar detener con docker-compose
             docker-compose -f docker-compose.prod.yml down || true
-            
+
             # Forzar detención de contenedor por nombre si existe
             if docker ps -a | grep -q ${CONTAINER_NAME}; then
               echo "Deteniendo contenedor ${CONTAINER_NAME}..."
               docker stop ${CONTAINER_NAME} || true
               docker rm ${CONTAINER_NAME} || true
             fi
-            
+
             # Verificar si el puerto 8100 está en uso y liberar si es necesario
             PORT_IN_USE=$(docker ps -q --filter "publish=8100" || true)
             if [ ! -z "$PORT_IN_USE" ]; then
@@ -149,18 +149,18 @@ jobs:
               docker stop $PORT_IN_USE || true
               docker rm $PORT_IN_USE || true
             fi
-            
+
             # Limpiar contenedores huérfanos y redes no usadas
             echo "🧹 Limpiando recursos huérfanos..."
             docker-compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
-            
+
             # Levantar el nuevo contenedor
             echo "🚀 Levantando nuevo contenedor..."
             docker-compose -f docker-compose.prod.yml up -d --remove-orphans
-            
+
             # Esperar un momento para que el contenedor se inicie
             sleep 5
-            
+
             # Verificar que el contenedor se creó correctamente
             if ! docker ps | grep -q ${CONTAINER_NAME}; then
               echo "❌ ERROR: El contenedor ${CONTAINER_NAME} no está corriendo"
@@ -171,7 +171,7 @@ jobs:
               docker logs ${CONTAINER_NAME} 2>&1 || echo "No se pudo obtener logs"
               exit 1
             fi
-            
+
             # Esperar a que el contenedor esté saludable
             echo "⏳ Esperando a que el contenedor esté saludable..."
             CONTAINER_HEALTHY=false
@@ -204,7 +204,7 @@ jobs:
               
               sleep 2
             done
-            
+
             if [ "$CONTAINER_HEALTHY" = false ]; then
               echo "❌ ERROR: Timeout esperando que el contenedor esté healthy"
               echo "Estado actual: $(docker inspect --format="{{.State.Status}}" ${CONTAINER_NAME})"
@@ -212,7 +212,7 @@ jobs:
               docker logs --tail 50 ${CONTAINER_NAME}
               exit 1
             fi
-            
+
             # Verificar logs en busca de errores críticos
             echo "🔍 Verificando logs en busca de errores..."
             if docker logs ${CONTAINER_NAME} 2>&1 | grep -q "Application startup failed"; then
@@ -220,14 +220,14 @@ jobs:
               docker logs --tail 50 ${CONTAINER_NAME}
               exit 1
             fi
-            
+
             # Limpiar imágenes antiguas
             echo "🧹 Limpiando imágenes antiguas..."
             docker image prune -f
-            
+
             # Eliminar el archivo tar.gz
             rm -f siscom-admin-api.tar.gz
-            
+
             echo "✅ Deployment completado exitosamente!"
 
       - name: Verify deployment
@@ -240,7 +240,7 @@ jobs:
           script: |
             echo "=== Verificación Final del Deployment ==="
             echo ""
-            
+
             # Verificar que el contenedor está corriendo
             echo "1. Estado del contenedor:"
             if ! docker ps | grep siscom-admin-api; then
@@ -249,7 +249,7 @@ jobs:
             fi
             echo "✅ Contenedor corriendo"
             echo ""
-            
+
             # Verificar health status
             echo "2. Health status:"
             HEALTH_STATUS=$(docker inspect --format="{{.State.Health.Status}}" siscom-admin-api)
@@ -260,32 +260,32 @@ jobs:
             fi
             echo "✅ Contenedor healthy"
             echo ""
-            
+
             # Verificar que no hay errores críticos en logs
             echo "3. Verificando logs recientes:"
             RECENT_LOGS=$(docker logs --tail 50 siscom-admin-api 2>&1)
-            
+
             if echo "$RECENT_LOGS" | grep -q "Application startup failed"; then
               echo "❌ ERROR: Aplicación falló al iniciar"
               echo "$RECENT_LOGS"
               exit 1
             fi
-            
+
             if echo "$RECENT_LOGS" | grep -q "ModuleNotFoundError"; then
               echo "❌ ERROR: Módulo faltante"
               echo "$RECENT_LOGS"
               exit 1
             fi
-            
+
             if echo "$RECENT_LOGS" | grep -E "ERROR.*Exiting" | grep -v "test"; then
               echo "❌ ERROR: Error crítico encontrado en logs"
               echo "$RECENT_LOGS"
               exit 1
             fi
-            
+
             echo "✅ No se encontraron errores críticos"
             echo ""
-            
+
             # Verificar que el health endpoint responde
             echo "4. Verificando health endpoint:"
             CONTAINER_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' siscom-admin-api)
@@ -295,7 +295,7 @@ jobs:
               echo "⚠️  Warning: No se pudo verificar el health endpoint (puede ser normal si hay firewall)"
             fi
             echo ""
-            
+
             echo "🎉 Deployment verificado exitosamente!"
             echo ""
             echo "=== Últimos logs (informativos) ==="
@@ -306,4 +306,3 @@ jobs:
         run: |
           echo "❌ Deployment failed! Check the logs above for details."
           # Aquí puedes agregar notificaciones a Slack, Discord, email, etc.
-

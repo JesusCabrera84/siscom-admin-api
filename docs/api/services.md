@@ -250,12 +250,13 @@ YEARLY:   Expira: 2025-01-15 10:30:00
 Existe un índice único parcial en la base de datos:
 
 ```sql
-CREATE UNIQUE INDEX uq_device_services_active_one 
-ON device_services(device_id) 
+CREATE UNIQUE INDEX uq_device_services_active_one
+ON device_services(device_id)
 WHERE status = 'ACTIVE';
 ```
 
 Esto garantiza que:
+
 - Solo puede haber UN servicio ACTIVE por dispositivo
 - No es posible tener dos suscripciones activas simultáneamente
 - Histórico de servicios se mantiene (EXPIRED, CANCELLED)
@@ -327,8 +328,8 @@ DeviceService → Plan
 ### Servicios por Expirar (próximos 7 días)
 
 ```sql
-SELECT * FROM device_services 
-WHERE status = 'ACTIVE' 
+SELECT * FROM device_services
+WHERE status = 'ACTIVE'
   AND client_id = '...'
   AND expires_at <= NOW() + INTERVAL '7 days'
 ORDER BY expires_at ASC;
@@ -337,8 +338,8 @@ ORDER BY expires_at ASC;
 ### Servicios Expirados sin Renovar
 
 ```sql
-SELECT * FROM device_services 
-WHERE status = 'ACTIVE' 
+SELECT * FROM device_services
+WHERE status = 'ACTIVE'
   AND expires_at < NOW()
   AND auto_renew = false;
 ```
@@ -346,7 +347,7 @@ WHERE status = 'ACTIVE'
 ### Historial de Servicio de un Dispositivo
 
 ```sql
-SELECT * FROM device_services 
+SELECT * FROM device_services
 WHERE device_id = '...'
 ORDER BY activated_at DESC;
 ```
@@ -463,4 +464,3 @@ GET /api/v1/services/active
 ```bash
 PATCH /api/v1/services/{service_id}/cancel
 ```
-

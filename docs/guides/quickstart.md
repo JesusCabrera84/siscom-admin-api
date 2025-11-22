@@ -67,6 +67,7 @@ curl http://localhost:8000/
 ```
 
 **Respuesta esperada:**
+
 ```json
 {
   "status": "ok",
@@ -100,6 +101,7 @@ curl -X POST http://localhost:8000/api/v1/clients/ \
 ```
 
 **Respuesta:**
+
 ```json
 {
   "id": "...",
@@ -135,6 +137,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 ```
 
 **Respuesta:**
+
 ```json
 {
   "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -232,6 +235,6 @@ Ver [Documentación de Pagos](../api/payments.md)
 ## Soporte
 
 Para soporte técnico o preguntas:
+
 - Email: soporte@siscom.com
 - Documentación: http://localhost:8000/docs
-

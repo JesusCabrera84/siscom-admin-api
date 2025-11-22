@@ -267,4 +267,3 @@ Usuario Maestro → POST /api/v1/users/resend-invitation
 - Solo usuarios maestros pueden invitar
 - Las invitaciones no pueden modificar el `client_id`
 - Los tokens son UUID únicos y no predecibles
-

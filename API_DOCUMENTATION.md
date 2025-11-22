@@ -63,6 +63,7 @@ Content-Type: application/json
 ```
 
 **Respuesta:**
+
 ```json
 {
   "user": {
@@ -114,11 +115,13 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 ### 🔓 Endpoints Públicos (No requieren autenticación)
 
 #### `POST /api/v1/auth/login`
+
 **Iniciar sesión**
 
 Autentica a un usuario y retorna tokens de acceso.
 
 **Request:**
+
 ```json
 {
   "email": "usuario@ejemplo.com",
@@ -127,6 +130,7 @@ Autentica a un usuario y retorna tokens de acceso.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "user": { ... },
@@ -141,11 +145,13 @@ Autentica a un usuario y retorna tokens de acceso.
 ---
 
 #### `POST /api/v1/auth/forgot-password`
+
 **Solicitar restablecimiento de contraseña**
 
 Genera un token y envía un email con el enlace de recuperación.
 
 **Request:**
+
 ```json
 {
   "email": "usuario@ejemplo.com"
@@ -153,6 +159,7 @@ Genera un token y envía un email con el enlace de recuperación.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Se ha enviado un código de verificación al correo registrado."
@@ -164,11 +171,13 @@ Genera un token y envía un email con el enlace de recuperación.
 ---
 
 #### `POST /api/v1/auth/reset-password`
+
 **Restablecer contraseña con token**
 
 Usa el token recibido por email para establecer una nueva contraseña.
 
 **Request:**
+
 ```json
 {
   "token": "uuid-token-from-email",
@@ -177,6 +186,7 @@ Usa el token recibido por email para establecer una nueva contraseña.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Contraseña restablecida exitosamente. Ahora puede iniciar sesión con su nueva contraseña."
@@ -186,11 +196,13 @@ Usa el token recibido por email para establecer una nueva contraseña.
 ---
 
 #### `POST /api/v1/auth/resend-verification`
+
 **Reenviar email de verificación**
 
 Reenvía el correo de verificación a usuarios no verificados.
 
 **Request:**
+
 ```json
 {
   "email": "usuario@ejemplo.com"
@@ -198,6 +210,7 @@ Reenvía el correo de verificación a usuarios no verificados.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Si la cuenta existe, se ha reenviado el correo de verificación."
@@ -207,11 +220,13 @@ Reenvía el correo de verificación a usuarios no verificados.
 ---
 
 #### `POST /api/v1/auth/confirm-email`
+
 **Confirmar email con token**
 
 Verifica el email del usuario usando el token enviado por correo.
 
 **Request:**
+
 ```json
 {
   "token": "uuid-token-from-email"
@@ -219,6 +234,7 @@ Verifica el email del usuario usando el token enviado por correo.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Email verificado exitosamente. Ahora puede iniciar sesión."
@@ -230,6 +246,7 @@ Verifica el email del usuario usando el token enviado por correo.
 ### 🔒 Endpoints Autenticados
 
 #### `POST /api/v1/auth/logout`
+
 **Cerrar sesión**
 
 Invalida todos los tokens del usuario.
@@ -237,6 +254,7 @@ Invalida todos los tokens del usuario.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Sesión cerrada exitosamente."
@@ -246,6 +264,7 @@ Invalida todos los tokens del usuario.
 ---
 
 #### `PATCH /api/v1/auth/password`
+
 **Cambiar contraseña (usuario autenticado)**
 
 Permite al usuario cambiar su contraseña proporcionando la actual.
@@ -253,6 +272,7 @@ Permite al usuario cambiar su contraseña proporcionando la actual.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "old_password": "PasswordActual123!",
@@ -261,6 +281,7 @@ Permite al usuario cambiar su contraseña proporcionando la actual.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Contraseña actualizada exitosamente."
@@ -274,11 +295,13 @@ Permite al usuario cambiar su contraseña proporcionando la actual.
 ### 🔓 Público
 
 #### `POST /api/v1/clients/`
+
 **Registrar nuevo cliente**
 
 Crea un nuevo cliente con su usuario maestro. Envía email de verificación.
 
 **Request:**
+
 ```json
 {
   "name": "Mi Empresa S.A.",
@@ -288,6 +311,7 @@ Crea un nuevo cliente con su usuario maestro. Envía email de verificación.
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": "uuid",
@@ -304,14 +328,17 @@ Crea un nuevo cliente con su usuario maestro. Envía email de verificación.
 ---
 
 #### `POST /api/v1/clients/verify-email`
+
 **Verificar email del cliente**
 
 Verifica el email y activa el cliente y usuario maestro.
 
 **Query Parameters:**
+
 - `token` (string): Token de verificación recibido por email
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Email verificado exitosamente. Tu cuenta ha sido activada.",
@@ -325,11 +352,13 @@ Verifica el email y activa el cliente y usuario maestro.
 ### 🔒 Autenticados
 
 #### `GET /api/v1/clients/`
+
 **Obtener información del cliente autenticado**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -347,11 +376,13 @@ Verifica el email y activa el cliente y usuario maestro.
 ### 🔒 Todos requieren autenticación
 
 #### `GET /api/v1/users/`
+
 **Listar todos los usuarios del cliente**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -378,11 +409,13 @@ Verifica el email y activa el cliente y usuario maestro.
 ---
 
 #### `GET /api/v1/users/me`
+
 **Obtener información del usuario actual**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -399,6 +432,7 @@ Verifica el email y activa el cliente y usuario maestro.
 ---
 
 #### `POST /api/v1/users/invite`
+
 **Invitar nuevo usuario** (Solo usuarios maestros)
 
 Envía una invitación por email para que un nuevo usuario se registre.
@@ -406,6 +440,7 @@ Envía una invitación por email para que un nuevo usuario se registre.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "email": "nuevousuario@miempresa.com",
@@ -414,6 +449,7 @@ Envía una invitación por email para que un nuevo usuario se registre.
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "detail": "Invitación enviada a nuevousuario@miempresa.com",
@@ -424,17 +460,20 @@ Envía una invitación por email para que un nuevo usuario se registre.
 **Email enviado:** Link a `{FRONTEND_URL}/accept-invitation?token={token}`
 
 **Errores:**
+
 - `403 Forbidden`: Si el usuario no es maestro
 - `400 Bad Request`: Si el email ya está registrado o tiene invitación pendiente
 
 ---
 
 #### `POST /api/v1/users/accept-invitation`
+
 **Aceptar invitación** (Público)
 
 El usuario invitado usa el token para crear su cuenta.
 
 **Request:**
+
 ```json
 {
   "token": "uuid-token-from-email",
@@ -443,6 +482,7 @@ El usuario invitado usa el token para crear su cuenta.
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "detail": "Usuario creado exitosamente.",
@@ -459,6 +499,7 @@ El usuario invitado usa el token para crear su cuenta.
 ---
 
 #### `POST /api/v1/users/resend-invitation`
+
 **Reenviar invitación** (Solo usuarios maestros)
 
 Reenvía una invitación a un email que no ha aceptado.
@@ -466,6 +507,7 @@ Reenvía una invitación a un email que no ha aceptado.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "email": "nuevousuario@miempresa.com"
@@ -473,6 +515,7 @@ Reenvía una invitación a un email que no ha aceptado.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Invitación reenviada a nuevousuario@miempresa.com",
@@ -489,6 +532,7 @@ Gestión del inventario de dispositivos GPS.
 ### 🔒 Todos requieren autenticación
 
 #### `POST /api/v1/devices/`
+
 **Registrar nuevo dispositivo**
 
 Agrega un dispositivo al inventario con estado "nuevo".
@@ -496,6 +540,7 @@ Agrega un dispositivo al inventario con estado "nuevo".
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "device_id": "IMEI123456789",
@@ -507,6 +552,7 @@ Agrega un dispositivo al inventario con estado "nuevo".
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "device_id": "IMEI123456789",
@@ -522,6 +568,7 @@ Agrega un dispositivo al inventario con estado "nuevo".
 ```
 
 **Estados del dispositivo:**
+
 - `nuevo`: Recién registrado, sin asignar
 - `asignado`: Asignado a un cliente
 - `instalado`: Instalado en una unidad
@@ -534,6 +581,7 @@ Agrega un dispositivo al inventario con estado "nuevo".
 ---
 
 #### `GET /api/v1/devices/`
+
 **Listar dispositivos del cliente**
 
 Lista todos los dispositivos asignados al cliente autenticado.
@@ -541,10 +589,12 @@ Lista todos los dispositivos asignados al cliente autenticado.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Query Parameters (opcionales):**
+
 - `status` (string): Filtrar por estado (nuevo, asignado, instalado, activo, etc.)
 - `active` (boolean): Filtrar por estado de servicio activo
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -565,11 +615,13 @@ Lista todos los dispositivos asignados al cliente autenticado.
 ---
 
 #### `GET /api/v1/devices/{device_id}`
+
 **Obtener detalles de un dispositivo**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "device_id": "IMEI123456789",
@@ -588,6 +640,7 @@ Lista todos los dispositivos asignados al cliente autenticado.
 ---
 
 #### `PATCH /api/v1/devices/{device_id}`
+
 **Actualizar dispositivo**
 
 Actualiza información del dispositivo (firmware, notas, etc.).
@@ -595,6 +648,7 @@ Actualiza información del dispositivo (firmware, notas, etc.).
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "firmware_version": "03.28.08",
@@ -603,6 +657,7 @@ Actualiza información del dispositivo (firmware, notas, etc.).
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "device_id": "IMEI123456789",
@@ -620,6 +675,7 @@ Actualiza información del dispositivo (firmware, notas, etc.).
 ---
 
 #### `PATCH /api/v1/devices/{device_id}/status`
+
 **Cambiar estado del dispositivo**
 
 Actualiza el estado operativo del dispositivo.
@@ -627,6 +683,7 @@ Actualiza el estado operativo del dispositivo.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "new_status": "suspendido",
@@ -635,6 +692,7 @@ Actualiza el estado operativo del dispositivo.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "device_id": "IMEI123456789",
@@ -647,6 +705,7 @@ Actualiza el estado operativo del dispositivo.
 ---
 
 #### `DELETE /api/v1/devices/{device_id}`
+
 **Eliminar dispositivo** (Soft delete)
 
 Marca el dispositivo como dado de baja.
@@ -654,6 +713,7 @@ Marca el dispositivo como dado de baja.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Dispositivo IMEI123456789 dado de baja exitosamente"
@@ -669,16 +729,19 @@ Historial de auditoría de todos los cambios en dispositivos.
 ### 🔒 Todos requieren autenticación
 
 #### `GET /api/v1/device-events/`
+
 **Listar eventos de dispositivos**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Query Parameters (opcionales):**
+
 - `device_id` (string): Filtrar por dispositivo específico
 - `event_type` (string): Filtrar por tipo de evento
 - `limit` (int, default=100): Límite de resultados
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -705,6 +768,7 @@ Historial de auditoría de todos los cambios en dispositivos.
 ```
 
 **Tipos de eventos:**
+
 - `creado`: Dispositivo registrado
 - `asignado`: Asignado a cliente
 - `instalado`: Instalado en unidad
@@ -723,11 +787,13 @@ Gestión de vehículos, maquinaria o cualquier unidad rastreable.
 ### 🔒 Todos requieren autenticación
 
 #### `POST /api/v1/units/`
+
 **Crear nueva unidad**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "name": "Camioneta #01",
@@ -742,6 +808,7 @@ Gestión de vehículos, maquinaria o cualquier unidad rastreable.
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": "uuid",
@@ -761,6 +828,7 @@ Gestión de vehículos, maquinaria o cualquier unidad rastreable.
 ```
 
 **Tipos de unidad comunes:**
+
 - `vehiculo`: Automóviles, camionetas, camiones
 - `maquinaria`: Grúas, excavadoras, etc.
 - `contenedor`: Contenedores de carga
@@ -770,15 +838,18 @@ Gestión de vehículos, maquinaria o cualquier unidad rastreable.
 ---
 
 #### `GET /api/v1/units/`
+
 **Listar unidades**
 
 Lista las unidades según los permisos del usuario:
+
 - **Usuario maestro**: Ve todas las unidades del cliente
 - **Usuario regular**: Solo ve las unidades asignadas a él
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -799,6 +870,7 @@ Lista las unidades según los permisos del usuario:
 ---
 
 #### `GET /api/v1/units/{unit_id}`
+
 **Obtener detalles de unidad con dispositivos y usuarios**
 
 Incluye dispositivos asignados y usuarios con acceso.
@@ -806,6 +878,7 @@ Incluye dispositivos asignados y usuarios con acceso.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -839,11 +912,13 @@ Incluye dispositivos asignados y usuarios con acceso.
 ---
 
 #### `PATCH /api/v1/units/{unit_id}`
+
 **Actualizar unidad**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "name": "Camioneta #01 (Renovada)",
@@ -853,6 +928,7 @@ Incluye dispositivos asignados y usuarios con acceso.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -866,6 +942,7 @@ Incluye dispositivos asignados y usuarios con acceso.
 ---
 
 #### `DELETE /api/v1/units/{unit_id}`
+
 **Eliminar unidad** (Soft delete)
 
 Marca la unidad como eliminada. Solo usuarios maestros o con rol "admin" en la unidad.
@@ -873,6 +950,7 @@ Marca la unidad como eliminada. Solo usuarios maestros o con rol "admin" en la u
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Unidad Camioneta #01 eliminada exitosamente"
@@ -888,6 +966,7 @@ Gestión de instalaciones de dispositivos en unidades.
 ### 🔒 Todos requieren autenticación
 
 #### `POST /api/v1/unit-devices/assign`
+
 **Instalar dispositivo en unidad**
 
 Asigna un dispositivo GPS a una unidad/vehículo.
@@ -895,6 +974,7 @@ Asigna un dispositivo GPS a una unidad/vehículo.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "unit_id": "uuid",
@@ -904,6 +984,7 @@ Asigna un dispositivo GPS a una unidad/vehículo.
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "unit_id": "uuid",
@@ -915,6 +996,7 @@ Asigna un dispositivo GPS a una unidad/vehículo.
 ```
 
 **Validaciones:**
+
 - El dispositivo debe pertenecer al cliente
 - El dispositivo no debe estar instalado en otra unidad actualmente
 - El usuario debe tener permisos sobre la unidad
@@ -922,6 +1004,7 @@ Asigna un dispositivo GPS a una unidad/vehículo.
 ---
 
 #### `POST /api/v1/unit-devices/uninstall`
+
 **Desinstalar dispositivo de unidad**
 
 Marca un dispositivo como desinstalado de una unidad.
@@ -929,6 +1012,7 @@ Marca un dispositivo como desinstalado de una unidad.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "unit_id": "uuid",
@@ -938,6 +1022,7 @@ Marca un dispositivo como desinstalado de una unidad.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "unit_id": "uuid",
@@ -951,11 +1036,13 @@ Marca un dispositivo como desinstalado de una unidad.
 ---
 
 #### `GET /api/v1/unit-devices/history/{device_id}`
+
 **Historial de instalaciones de un dispositivo**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -986,6 +1073,7 @@ Sistema de permisos granulares por unidad.
 ### 🔒 Todos requieren autenticación (maestro o admin de la unidad)
 
 #### `POST /api/v1/user-units/assign`
+
 **Asignar usuario a unidad**
 
 Otorga permisos a un usuario sobre una unidad específica.
@@ -993,6 +1081,7 @@ Otorga permisos a un usuario sobre una unidad específica.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "unit_id": "uuid",
@@ -1002,11 +1091,13 @@ Otorga permisos a un usuario sobre una unidad específica.
 ```
 
 **Roles disponibles:**
+
 - `viewer`: Solo puede ver la unidad
 - `editor`: Puede ver y editar información
 - `admin`: Puede ver, editar y gestionar permisos
 
 **Response:** `201 Created`
+
 ```json
 {
   "unit_id": "uuid",
@@ -1019,6 +1110,7 @@ Otorga permisos a un usuario sobre una unidad específica.
 ---
 
 #### `DELETE /api/v1/user-units/unassign`
+
 **Desasignar usuario de unidad**
 
 Revoca los permisos de un usuario sobre una unidad.
@@ -1026,6 +1118,7 @@ Revoca los permisos de un usuario sobre una unidad.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "unit_id": "uuid",
@@ -1034,6 +1127,7 @@ Revoca los permisos de un usuario sobre una unidad.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Usuario desasignado de la unidad exitosamente"
@@ -1043,11 +1137,13 @@ Revoca los permisos de un usuario sobre una unidad.
 ---
 
 #### `GET /api/v1/user-units/{unit_id}/users`
+
 **Listar usuarios asignados a una unidad**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -1069,6 +1165,7 @@ Activación y gestión de servicios de rastreo.
 ### 🔒 Todos requieren autenticación
 
 #### `POST /api/v1/services/activate`
+
 **Activar servicio de rastreo**
 
 Activa un servicio de rastreo para un dispositivo según un plan.
@@ -1076,6 +1173,7 @@ Activa un servicio de rastreo para un dispositivo según un plan.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "device_id": "IMEI123456789",
@@ -1085,10 +1183,12 @@ Activa un servicio de rastreo para un dispositivo según un plan.
 ```
 
 **Tipos de suscripción:**
+
 - `monthly`: Pago mensual
 - `annual`: Pago anual (usualmente con descuento)
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": "uuid",
@@ -1107,6 +1207,7 @@ Activa un servicio de rastreo para un dispositivo según un plan.
 ```
 
 **Validaciones:**
+
 - Solo puede haber UN servicio ACTIVE por dispositivo
 - El dispositivo debe pertenecer al cliente
 - El plan debe existir y estar activo
@@ -1114,6 +1215,7 @@ Activa un servicio de rastreo para un dispositivo según un plan.
 ---
 
 #### `POST /api/v1/services/confirm-payment`
+
 **Confirmar pago de servicio**
 
 Confirma el pago de un servicio (usualmente tras confirmación de pasarela de pago).
@@ -1121,6 +1223,7 @@ Confirma el pago de un servicio (usualmente tras confirmación de pasarela de pa
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "device_service_id": "uuid",
@@ -1129,6 +1232,7 @@ Confirma el pago de un servicio (usualmente tras confirmación de pasarela de pa
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Pago confirmado exitosamente",
@@ -1140,6 +1244,7 @@ Confirma el pago de un servicio (usualmente tras confirmación de pasarela de pa
 ---
 
 #### `GET /api/v1/services/active`
+
 **Listar servicios activos**
 
 Lista todos los servicios activos del cliente con detalles de dispositivo y plan.
@@ -1147,6 +1252,7 @@ Lista todos los servicios activos del cliente con detalles de dispositivo y plan
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -1168,6 +1274,7 @@ Lista todos los servicios activos del cliente con detalles de dispositivo y plan
 ---
 
 #### `POST /api/v1/services/cancel`
+
 **Cancelar servicio**
 
 Cancela un servicio activo.
@@ -1175,6 +1282,7 @@ Cancela un servicio activo.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "device_service_id": "uuid",
@@ -1183,6 +1291,7 @@ Cancela un servicio activo.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "message": "Servicio cancelado exitosamente",
@@ -1201,11 +1310,13 @@ Catálogo de planes de servicio disponibles.
 ### 🔓 Público (no requiere autenticación)
 
 #### `GET /api/v1/plans/`
+
 **Listar planes disponibles**
 
 Obtiene el catálogo completo de planes.
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -1250,6 +1361,7 @@ Gestión de pedidos de hardware.
 ### 🔒 Todos requieren autenticación
 
 #### `POST /api/v1/orders/`
+
 **Crear nuevo pedido**
 
 Crea un pedido de hardware con sus items.
@@ -1257,6 +1369,7 @@ Crea un pedido de hardware con sus items.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Request:**
+
 ```json
 {
   "items": [
@@ -1279,12 +1392,14 @@ Crea un pedido de hardware con sus items.
 ```
 
 **Tipos de item:**
+
 - `hardware`: Dispositivos GPS
 - `accessory`: Accesorios (antenas, cables, etc.)
 - `service`: Servicios adicionales
 - `installation`: Servicio de instalación
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": "uuid",
@@ -1322,11 +1437,13 @@ Crea un pedido de hardware con sus items.
 ---
 
 #### `GET /api/v1/orders/`
+
 **Listar pedidos del cliente**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -1343,6 +1460,7 @@ Crea un pedido de hardware con sus items.
 ```
 
 **Estados de orden:**
+
 - `PENDING`: Pendiente de pago
 - `PROCESSING`: En procesamiento
 - `COMPLETED`: Completada
@@ -1351,6 +1469,7 @@ Crea un pedido de hardware con sus items.
 ---
 
 #### `GET /api/v1/orders/{order_id}`
+
 **Obtener detalles de un pedido**
 
 Incluye todos los items del pedido.
@@ -1358,6 +1477,7 @@ Incluye todos los items del pedido.
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -1380,14 +1500,17 @@ Gestión de pagos del cliente.
 ### 🔒 Todos requieren autenticación
 
 #### `GET /api/v1/payments/`
+
 **Listar pagos del cliente**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Query Parameters (opcionales):**
+
 - `status` (string): Filtrar por estado (PENDING, SUCCESS, FAILED, CANCELLED)
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -1405,6 +1528,7 @@ Gestión de pagos del cliente.
 ```
 
 **Estados de pago:**
+
 - `PENDING`: Pendiente de pago
 - `SUCCESS`: Pagado exitosamente
 - `FAILED`: Pago fallido
@@ -1413,11 +1537,13 @@ Gestión de pagos del cliente.
 ---
 
 #### `GET /api/v1/payments/{payment_id}`
+
 **Obtener detalles de un pago**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "uuid",
@@ -1593,26 +1719,26 @@ curl -X GET http://localhost:8100/api/v1/units/ \
 
 ### Errores de Autenticación
 
-| Código | Descripción |
-|--------|-------------|
-| `401 Unauthorized` | Token inválido o expirado |
-| `403 Forbidden` | Email no verificado o permisos insuficientes |
-| `404 Not Found` | Usuario no encontrado |
+| Código             | Descripción                                  |
+| ------------------ | -------------------------------------------- |
+| `401 Unauthorized` | Token inválido o expirado                    |
+| `403 Forbidden`    | Email no verificado o permisos insuficientes |
+| `404 Not Found`    | Usuario no encontrado                        |
 
 ### Errores de Validación
 
-| Código | Descripción |
-|--------|-------------|
-| `400 Bad Request` | Datos inválidos en la petición |
-| `422 Unprocessable Entity` | Error de validación de campos |
+| Código                     | Descripción                    |
+| -------------------------- | ------------------------------ |
+| `400 Bad Request`          | Datos inválidos en la petición |
+| `422 Unprocessable Entity` | Error de validación de campos  |
 
 ### Errores de Negocio
 
-| Código | Descripción |
-|--------|-------------|
-| `409 Conflict` | Ya existe un recurso con esos datos |
-| `404 Not Found` | Recurso no encontrado |
-| `403 Forbidden` | Operación no permitida |
+| Código          | Descripción                         |
+| --------------- | ----------------------------------- |
+| `409 Conflict`  | Ya existe un recurso con esos datos |
+| `404 Not Found` | Recurso no encontrado               |
+| `403 Forbidden` | Operación no permitida              |
 
 **Ejemplo de respuesta de error:**
 
@@ -1635,6 +1761,7 @@ http://localhost:8100/docs
 ```
 
 Características:
+
 - ✅ Probar endpoints directamente desde el navegador
 - ✅ Ver todos los modelos de datos
 - ✅ Autenticación integrada
@@ -1716,6 +1843,7 @@ https://github.com/tu-usuario/siscom-admin-api
 ### Version 1.0.0 (2024-11-08)
 
 **Nuevas características:**
+
 - ✅ Sistema completo de autenticación con AWS Cognito
 - ✅ Gestión multi-tenant de clientes
 - ✅ Sistema de invitaciones con emails
@@ -1727,6 +1855,7 @@ https://github.com/tu-usuario/siscom-admin-api
 - ✅ Deployment automatizado con GitHub Actions
 
 **Documentación:**
+
 - ✅ API Documentation completa
 - ✅ Guías de configuración
 - ✅ Ejemplos de uso
@@ -1758,6 +1887,7 @@ https://github.com/tu-usuario/siscom-admin-api
 ### Headers de Seguridad
 
 La API implementa:
+
 - CORS configurado correctamente
 - Headers de seguridad estándar
 - Rate limiting (próximamente)
@@ -1781,6 +1911,7 @@ La API implementa:
 ## 🙏 Agradecimientos
 
 Construido con:
+
 - [FastAPI](https://fastapi.tiangolo.com/)
 - [SQLAlchemy](https://www.sqlalchemy.org/)
 - [AWS Cognito](https://aws.amazon.com/cognito/)
@@ -1790,4 +1921,3 @@ Construido con:
 ---
 
 **¿Tienes preguntas?** Consulta la documentación adicional en `/docs/` o contacta al equipo de desarrollo.
-

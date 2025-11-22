@@ -26,8 +26,8 @@ Lista todos los planes de servicio disponibles.
     "id": "223e4567-e89b-12d3-a456-426614174000",
     "name": "Plan Básico",
     "description": "Rastreo GPS básico con actualizaciones cada 60 segundos",
-    "monthly_price": 199.00,
-    "yearly_price": 1990.00,
+    "monthly_price": 199.0,
+    "yearly_price": 1990.0,
     "features": {
       "update_interval": 60,
       "historical_data": 30,
@@ -41,8 +41,8 @@ Lista todos los planes de servicio disponibles.
     "id": "334e4567-e89b-12d3-a456-426614174000",
     "name": "Plan Premium",
     "description": "Rastreo GPS avanzado con actualizaciones cada 30 segundos",
-    "monthly_price": 299.00,
-    "yearly_price": 2990.00,
+    "monthly_price": 299.0,
+    "yearly_price": 2990.0,
     "features": {
       "update_interval": 30,
       "historical_data": 90,
@@ -78,13 +78,13 @@ Características típicas incluidas:
 
 ```json
 {
-  "update_interval": 30,        // Intervalo de actualización en segundos
-  "historical_data": 90,        // Días de historial disponible
-  "geofences": 20,              // Número máximo de geocercas
-  "alerts": true,               // Alertas por email/SMS
-  "priority_support": true,     // Soporte prioritario
-  "custom_reports": true,       // Reportes personalizados
-  "api_access": false           // Acceso a API para integración
+  "update_interval": 30, // Intervalo de actualización en segundos
+  "historical_data": 90, // Días de historial disponible
+  "geofences": 20, // Número máximo de geocercas
+  "alerts": true, // Alertas por email/SMS
+  "priority_support": true, // Soporte prioritario
+  "custom_reports": true, // Reportes personalizados
+  "api_access": false // Acceso a API para integración
 }
 ```
 
@@ -172,6 +172,7 @@ POST /api/v1/services/activate
 ```
 
 El sistema:
+
 1. Busca el plan por `plan_id`
 2. Toma el precio según `subscription_type` (MONTHLY o YEARLY)
 3. Crea el pago con ese monto
@@ -181,14 +182,14 @@ El sistema:
 
 ## Comparación de Planes
 
-| Característica | Básico | Premium | Empresarial |
-|---|---|---|---|
-| Precio Mensual | $199 | $299 | Personalizado |
-| Actualización | 60s | 30s | 10s |
-| Historial | 30 días | 90 días | Ilimitado |
-| Geocercas | 5 | 20 | Ilimitadas |
-| Soporte | Estándar | Prioritario | Dedicado |
-| Reportes | Básicos | Avanzados | Personalizados |
+| Característica | Básico   | Premium     | Empresarial    |
+| -------------- | -------- | ----------- | -------------- |
+| Precio Mensual | $199     | $299        | Personalizado  |
+| Actualización  | 60s      | 30s         | 10s            |
+| Historial      | 30 días  | 90 días     | Ilimitado      |
+| Geocercas      | 5        | 20          | Ilimitadas     |
+| Soporte        | Estándar | Prioritario | Dedicado       |
+| Reportes       | Básicos  | Avanzados   | Personalizados |
 
 ---
 
@@ -214,8 +215,8 @@ VALUES (
 ### Descontinuar Plan (SQL)
 
 ```sql
-UPDATE plans 
-SET active = false 
+UPDATE plans
+SET active = false
 WHERE id = '...';
 ```
 
@@ -291,8 +292,8 @@ curl http://localhost:8000/api/v1/plans/
 {
   "id": "334e4567-e89b-12d3-a456-426614174000",
   "name": "Plan Premium",
-  "monthly_price": 299.00,
-  "yearly_price": 2990.00
+  "monthly_price": 299.0,
+  "yearly_price": 2990.0
 }
 ```
 
@@ -314,7 +315,7 @@ curl -X POST http://localhost:8000/api/v1/services/activate \
 ```json
 {
   "payment": {
-    "amount": 299.00,
+    "amount": 299.0,
     "description": "Plan Premium - Suscripción Mensual"
   }
 }
@@ -343,4 +344,3 @@ curl -X POST http://localhost:8000/api/v1/services/activate \
 - Destacar plan recomendado según uso
 - Permitir cambio de plan fácilmente
 - Ofrecer trial o demo de características premium
-

@@ -2,7 +2,7 @@
 
 ## Descripción
 
-Endpoints para gestionar autenticación de usuarios con AWS Cognito, incluyendo login, recuperación de contraseña, cambio de contraseña y verificación de email.
+Endpoints para gestionar autenticación de usuarios con AWS Cognito, incluyendo login, renovación de tokens, recuperación de contraseña, cambio de contraseña y verificación de email.
 
 ---
 
@@ -184,7 +184,48 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 6. Reenviar Verificación de Email
+### 6. Renovar Tokens (Refresh)
+
+**POST** `/api/v1/auth/refresh`
+
+Renueva el access token y el id token usando un refresh token válido.
+
+#### Request Body
+
+```json
+{
+  "refresh_token": "eyJjdHkiOiJKV1Q..."
+}
+```
+
+#### Response 200 OK
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1...",
+  "id_token": "eyJhbGciOiJSUzI1...",
+  "expires_in": 3600,
+  "token_type": "Bearer"
+}
+```
+
+#### Errores Comunes
+
+- **401 Unauthorized**: Refresh token inválido o expirado
+- **400 Bad Request**: Parámetros inválidos
+- **500 Internal Server Error**: Error al renovar el token en Cognito
+
+#### Notas
+
+- Este endpoint **NO requiere autenticación** (es público)
+- El refresh token NO se renueva, sigue siendo el mismo
+- Solo se renuevan el access token y el id token
+- Use este endpoint cuando el access token expire para evitar que el usuario tenga que iniciar sesión nuevamente
+- El refresh token tiene una duración mayor (típicamente 30 días)
+
+---
+
+### 7. Reenviar Verificación de Email
 
 **POST** `/api/v1/auth/resend-verification`
 
@@ -209,7 +250,7 @@ Reenvía el código de verificación al email del usuario.
 
 ---
 
-### 7. Confirmar Email
+### 8. Confirmar Email
 
 **POST** `/api/v1/auth/confirm-email`
 
@@ -248,7 +289,34 @@ Las contraseñas deben cumplir con los siguientes requisitos de AWS Cognito:
 - Al menos una letra mayúscula
 - Al menos una letra minúscula
 - Al menos un número
-- Al menos un carácter especial (!@#$%^&*)
+- Al menos un carácter especial (!@#$%^&\*)
+
+---
+
+## Flujo de Uso del Refresh Token
+
+El refresh token permite mantener al usuario autenticado sin que tenga que volver a ingresar sus credenciales:
+
+1. Usuario inicia sesión con `POST /api/v1/auth/login`
+2. El sistema retorna `access_token`, `id_token` y `refresh_token`
+3. Cliente almacena los tres tokens de forma segura
+4. Cliente usa el `access_token` para llamadas a endpoints protegidos
+5. Cuando el `access_token` expira (después de 1 hora):
+   - Cliente detecta error 401 en una llamada protegida
+   - Cliente llama a `POST /api/v1/auth/refresh` con el `refresh_token`
+   - Sistema retorna nuevos `access_token` e `id_token`
+   - Cliente actualiza los tokens almacenados
+   - Cliente reintenta la llamada fallida con el nuevo `access_token`
+6. El `refresh_token` permanece válido hasta que:
+   - Expire (típicamente 30 días)
+   - El usuario haga logout (`POST /api/v1/auth/logout`)
+   - Se revoque manualmente en Cognito
+
+**Mejores prácticas:**
+
+- Almacenar el refresh token de forma segura (nunca en localStorage en aplicaciones web)
+- Implementar renovación automática de tokens antes de que expiren
+- Manejar el caso cuando el refresh token también expira (redirigir a login)
 
 ---
 
@@ -272,7 +340,7 @@ Las contraseñas deben cumplir con los siguientes requisitos de AWS Cognito:
 - Los códigos de recuperación de contraseña expiran en 1 hora
 - Los códigos son de 6 dígitos numéricos y se pueden usar solo una vez
 - El refresh token puede usarse para obtener nuevos access tokens sin reautenticar
-- Los endpoints públicos (no requieren autenticación): login, forgot-password, reset-password, resend-verification, confirm-email
+- Los refresh tokens tienen una duración mayor (típicamente 30 días)
+- Los endpoints públicos (no requieren autenticación): login, forgot-password, reset-password, resend-verification, confirm-email, refresh
 - Los endpoints protegidos (requieren autenticación): password (cambiar contraseña), logout
 - Por seguridad, los endpoints forgot-password y resend-verification siempre retornan el mismo mensaje sin revelar si el email existe
-

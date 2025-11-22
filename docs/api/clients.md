@@ -267,4 +267,3 @@ Un cliente tiene:
 - `is_master=True` por defecto
 - Tiene permisos para invitar usuarios
 - No puede eliminarse sin eliminar el cliente
-

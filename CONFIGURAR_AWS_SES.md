@@ -228,7 +228,7 @@ Para enviar emails a **cualquier dirección** sin verificar:
 4. Completa el formulario:
    - **Mail type**: Transactional
    - **Website URL**: Tu sitio web
-   - **Use case description**: 
+   - **Use case description**:
      ```
      Necesitamos enviar correos transaccionales para:
      - Verificación de cuentas de usuario
@@ -284,4 +284,3 @@ Si sigues teniendo problemas:
 2. Verifica en AWS SES Console → Email sending → Sending statistics
 3. Revisa AWS CloudWatch Logs para errores de SES
 4. Consulta la documentación: [docs/guides/email-configuration.md](docs/guides/email-configuration.md)
-

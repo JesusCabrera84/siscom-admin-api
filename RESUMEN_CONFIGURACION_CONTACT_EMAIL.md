@@ -5,42 +5,51 @@
 ### ✅ 1. Configuración de Docker
 
 #### `docker-compose.yml`
+
 - ✅ Variable agregada con valor por defecto: `contacto@geminislabs.com`
 - ✅ Disponible para desarrollo local
 
 #### `docker-compose.prod.yml`
+
 - ✅ Variable agregada (toma valor del .env)
 - ✅ Lista para producción
 
 ### ✅ 2. GitHub Actions
 
 #### `.github/workflows/deploy.yml`
+
 - ✅ Variable agregada en las variables de entorno (línea 91)
 - ✅ Variable agregada en la lista de envs (línea 97)
 - ✅ Variable agregada al archivo .env generado (línea 124)
 
 #### `.github/workflows/ci.yml`
+
 - ✅ Variable agregada para tests de Docker
 
 ### ✅ 3. Código de la Aplicación
 
 #### `app/core/config.py`
+
 - ✅ Campo `CONTACT_EMAIL` agregado (Optional con default None)
 - ✅ No rompe la aplicación si no está configurada
 
 #### `app/api/v1/endpoints/contact.py`
+
 - ✅ Endpoint creado: `/api/v1/contact/send-message`
 - ✅ Validación de que CONTACT_EMAIL esté configurada
 
 #### `app/schemas/contact.py`
+
 - ✅ Schema de validación creado
 - ✅ Valida que al menos email o teléfono estén presentes
 
 #### `app/services/notifications.py`
+
 - ✅ Función `send_contact_email()` implementada
 - ✅ Usa AWS SES para envío
 
 #### `app/templates/contact_message.html`
+
 - ✅ Template HTML profesional creado
 
 ### ✅ 4. Documentación
@@ -174,28 +183,28 @@ Reemplaza `localhost:8000` con tu URL de producción.
 
 ## 📊 Estado Actual
 
-| Item | Estado | Notas |
-|------|--------|-------|
-| Código del endpoint | ✅ Completo | Funcionando localmente |
-| Schemas de validación | ✅ Completo | - |
-| Template HTML | ✅ Completo | - |
-| Documentación | ✅ Completo | 4 archivos creados |
-| Docker Compose | ✅ Completo | Dev y Prod |
-| GitHub Actions | ✅ Actualizado | Falta agregar variable |
-| Variable en .env local | ✅ Agregada | `contacto@geminislabs.com` |
-| Variable en GitHub | ⏳ Pendiente | **ACCIÓN REQUERIDA** |
-| AWS SES verificación | ⏳ Pendiente | **ACCIÓN REQUERIDA** |
-| Permisos IAM | ⏳ Pendiente | **ACCIÓN REQUERIDA** |
+| Item                   | Estado         | Notas                      |
+| ---------------------- | -------------- | -------------------------- |
+| Código del endpoint    | ✅ Completo    | Funcionando localmente     |
+| Schemas de validación  | ✅ Completo    | -                          |
+| Template HTML          | ✅ Completo    | -                          |
+| Documentación          | ✅ Completo    | 4 archivos creados         |
+| Docker Compose         | ✅ Completo    | Dev y Prod                 |
+| GitHub Actions         | ✅ Actualizado | Falta agregar variable     |
+| Variable en .env local | ✅ Agregada    | `contacto@geminislabs.com` |
+| Variable en GitHub     | ⏳ Pendiente   | **ACCIÓN REQUERIDA**       |
+| AWS SES verificación   | ⏳ Pendiente   | **ACCIÓN REQUERIDA**       |
+| Permisos IAM           | ⏳ Pendiente   | **ACCIÓN REQUERIDA**       |
 
 ## 🔗 Enlaces Rápidos
 
-| Documento | Propósito |
-|-----------|-----------|
-| `docs/api/contact.md` | Documentación del API de contacto |
-| `docs/guides/github-actions-contact-setup.md` | Configurar variable en GitHub |
-| `CONFIGURACION_CONTACTO.md` | Guía de configuración general |
-| `CONFIGURAR_AWS_SES.md` | Configurar AWS SES |
-| `setup_ses.sh` | Script automático de configuración |
+| Documento                                     | Propósito                          |
+| --------------------------------------------- | ---------------------------------- |
+| `docs/api/contact.md`                         | Documentación del API de contacto  |
+| `docs/guides/github-actions-contact-setup.md` | Configurar variable en GitHub      |
+| `CONFIGURACION_CONTACTO.md`                   | Guía de configuración general      |
+| `CONFIGURAR_AWS_SES.md`                       | Configurar AWS SES                 |
+| `setup_ses.sh`                                | Script automático de configuración |
 
 ## 🚀 Comando Rápido de Configuración
 
@@ -263,4 +272,3 @@ Si tienes problemas:
 **Próximo paso**: Configurar variable en GitHub Actions
 
 **Documentación**: Consulta los 5 documentos creados en este repositorio
-

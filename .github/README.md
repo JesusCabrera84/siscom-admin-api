@@ -5,11 +5,14 @@ Este directorio contiene los workflows de GitHub Actions para CI/CD del proyecto
 ## 📋 Workflows Disponibles
 
 ### 1. `deploy.yml` - Deployment Automático
+
 Se ejecuta cuando:
+
 - Se hace push a la rama `master`
 - Se ejecuta manualmente desde GitHub Actions
 
 **Pasos:**
+
 1. Verifica el código con Ruff y Black
 2. Construye la imagen Docker
 3. Copia la imagen al servidor EC2
@@ -17,11 +20,14 @@ Se ejecuta cuando:
 5. Verifica que el deployment fue exitoso
 
 ### 2. `ci.yml` - Integración Continua
+
 Se ejecuta cuando:
+
 - Se crea o actualiza un Pull Request hacia `master` o `develop`
 - Se hace push a la rama `develop`
 
 **Pasos:**
+
 1. Ejecuta linters (Ruff, Black)
 2. Ejecuta tests con pytest
 3. Construye y prueba la imagen Docker
@@ -32,6 +38,7 @@ Debes configurar los siguientes secrets en GitHub:
 **Settings → Secrets and variables → Actions → New repository secret**
 
 ### Secrets de EC2:
+
 ```
 EC2_HOST                    # IP o hostname del servidor EC2
 EC2_USERNAME                # Usuario SSH (ej: ubuntu, ec2-user)
@@ -40,11 +47,13 @@ EC2_SSH_PORT                # Puerto SSH (generalmente 22)
 ```
 
 ### Secrets de Base de Datos:
+
 ```
 DB_PASSWORD                 # Contraseña de PostgreSQL
 ```
 
 ### Secrets de AWS Cognito:
+
 ```
 COGNITO_USER_POOL_ID        # ID del User Pool de Cognito (ej: us-east-1_XXXXXXXX)
 COGNITO_CLIENT_ID           # Client ID de Cognito
@@ -63,14 +72,14 @@ Configura estas variables en:
 
 ⚠️ **IMPORTANTE**: Estas deben configurarse como **Variables**, NO como Secrets:
 
-| Variable | Valor de Ejemplo | Descripción |
-|----------|------------------|-------------|
-| `PROJECT_NAME` | `SISCOM Admin API` | Nombre del proyecto |
-| `DB_HOST` | `siscom-db.xxxxx.us-east-1.rds.amazonaws.com` | Endpoint de RDS |
-| `DB_PORT` | `5432` | Puerto de PostgreSQL |
-| `DB_USER` | `siscom_admin` | Usuario de PostgreSQL |
-| `DB_NAME` | `siscom_admin` | Nombre de la base de datos |
-| `COGNITO_REGION` | `us-east-1` | **⚠️ CRÍTICO**: Región de AWS Cognito (ej: us-east-1, us-west-2) |
+| Variable         | Valor de Ejemplo                              | Descripción                                                      |
+| ---------------- | --------------------------------------------- | ---------------------------------------------------------------- |
+| `PROJECT_NAME`   | `SISCOM Admin API`                            | Nombre del proyecto                                              |
+| `DB_HOST`        | `siscom-db.xxxxx.us-east-1.rds.amazonaws.com` | Endpoint de RDS                                                  |
+| `DB_PORT`        | `5432`                                        | Puerto de PostgreSQL                                             |
+| `DB_USER`        | `siscom_admin`                                | Usuario de PostgreSQL                                            |
+| `DB_NAME`        | `siscom_admin`                                | Nombre de la base de datos                                       |
+| `COGNITO_REGION` | `us-east-1`                                   | **⚠️ CRÍTICO**: Región de AWS Cognito (ej: us-east-1, us-west-2) |
 
 **Nota Importante**: `COGNITO_REGION` es crítica - si no está configurada o está vacía, el deployment fallará con error: `Invalid endpoint: https://cognito-idp..amazonaws.com`
 
@@ -82,6 +91,7 @@ El workflow de deploy usa el environment `production`. Debes crearlo en:
 Nombre: `production`
 
 Puedes configurar:
+
 - **Protection rules**: Requerir aprobación antes de deploy
 - **Environment secrets**: Secrets específicos para este environment
 
@@ -90,6 +100,7 @@ Puedes configurar:
 Antes de ejecutar el workflow por primera vez, asegúrate de que tu servidor EC2 tenga:
 
 ### 1. Docker y Docker Compose instalados:
+
 ```bash
 # Instalar Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
@@ -102,16 +113,19 @@ sudo chmod +x /usr/local/bin/docker-compose
 ```
 
 ### 2. Crear la red Docker:
+
 ```bash
 docker network create siscom-network
 ```
 
 ### 3. Configurar el directorio de trabajo:
+
 ```bash
 mkdir -p ~/siscom-admin-api
 ```
 
 ### 4. Configurar el firewall (si es necesario):
+
 ```bash
 # Permitir tráfico en el puerto 8100
 sudo ufw allow 8100/tcp
@@ -174,22 +188,26 @@ Para problemas comunes y soluciones detalladas, consulta:
 **Solución Automática**: Vuelve a ejecutar el workflow manualmente desde GitHub Actions.
 
 **Solución Manual**: Ejecuta en el servidor:
+
 ```bash
 cd ~/siscom-admin-api
 ./scripts/cleanup_deployment.sh
 ```
 
 #### El deployment falla en "Deploy to EC2"
+
 - Verifica que los secrets estén configurados correctamente
 - Asegúrate de que la clave SSH tenga los permisos correctos
 - Revisa que el servidor EC2 sea accesible desde GitHub Actions
 
 #### El contenedor no inicia correctamente
+
 - Revisa los logs: `docker logs siscom-admin-api`
 - Verifica que todas las variables de entorno estén configuradas
 - Asegúrate de que la base de datos sea accesible desde el servidor
 
 #### Error de conexión a la base de datos
+
 - Verifica que el security group de RDS permita conexiones desde el EC2
 - Confirma que las credenciales de BD sean correctas
 - Prueba la conexión manualmente desde el servidor EC2
@@ -210,4 +228,3 @@ Para contribuir mejoras a los workflows:
 2. Prueba los workflows localmente cuando sea posible
 3. Crea un Pull Request
 4. El workflow de CI se ejecutará automáticamente
-

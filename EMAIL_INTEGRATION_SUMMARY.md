@@ -53,6 +53,7 @@ Los 3 templates ya existían, pero ahora se usan correctamente:
 - `password_reset.html` - Email de reset de contraseña
 
 Cada template recibe las siguientes variables:
+
 - `subject`: Asunto del correo
 - `title`: Título principal
 - `message`: Mensaje descriptivo
@@ -79,6 +80,7 @@ Se completaron todos los TODOs de envío de email en los siguientes archivos:
 ### 5. Dependencias (`requirements.txt`)
 
 Se agregó:
+
 ```
 jinja2==3.1.3
 ```
@@ -138,10 +140,7 @@ Si tu aplicación corre en EC2, el IAM Role necesita:
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "ses:SendEmail",
-        "ses:SendRawEmail"
-      ],
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
       "Resource": "*"
     }
   ]
@@ -194,6 +193,7 @@ aws iam get-role-policy --role-name YourEC2Role --policy-name SESSendEmail
 ### 5. Deployment
 
 **Opción A - Con GitHub Actions (Recomendado)**:
+
 ```bash
 # Hacer push a master
 git add .
@@ -205,6 +205,7 @@ git push origin master
 ```
 
 **Opción B - Manual**:
+
 ```bash
 # En el servidor EC2
 cd siscom-admin-api
@@ -295,6 +296,7 @@ Los logs incluyen información detallada:
 ### Métricas de AWS SES
 
 Ir a AWS SES Console → Sending statistics:
+
 - Emails enviados
 - Bounces
 - Complaints
@@ -307,6 +309,7 @@ Ir a AWS SES Console → Sending statistics:
 **Causa**: El email remitente no está verificado en AWS SES
 
 **Solución**:
+
 ```bash
 # Verificar el email en AWS SES Console
 aws ses verify-email-identity --email-address noreply@tudominio.com
@@ -317,6 +320,7 @@ aws ses verify-email-identity --email-address noreply@tudominio.com
 **Causa**: Cuenta en sandbox mode y el email destino no está verificado
 
 **Solución**:
+
 - Verificar también el email de destino en SES Console
 - O solicitar mover la cuenta fuera del sandbox
 
@@ -325,6 +329,7 @@ aws ses verify-email-identity --email-address noreply@tudominio.com
 **Causa**: IAM Role sin permisos de SES
 
 **Solución**:
+
 ```bash
 # Agregar política de SES al IAM Role
 aws iam put-role-policy \
@@ -336,6 +341,7 @@ aws iam put-role-policy \
 ### ❌ Los emails no llegan
 
 **Checklist**:
+
 1. ✅ Email remitente verificado
 2. ✅ Variables de entorno configuradas
 3. ✅ Permisos IAM correctos
@@ -380,24 +386,23 @@ aws iam put-role-policy \
 
 ## Resumen Técnico
 
-| Componente | Estado | Archivo |
-|------------|--------|---------|
-| Servicio de emails | ✅ Completo | `app/services/notifications.py` |
-| Configuración | ✅ Completo | `app/core/config.py` |
-| Templates HTML | ✅ Existentes y usándose | `app/templates/*.html` |
-| Integración en endpoints | ✅ Completo | `app/api/v1/endpoints/*.py` |
-| Dependencias | ✅ Actualizado | `requirements.txt` |
-| Docker Compose Dev | ✅ Actualizado | `docker-compose.yml` |
-| Docker Compose Prod | ✅ Actualizado | `docker-compose.prod.yml` |
-| GitHub Actions CI/CD | ✅ Actualizado | `.github/workflows/deploy.yml` |
-| Documentación AWS SES | ✅ Completo | `docs/guides/email-configuration.md` |
-| Documentación GitHub | ✅ Completo | `docs/guides/github-actions-email-setup.md` |
-| README | ✅ Actualizado | `README.md` |
-| Tests | ⏳ Pendiente | - |
+| Componente               | Estado                   | Archivo                                     |
+| ------------------------ | ------------------------ | ------------------------------------------- |
+| Servicio de emails       | ✅ Completo              | `app/services/notifications.py`             |
+| Configuración            | ✅ Completo              | `app/core/config.py`                        |
+| Templates HTML           | ✅ Existentes y usándose | `app/templates/*.html`                      |
+| Integración en endpoints | ✅ Completo              | `app/api/v1/endpoints/*.py`                 |
+| Dependencias             | ✅ Actualizado           | `requirements.txt`                          |
+| Docker Compose Dev       | ✅ Actualizado           | `docker-compose.yml`                        |
+| Docker Compose Prod      | ✅ Actualizado           | `docker-compose.prod.yml`                   |
+| GitHub Actions CI/CD     | ✅ Actualizado           | `.github/workflows/deploy.yml`              |
+| Documentación AWS SES    | ✅ Completo              | `docs/guides/email-configuration.md`        |
+| Documentación GitHub     | ✅ Completo              | `docs/guides/github-actions-email-setup.md` |
+| README                   | ✅ Actualizado           | `README.md`                                 |
+| Tests                    | ⏳ Pendiente             | -                                           |
 
 ---
 
 **Fecha**: 2025-11-08
 **Autor**: Claude AI Assistant
 **Versión**: 1.0
-

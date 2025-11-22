@@ -5,6 +5,7 @@ Esta guía te ayudará a configurar un IAM Role para tu instancia EC2 para que p
 ## 🎯 ¿Por qué usar IAM Roles?
 
 **Ventajas:**
+
 - ✅ **Más seguro**: No necesitas almacenar credenciales en variables de entorno
 - ✅ **Automático**: Las credenciales se rotan automáticamente
 - ✅ **Mejor práctica**: Recomendado por AWS
@@ -21,29 +22,29 @@ Esta guía te ayudará a configurar un IAM Role para tu instancia EC2 para que p
 
 ```json
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "cognito-idp:AdminInitiateAuth",
-                "cognito-idp:AdminCreateUser",
-                "cognito-idp:AdminSetUserPassword",
-                "cognito-idp:AdminGetUser",
-                "cognito-idp:AdminUpdateUserAttributes",
-                "cognito-idp:AdminDeleteUser",
-                "cognito-idp:ListUsers",
-                "cognito-idp:AdminResetUserPassword",
-                "cognito-idp:AdminConfirmSignUp",
-                "cognito-idp:AdminDisableUser",
-                "cognito-idp:AdminEnableUser",
-                "cognito-idp:AdminUserGlobalSignOut",
-                "cognito-idp:GlobalSignOut",
-                "cognito-idp:ChangePassword"
-            ],
-            "Resource": "arn:aws:cognito-idp:*:*:userpool/*"
-        }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:AdminInitiateAuth",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminSetUserPassword",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "cognito-idp:AdminDeleteUser",
+        "cognito-idp:ListUsers",
+        "cognito-idp:AdminResetUserPassword",
+        "cognito-idp:AdminConfirmSignUp",
+        "cognito-idp:AdminDisableUser",
+        "cognito-idp:AdminEnableUser",
+        "cognito-idp:AdminUserGlobalSignOut",
+        "cognito-idp:GlobalSignOut",
+        "cognito-idp:ChangePassword"
+      ],
+      "Resource": "arn:aws:cognito-idp:*:*:userpool/*"
+    }
+  ]
 }
 ```
 
@@ -110,6 +111,7 @@ docker-compose -f docker-compose.prod.yml up -d
 ## ✅ Verificar que Funciona
 
 1. Verifica los logs del contenedor:
+
 ```bash
 docker logs -f siscom-admin-api
 ```
@@ -117,6 +119,7 @@ docker logs -f siscom-admin-api
 2. No deberías ver errores relacionados con credenciales de AWS
 
 3. Prueba el health endpoint:
+
 ```bash
 curl http://localhost:8100/health
 ```
@@ -124,6 +127,7 @@ curl http://localhost:8100/health
 ## 🚫 Eliminar Secrets Innecesarios de GitHub
 
 Una vez que el IAM Role esté configurado, **ya no necesitas** estos secrets en GitHub:
+
 - ❌ `AWS_ACCESS_KEY_ID` - Puedes eliminarlo
 - ❌ `AWS_SECRET_ACCESS_KEY` - Puedes eliminarlo
 
@@ -136,9 +140,11 @@ Boto3 usará automáticamente las credenciales del IAM Role.
 **Causa**: El IAM Role no está asignado correctamente o el contenedor no tiene acceso.
 
 **Solución**:
+
 1. Verifica que el role esté asignado: **EC2 → Instances → Security → IAM role**
 2. Reinicia el contenedor después de asignar el role
 3. Verifica desde dentro del contenedor:
+
 ```bash
 docker exec -it siscom-admin-api /bin/bash
 curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
@@ -149,6 +155,7 @@ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
 **Causa**: El IAM Role no tiene los permisos necesarios.
 
 **Solución**:
+
 1. Verifica que la política `siscom-cognito-access` esté adjunta al role
 2. Revisa los permisos de la política
 3. Asegúrate de que el User Pool está en la misma región
@@ -159,6 +166,7 @@ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
 
 **Solución**:
 Elimina completamente las variables de entorno del `.env`:
+
 ```bash
 # NO incluir estas líneas en .env:
 # AWS_ACCESS_KEY_ID=
@@ -183,4 +191,3 @@ Elimina completamente las variables de entorno del `.env`:
 ---
 
 **Última actualización:** Noviembre 2025
-

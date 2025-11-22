@@ -13,7 +13,7 @@ jobs:
   lint-and-test:
     name: Lint and Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,8 +21,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -70,9 +70,8 @@ jobs:
             -e CONTACT_EMAIL=test@test.com \
             -e RECAPTCHA_SECRET_KEY=test_key \
             siscom-admin-api:test || true
-          
+
           sleep 5
           docker logs test-container
           docker stop test-container || true
           docker rm test-container || true
-

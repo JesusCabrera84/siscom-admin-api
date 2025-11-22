@@ -29,14 +29,14 @@ Authorization: Bearer <access_token>
       "device_serial": "GPS-2024-001",
       "device_model": "TK103",
       "device_imei": "353451234567890",
-      "unit_price": 1500.00,
+      "unit_price": 1500.0,
       "quantity": 2
     },
     {
       "device_serial": "GPS-2024-002",
       "device_model": "TK303",
       "device_imei": "353451234567891",
-      "unit_price": 2000.00,
+      "unit_price": 2000.0,
       "quantity": 1
     }
   ]
@@ -50,7 +50,7 @@ Authorization: Bearer <access_token>
   "id": "789e4567-e89b-12d3-a456-426614174000",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "PENDING",
-  "total_amount": 5000.00,
+  "total_amount": 5000.0,
   "items": [
     {
       "id": "item-1",
@@ -58,9 +58,9 @@ Authorization: Bearer <access_token>
       "device_serial": "GPS-2024-001",
       "device_model": "TK103",
       "device_imei": "353451234567890",
-      "unit_price": 1500.00,
+      "unit_price": 1500.0,
       "quantity": 2,
-      "subtotal": 3000.00
+      "subtotal": 3000.0
     },
     {
       "id": "item-2",
@@ -68,9 +68,9 @@ Authorization: Bearer <access_token>
       "device_serial": "GPS-2024-002",
       "device_model": "TK303",
       "device_imei": "353451234567891",
-      "unit_price": 2000.00,
+      "unit_price": 2000.0,
       "quantity": 1,
-      "subtotal": 2000.00
+      "subtotal": 2000.0
     }
   ],
   "created_at": "2024-01-15T10:30:00Z"
@@ -99,7 +99,7 @@ Authorization: Bearer <access_token>
     "id": "789e4567-e89b-12d3-a456-426614174000",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
     "status": "COMPLETED",
-    "total_amount": 5000.00,
+    "total_amount": 5000.0,
     "created_at": "2024-01-15T10:30:00Z",
     "completed_at": "2024-01-15T14:00:00Z"
   }
@@ -131,15 +131,15 @@ Authorization: Bearer <access_token>
   "id": "789e4567-e89b-12d3-a456-426614174000",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "COMPLETED",
-  "total_amount": 5000.00,
+  "total_amount": 5000.0,
   "items": [
     {
       "id": "item-1",
       "device_serial": "GPS-2024-001",
       "device_model": "TK103",
-      "unit_price": 1500.00,
+      "unit_price": 1500.0,
       "quantity": 2,
-      "subtotal": 3000.00
+      "subtotal": 3000.0
     }
   ],
   "created_at": "2024-01-15T10:30:00Z",
@@ -287,12 +287,12 @@ Cada item representa un tipo de dispositivo:
 
 ```json
 {
-  "device_serial": "GPS-2024-001",  // Número de serie del dispositivo
-  "device_model": "TK103",          // Modelo del hardware
-  "device_id": "353451234567890",   // Device ID único del dispositivo
-  "unit_price": 1500.00,            // Precio unitario
-  "quantity": 2,                    // Cantidad de dispositivos
-  "subtotal": 3000.00               // unit_price * quantity
+  "device_serial": "GPS-2024-001", // Número de serie del dispositivo
+  "device_model": "TK103", // Modelo del hardware
+  "device_id": "353451234567890", // Device ID único del dispositivo
+  "unit_price": 1500.0, // Precio unitario
+  "quantity": 2, // Cantidad de dispositivos
+  "subtotal": 3000.0 // unit_price * quantity
 }
 ```
 
@@ -353,7 +353,7 @@ curl -X POST http://localhost:8000/api/v1/orders/ \
 {
   "id": "...",
   "status": "PENDING",
-  "total_amount": 3000.00
+  "total_amount": 3000.0
 }
 ```
 
@@ -366,12 +366,12 @@ Transferencia, tarjeta, etc.
 ### 5. Admin Confirma Pago
 
 ```sql
-UPDATE payments 
-SET status = 'SUCCESS' 
+UPDATE payments
+SET status = 'SUCCESS'
 WHERE order_id = '...';
 
-UPDATE orders 
-SET status = 'PAID' 
+UPDATE orders
+SET status = 'PAID'
 WHERE id = '...';
 ```
 
@@ -384,9 +384,9 @@ Envío físico con paquetería
 ### 7. Admin Marca Orden como COMPLETED
 
 ```sql
-UPDATE orders 
-SET status = 'COMPLETED', 
-    completed_at = NOW() 
+UPDATE orders
+SET status = 'COMPLETED',
+    completed_at = NOW()
 WHERE id = '...';
 
 -- Crear dispositivos en BD
@@ -422,4 +422,3 @@ Cliente activa servicios de rastreo
 - Verificar información de dispositivos antes de ordenar
 - Guardar número de orden para seguimiento
 - Confirmar recepción de dispositivos
-

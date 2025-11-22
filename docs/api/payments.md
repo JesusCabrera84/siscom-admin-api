@@ -27,7 +27,7 @@ Authorization: Bearer <access_token>
   {
     "id": "abc12345-e89b-12d3-a456-426614174000",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
-    "amount": 299.00,
+    "amount": 299.0,
     "status": "SUCCESS",
     "payment_method": "credit_card",
     "description": "Plan Premium - Suscripción Mensual",
@@ -39,7 +39,7 @@ Authorization: Bearer <access_token>
   {
     "id": "def67890-e89b-12d3-a456-426614174000",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
-    "amount": 5000.00,
+    "amount": 5000.0,
     "status": "SUCCESS",
     "payment_method": "bank_transfer",
     "description": "Orden #789e4567",
@@ -89,7 +89,7 @@ Pago por activación o renovación de servicio de rastreo:
 
 ```json
 {
-  "amount": 299.00,
+  "amount": 299.0,
   "description": "Plan Premium - Suscripción Mensual",
   "device_service_id": "323e4567-e89b-12d3-a456-426614174000",
   "order_id": null
@@ -102,7 +102,7 @@ Pago por compra de dispositivos GPS:
 
 ```json
 {
-  "amount": 5000.00,
+  "amount": 5000.0,
   "description": "Orden #789e4567 - 2x TK103, 1x TK303",
   "device_service_id": null,
   "order_id": "789e4567-e89b-12d3-a456-426614174000"
@@ -249,22 +249,22 @@ Order.status = PAID
 @router.post("/webhooks/stripe")
 def stripe_webhook(payload: dict):
     event = payload["type"]
-    
+
     if event == "payment_intent.succeeded":
         payment_id = payload["data"]["object"]["metadata"]["payment_id"]
-        
+
         # Actualizar pago
         payment = db.query(Payment).filter(Payment.id == payment_id).first()
         payment.status = PaymentStatus.SUCCESS
         payment.paid_at = datetime.utcnow()
         db.commit()
-        
+
         # Activar servicio o completar orden
         if payment.device_service_id:
             activate_service(payment.device_service_id)
         elif payment.order_id:
             mark_order_as_paid(payment.order_id)
-    
+
     return {"status": "received"}
 ```
 
@@ -322,7 +322,7 @@ if payment.order_id:
 ### Ingresos Mensuales
 
 ```sql
-SELECT 
+SELECT
   DATE_TRUNC('month', paid_at) as month,
   SUM(amount) as total_revenue
 FROM payments
@@ -335,7 +335,7 @@ ORDER BY month DESC;
 ### Pagos por Método
 
 ```sql
-SELECT 
+SELECT
   payment_method,
   COUNT(*) as count,
   SUM(amount) as total
@@ -348,7 +348,7 @@ GROUP BY payment_method;
 ### Tasa de Éxito
 
 ```sql
-SELECT 
+SELECT
   COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END)::float / COUNT(*) * 100 as success_rate
 FROM payments
 WHERE client_id = '...';
@@ -441,7 +441,7 @@ GET /api/v1/payments/
 ```json
 {
   "id": "abc123...",
-  "amount": 299.00,
+  "amount": 299.0,
   "status": "SUCCESS",
   "description": "Plan Premium - Mensual",
   "paid_at": "2024-01-15T10:30:15Z"
@@ -472,4 +472,3 @@ GET /api/v1/payments/
 - Verificar cargos en estado de cuenta
 - Reportar cargos no reconocidos
 - Mantener métodos de pago actualizados
-

@@ -9,21 +9,25 @@ SISCOM Admin API es una aplicación FastAPI que implementa un sistema multi-tena
 ## Stack Tecnológico
 
 ### Backend
+
 - **FastAPI**: Framework web de alto rendimiento
 - **Python 3.11+**: Lenguaje de programación
 - **SQLAlchemy 2.x**: ORM para base de datos
 - **Pydantic**: Validación de datos
 
 ### Base de Datos
+
 - **PostgreSQL 16**: Base de datos relacional
 - **Alembic**: Migraciones de esquema
 
 ### Autenticación
+
 - **AWS Cognito**: Gestión de identidad y acceso
 - **JWT**: Tokens de autenticación
 - **Boto3**: SDK de AWS para Python
 
 ### DevOps
+
 - **Docker**: Contenedorización
 - **Docker Compose**: Orquestación local
 
@@ -202,6 +206,7 @@ Ejecutar query con filtro por client_id
 ### 1. API Layer (app/api/)
 
 Responsabilidades:
+
 - Definir endpoints HTTP
 - Validar request/response
 - Manejar autenticación/autorización
@@ -220,6 +225,7 @@ def activate_service(
 ### 2. Service Layer (app/services/)
 
 Responsabilidades:
+
 - Implementar lógica de negocio
 - Coordinar múltiples operaciones
 - Manejar transacciones
@@ -243,6 +249,7 @@ def activate_device_service(
 ### 3. Model Layer (app/models/)
 
 Responsabilidades:
+
 - Definir estructura de datos
 - Relaciones entre tablas
 - Validaciones de DB
@@ -250,7 +257,7 @@ Responsabilidades:
 ```python
 class DeviceService(SQLModel, table=True):
     __tablename__ = "device_services"
-    
+
     id: UUID
     client_id: UUID
     device_id: UUID
@@ -261,6 +268,7 @@ class DeviceService(SQLModel, table=True):
 ### 4. Schema Layer (app/schemas/)
 
 Responsabilidades:
+
 - Definir contratos de API
 - Validar entrada/salida
 - Transformar datos
@@ -361,10 +369,10 @@ def test_activate_service():
     # Given
     device = create_test_device()
     plan = create_test_plan()
-    
+
     # When
     service = activate_device_service(...)
-    
+
     # Then
     assert service.status == "ACTIVE"
     assert device.active == True
@@ -403,7 +411,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
 services:
   db:
     image: postgres:16
-  
+
   api:
     build: .
     depends_on:
@@ -469,4 +477,3 @@ services:
 - [ ] Alertas inteligentes
 - [ ] Integración con terceros
 - [ ] API pública para partners
-

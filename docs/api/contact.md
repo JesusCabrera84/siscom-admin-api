@@ -120,6 +120,7 @@ aws ses verify-email-identity --email-address contacto@geminislabs.com
 ```
 
 O desde la consola de AWS:
+
 1. Ve a AWS SES Console
 2. Navega a "Verified identities"
 3. Haz clic en "Create identity"
@@ -146,6 +147,7 @@ El template utilizado es `contact_message.html` ubicado en `app/templates/`.
 Este endpoint está protegido con Google reCAPTCHA v3 para prevenir spam y bots. A diferencia de reCAPTCHA v2, **no requiere interacción del usuario** (no hay checkbox ni desafíos).
 
 reCAPTCHA v3 analiza el comportamiento del usuario y asigna un **score** de 0.0 a 1.0:
+
 - **1.0**: Muy probablemente humano
 - **0.5**: Umbral requerido
 - **0.0**: Muy probablemente bot
@@ -155,36 +157,39 @@ reCAPTCHA v3 analiza el comportamiento del usuario y asigna un **score** de 0.0 
 **Para React/Next.js:**
 
 1. Instalar la librería:
+
 ```bash
 npm install react-google-recaptcha-v3
 ```
 
 2. Configurar el Provider:
+
 ```tsx
-import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
+import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
 <GoogleReCaptchaProvider reCaptchaKey="TU_SITE_KEY_PUBLICA">
   <App />
-</GoogleReCaptchaProvider>
+</GoogleReCaptchaProvider>;
 ```
 
 3. Generar el token en tu formulario:
+
 ```tsx
-import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 
 function ContactForm() {
   const { executeRecaptcha } = useGoogleReCaptcha();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Generar token
-    const recaptchaToken = await executeRecaptcha('contact_form');
-    
+    const recaptchaToken = await executeRecaptcha("contact_form");
+
     // Enviar con el token
-    const response = await fetch('/api/v1/contact/send-message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const response = await fetch("/api/v1/contact/send-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nombre: formData.nombre,
         correo_electronico: formData.email,
@@ -203,24 +208,25 @@ function ContactForm() {
 <script src="https://www.google.com/recaptcha/api.js?render=TU_SITE_KEY_PUBLICA"></script>
 
 <script>
-function handleSubmit() {
-  grecaptcha.ready(function() {
-    grecaptcha.execute('TU_SITE_KEY_PUBLICA', {action: 'contact_form'})
-      .then(function(token) {
-        // Enviar con el token
-        fetch('/api/v1/contact/send-message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: '...',
-            correo_electronico: '...',
-            mensaje: '...',
-            recaptcha_token: token
-          })
+  function handleSubmit() {
+    grecaptcha.ready(function () {
+      grecaptcha
+        .execute("TU_SITE_KEY_PUBLICA", { action: "contact_form" })
+        .then(function (token) {
+          // Enviar con el token
+          fetch("/api/v1/contact/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nombre: "...",
+              correo_electronico: "...",
+              mensaje: "...",
+              recaptcha_token: token,
+            }),
+          });
         });
-      });
-  });
-}
+    });
+  }
 </script>
 ```
 
@@ -263,30 +269,34 @@ curl -X POST "https://api.tudominio.com/api/v1/contact/send-message" \
 
 ```javascript
 // Generar token de reCAPTCHA
-grecaptcha.ready(function() {
-  grecaptcha.execute('TU_SITE_KEY_PUBLICA', {action: 'contact_form'})
-    .then(async function(recaptchaToken) {
+grecaptcha.ready(function () {
+  grecaptcha
+    .execute("TU_SITE_KEY_PUBLICA", { action: "contact_form" })
+    .then(async function (recaptchaToken) {
       // Enviar formulario con el token
-      const response = await fetch('https://api.tudominio.com/api/v1/contact/send-message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        "https://api.tudominio.com/api/v1/contact/send-message",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nombre: "Juan Pérez",
+            correo_electronico: "juan@example.com",
+            telefono: "+52 123 456 7890",
+            mensaje: "Estoy interesado en sus servicios de monitoreo vehicular",
+            recaptcha_token: recaptchaToken,
+          }),
         },
-        body: JSON.stringify({
-          nombre: 'Juan Pérez',
-          correo_electronico: 'juan@example.com',
-          telefono: '+52 123 456 7890',
-          mensaje: 'Estoy interesado en sus servicios de monitoreo vehicular',
-          recaptcha_token: recaptchaToken
-        })
-      });
+      );
 
       const data = await response.json();
-      
+
       if (data.success) {
-        console.log('✅ Mensaje enviado:', data.message);
+        console.log("✅ Mensaje enviado:", data.message);
       } else {
-        console.error('❌ Error:', data.detail);
+        console.error("❌ Error:", data.detail);
       }
     });
 });
@@ -325,7 +335,7 @@ else:
 1. **Google reCAPTCHA v3**: Protección anti-spam basada en análisis de comportamiento (sin interacción del usuario)
 2. **Limitación de tamaño del body**: Máximo 50KB para prevenir ataques DoS
 3. **Sanitización de HTML**: Todos los campos de texto son escapados para prevenir XSS
-4. **Validación de campos**: 
+4. **Validación de campos**:
    - Nombre: Máximo 200 caracteres
    - Mensaje: Máximo 5000 caracteres
    - Teléfono: Solo caracteres válidos (números, +, -, paréntesis)
@@ -365,13 +375,15 @@ En caso de error:
 
 **Causa**: Cuenta en sandbox mode y límites de envío alcanzados
 
-**Solución**: 
+**Solución**:
+
 - Solicita mover tu cuenta fuera del sandbox de AWS SES
 - Revisa los límites de envío en la consola de SES
 
 ### Los emails no llegan
 
 **Checklist**:
+
 1. ✅ Variable `CONTACT_EMAIL` configurada en `.env`
 2. ✅ Variable `RECAPTCHA_SECRET_KEY` configurada (opcional pero recomendado)
 3. ✅ Email verificado en AWS SES
@@ -384,7 +396,8 @@ En caso de error:
 
 **Causa**: El servidor tiene `RECAPTCHA_SECRET_KEY` configurada pero no se envió el token
 
-**Solución**: 
+**Solución**:
+
 1. Verifica que el frontend esté generando el token de reCAPTCHA
 2. Verifica que el token se esté enviando en el campo `recaptcha_token`
 3. Usa las herramientas de desarrollo del navegador para inspeccionar el request
@@ -394,6 +407,7 @@ En caso de error:
 **Causa**: El token es inválido, expiró o tiene un score bajo
 
 **Solución**:
+
 1. Los tokens expiran después de ~2 minutos - genera un nuevo token para cada envío
 2. No reutilices tokens entre diferentes formularios
 3. Verifica que la Site Key del frontend coincida con la Secret Key del backend
@@ -404,6 +418,7 @@ En caso de error:
 **Causa**: El score de reCAPTCHA es menor a 0.5 (posible bot)
 
 **Solución**:
+
 1. Intenta desde un navegador diferente
 2. Asegúrate de que JavaScript esté habilitado
 3. No uses herramientas de automatización (Selenium, Puppeteer) sin configuración especial
@@ -414,4 +429,3 @@ En caso de error:
 - [Documentación completa de reCAPTCHA](../guides/recaptcha-setup.md)
 - [Documentación de seguridad del endpoint](../security/contact-endpoint-security.md)
 - [Google reCAPTCHA v3](https://developers.google.com/recaptcha/docs/v3)
-

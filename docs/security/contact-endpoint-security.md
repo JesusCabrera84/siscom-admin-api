@@ -19,6 +19,7 @@ async def limit_body_size(request: Request, call_next):
 ```
 
 **Protege contra**:
+
 - ✅ Ataques de denegación de servicio (DoS)
 - ✅ Payloads excesivamente grandes
 - ✅ Abuso del endpoint
@@ -26,6 +27,7 @@ async def limit_body_size(request: Request, call_next):
 **Límite**: 50KB (50,000 bytes)
 
 **Respuesta si se excede**:
+
 ```http
 HTTP/1.1 413 Payload Too Large
 Content-Type: text/plain
@@ -49,13 +51,15 @@ def sanitize_html(text: str, max_length: int = 5000) -> str:
 ```
 
 **Convierte**:
+
 ```python
-"<script>alert('XSS')</script>" 
-# → 
+"<script>alert('XSS')</script>"
+# →
 "&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;"
 ```
 
 **Protege contra**:
+
 - ✅ Cross-Site Scripting (XSS)
 - ✅ Inyección de HTML
 - ✅ Inyección de JavaScript
@@ -68,6 +72,7 @@ def sanitize_html(text: str, max_length: int = 5000) -> str:
 Cada campo tiene validaciones específicas:
 
 #### Campo `nombre` (máx 200 caracteres)
+
 ```python
 @field_validator("nombre")
 def validate_nombre(cls, v: str) -> str:
@@ -75,11 +80,13 @@ def validate_nombre(cls, v: str) -> str:
 ```
 
 **Valida**:
+
 - ✅ No puede estar vacío
 - ✅ Máximo 200 caracteres
 - ✅ HTML escapado
 
 #### Campo `mensaje` (máx 5000 caracteres)
+
 ```python
 @field_validator("mensaje")
 def validate_mensaje(cls, v: str) -> str:
@@ -87,11 +94,13 @@ def validate_mensaje(cls, v: str) -> str:
 ```
 
 **Valida**:
+
 - ✅ No puede estar vacío
 - ✅ Máximo 5000 caracteres
 - ✅ HTML escapado
 
 #### Campo `telefono` (validación de formato)
+
 ```python
 @field_validator("telefono")
 def validate_telefono(cls, v: Optional[str]) -> Optional[str]:
@@ -99,17 +108,20 @@ def validate_telefono(cls, v: Optional[str]) -> Optional[str]:
 ```
 
 **Valida**:
+
 - ✅ Solo caracteres permitidos: `0-9`, `+`, `-`, `(`, `)`, espacios
 - ✅ Mínimo 7 dígitos
 - ✅ Máximo 20 dígitos
 - ✅ HTML escapado
 
 #### Campo `correo_electronico`
+
 ```python
 correo_electronico: Optional[EmailStr] = None
 ```
 
 **Valida**:
+
 - ✅ Formato de email válido (Pydantic EmailStr)
 - ✅ No requiere sanitización adicional (validado por Pydantic)
 
@@ -122,6 +134,7 @@ def model_post_init(self, __context) -> None:
 ```
 
 **Valida**:
+
 - ✅ Al menos `correo_electronico` o `telefono` deben estar presentes
 
 ## 🧪 Ejemplos de Protección
@@ -129,6 +142,7 @@ def model_post_init(self, __context) -> None:
 ### Ejemplo 1: Intento de XSS en el nombre
 
 **Request**:
+
 ```json
 {
   "nombre": "<script>alert('hack')</script>",
@@ -138,6 +152,7 @@ def model_post_init(self, __context) -> None:
 ```
 
 **Procesado internamente**:
+
 ```python
 nombre = "&lt;script&gt;alert(&#x27;hack&#x27;)&lt;/script&gt;"
 ```
@@ -147,6 +162,7 @@ nombre = "&lt;script&gt;alert(&#x27;hack&#x27;)&lt;/script&gt;"
 ### Ejemplo 2: Intento de XSS en el mensaje
 
 **Request**:
+
 ```json
 {
   "nombre": "Juan",
@@ -156,6 +172,7 @@ nombre = "&lt;script&gt;alert(&#x27;hack&#x27;)&lt;/script&gt;"
 ```
 
 **Procesado**:
+
 ```python
 mensaje = "&lt;img src=x onerror=&#x27;alert(1)&#x27;&gt;"
 ```
@@ -165,6 +182,7 @@ mensaje = "&lt;img src=x onerror=&#x27;alert(1)&#x27;&gt;"
 ### Ejemplo 3: Payload demasiado grande
 
 **Request con body > 50KB**:
+
 ```http
 POST /api/v1/contact/send-message
 Content-Length: 60000
@@ -173,6 +191,7 @@ Content-Length: 60000
 ```
 
 **Response**:
+
 ```http
 HTTP/1.1 413 Payload Too Large
 Content-Type: text/plain
@@ -183,6 +202,7 @@ Payload demasiado grande. Máximo permitido: 50KB
 ### Ejemplo 4: Mensaje demasiado largo
 
 **Request**:
+
 ```json
 {
   "nombre": "Juan",
@@ -192,6 +212,7 @@ Payload demasiado grande. Máximo permitido: 50KB
 ```
 
 **Response**:
+
 ```http
 HTTP/1.1 422 Unprocessable Entity
 
@@ -208,6 +229,7 @@ HTTP/1.1 422 Unprocessable Entity
 ### Ejemplo 5: Teléfono con caracteres inválidos
 
 **Request**:
+
 ```json
 {
   "nombre": "Juan",
@@ -217,6 +239,7 @@ HTTP/1.1 422 Unprocessable Entity
 ```
 
 **Response**:
+
 ```http
 HTTP/1.1 422 Unprocessable Entity
 
@@ -232,43 +255,48 @@ HTTP/1.1 422 Unprocessable Entity
 
 ## 📊 Límites Configurados
 
-| Campo | Límite | Validación |
-|-------|--------|------------|
-| Body completo | 50KB | Middleware global |
-| `nombre` | 200 caracteres | Schema validator |
-| `mensaje` | 5000 caracteres | Schema validator |
-| `telefono` (dígitos) | 7-20 dígitos | Regex validator |
-| `correo_electronico` | N/A | EmailStr de Pydantic |
+| Campo                | Límite          | Validación           |
+| -------------------- | --------------- | -------------------- |
+| Body completo        | 50KB            | Middleware global    |
+| `nombre`             | 200 caracteres  | Schema validator     |
+| `mensaje`            | 5000 caracteres | Schema validator     |
+| `telefono` (dígitos) | 7-20 dígitos    | Regex validator      |
+| `correo_electronico` | N/A             | EmailStr de Pydantic |
 
 ## 🔍 Cómo Funciona `html.escape()`
 
 La función `html.escape()` convierte caracteres especiales de HTML en sus entidades HTML correspondientes:
 
-| Carácter | Entidad HTML | Descripción |
-|----------|--------------|-------------|
-| `<` | `&lt;` | Menor que |
-| `>` | `&gt;` | Mayor que |
-| `&` | `&amp;` | Ampersand |
-| `"` | `&quot;` | Comillas dobles |
-| `'` | `&#x27;` | Comilla simple |
+| Carácter | Entidad HTML | Descripción     |
+| -------- | ------------ | --------------- |
+| `<`      | `&lt;`       | Menor que       |
+| `>`      | `&gt;`       | Mayor que       |
+| `&`      | `&amp;`      | Ampersand       |
+| `"`      | `&quot;`     | Comillas dobles |
+| `'`      | `&#x27;`     | Comilla simple  |
 
 ### Antes de sanitizar:
+
 ```html
-<script>alert('XSS')</script>
-<img src=x onerror='alert(1)'>
+<script>
+  alert("XSS");
+</script>
+<img src="x" onerror="alert(1)" />
 <iframe src="evil.com"></iframe>
 ```
 
 ### Después de sanitizar:
+
 ```html
-&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt;
-&lt;img src=x onerror=&#x27;alert(1)&#x27;&gt;
-&lt;iframe src=&quot;evil.com&quot;&gt;&lt;/iframe&gt;
+&lt;script&gt;alert(&#x27;XSS&#x27;)&lt;/script&gt; &lt;img src=x
+onerror=&#x27;alert(1)&#x27;&gt; &lt;iframe
+src=&quot;evil.com&quot;&gt;&lt;/iframe&gt;
 ```
 
 ## 🧪 Probar las Validaciones
 
 ### Test 1: XSS en nombre
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
   -H "Content-Type: application/json" \
@@ -282,6 +310,7 @@ curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
 **Resultado**: ✅ Acepta la petición pero sanitiza el HTML
 
 ### Test 2: Payload grande
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
   -H "Content-Type: application/json" \
@@ -292,6 +321,7 @@ curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
 **Resultado**: ❌ 413 Payload Too Large
 
 ### Test 3: Mensaje muy largo
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
   -H "Content-Type: application/json" \
@@ -305,6 +335,7 @@ curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
 **Resultado**: ❌ 422 Unprocessable Entity (excede 5000 caracteres)
 
 ### Test 4: Teléfono inválido
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
   -H "Content-Type: application/json" \
@@ -391,7 +422,7 @@ Agrega campos ocultos que los bots llenarán pero los humanos no:
 class ContactMessageCreate(BaseModel):
     # Campo honeypot - debe estar vacío
     website: Optional[str] = None
-    
+
     def model_post_init(self, __context) -> None:
         if self.website:
             raise ValueError("Spam detectado")
@@ -410,4 +441,3 @@ if "<script>" in mensaje or "DROP TABLE" in mensaje:
 
 **Última actualización**: 2025-11-20  
 **Estado**: ✅ Implementado y probado
-

@@ -71,7 +71,8 @@ SES_REGION=us-east-1
 FRONTEND_URL=https://app.tudominio.com
 ```
 
-**Importante**: 
+**Importante**:
+
 - Reemplaza los valores de `COGNITO_*` con los valores reales de tu User Pool de AWS Cognito
 - `SES_FROM_EMAIL` debe estar verificado en AWS SES
 - Ver [Guía de configuración de emails](docs/guides/email-configuration.md) para más detalles
@@ -83,6 +84,7 @@ docker-compose up -d
 ```
 
 Esto levantará:
+
 - PostgreSQL en el puerto 5432
 - API en el puerto 8000
 
@@ -141,6 +143,7 @@ La API estará disponible en http://localhost:8000
 ### 📘 Documentación Completa para Compartir
 
 **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - Guía exhaustiva de la API para desarrolladores:
+
 - 📋 Todos los endpoints explicados con ejemplos
 - 🔐 Sistema de autenticación y permisos
 - 🔄 Flujos de negocio completos
@@ -264,8 +267,8 @@ pytest --cov=app --cov-report=html
 Existe un índice único parcial que garantiza que **solo puede haber UN servicio ACTIVE por dispositivo**:
 
 ```sql
-CREATE UNIQUE INDEX uq_device_services_active_one 
-ON device_services(device_id) 
+CREATE UNIQUE INDEX uq_device_services_active_one
+ON device_services(device_id)
 WHERE status = 'ACTIVE';
 ```
 
@@ -338,4 +341,3 @@ ruff check app/
 ## Soporte
 
 Para soporte técnico, contactar a [email de soporte]
-

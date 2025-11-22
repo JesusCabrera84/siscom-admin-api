@@ -23,10 +23,10 @@ A diferencia de reCAPTCHA v2, **no requiere interacción del usuario** (no hay c
 ```
 Label: SISCOM Contact Form
 reCAPTCHA type: reCAPTCHA v3
-Domains: 
+Domains:
   - localhost (para desarrollo)
   - tudominio.com (para producción)
-  
+
 Accept reCAPTCHA Terms of Service: ✓
 ```
 
@@ -61,6 +61,7 @@ RECAPTCHA_SECRET_KEY=6LexampleSecretKeyxxxxxxxxxxxxxxxxxxxxxx
 #### Docker y Docker Compose
 
 Ya está configurado en:
+
 - ✅ `docker-compose.yml` - Para desarrollo
 - ✅ `docker-compose.prod.yml` - Para producción
 - ✅ `.github/workflows/deploy.yml` - Para CI/CD
@@ -80,7 +81,7 @@ yarn add react-google-recaptcha-v3
 
 ```tsx
 // _app.tsx o layout.tsx
-import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
+import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 
 function MyApp({ Component, pageProps }) {
   return (
@@ -97,7 +98,7 @@ function MyApp({ Component, pageProps }) {
 #### Usar en el Formulario de Contacto
 
 ```tsx
-import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 
 function ContactForm() {
   const { executeRecaptcha } = useGoogleReCaptcha();
@@ -107,16 +108,16 @@ function ContactForm() {
 
     // Obtener token de reCAPTCHA
     if (!executeRecaptcha) {
-      console.error('reCAPTCHA no disponible');
+      console.error("reCAPTCHA no disponible");
       return;
     }
 
-    const recaptchaToken = await executeRecaptcha('contact_form');
+    const recaptchaToken = await executeRecaptcha("contact_form");
 
     // Enviar formulario con el token
-    const response = await fetch('/api/v1/contact/send-message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const response = await fetch("/api/v1/contact/send-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nombre: formData.nombre,
         correo_electronico: formData.email,
@@ -127,13 +128,13 @@ function ContactForm() {
     });
 
     const data = await response.json();
-    
+
     if (response.ok) {
       // Éxito
-      console.log('Mensaje enviado:', data);
+      console.log("Mensaje enviado:", data);
     } else {
       // Error (puede ser por reCAPTCHA)
-      console.error('Error:', data.detail);
+      console.error("Error:", data.detail);
     }
   };
 
@@ -153,38 +154,41 @@ function ContactForm() {
 <script src="https://www.google.com/recaptcha/api.js?render=6LexampleSiteKeyxxxxxxxxxxxxxxxxxxxxxx"></script>
 
 <script>
-function handleSubmit(event) {
-  event.preventDefault();
-  
-  grecaptcha.ready(function() {
-    grecaptcha.execute('6LexampleSiteKeyxxxxxxxxxxxxxxxxxxxxxx', {action: 'contact_form'})
-      .then(function(token) {
-        // Agregar el token al formulario
-        const formData = {
-          nombre: document.getElementById('nombre').value,
-          correo_electronico: document.getElementById('email').value,
-          telefono: document.getElementById('telefono').value,
-          mensaje: document.getElementById('mensaje').value,
-          recaptcha_token: token
-        };
-        
-        // Enviar el formulario
-        fetch('/api/v1/contact/send-message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    grecaptcha.ready(function () {
+      grecaptcha
+        .execute("6LexampleSiteKeyxxxxxxxxxxxxxxxxxxxxxx", {
+          action: "contact_form",
         })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            alert('Mensaje enviado!');
-          } else {
-            alert('Error: ' + data.detail);
-          }
+        .then(function (token) {
+          // Agregar el token al formulario
+          const formData = {
+            nombre: document.getElementById("nombre").value,
+            correo_electronico: document.getElementById("email").value,
+            telefono: document.getElementById("telefono").value,
+            mensaje: document.getElementById("mensaje").value,
+            recaptcha_token: token,
+          };
+
+          // Enviar el formulario
+          fetch("/api/v1/contact/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formData),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success) {
+                alert("Mensaje enviado!");
+              } else {
+                alert("Error: " + data.detail);
+              }
+            });
         });
-      });
-  });
-}
+    });
+  }
 </script>
 ```
 
@@ -228,13 +232,13 @@ async def verify_recaptcha(token: str, min_score: float = 0.5) -> dict:
         "https://www.google.com/recaptcha/api/siteverify",
         data={"secret": RECAPTCHA_SECRET_KEY, "response": token}
     )
-    
+
     data = response.json()
-    
+
     # Verifica el score
     if data.get("score", 0.0) < min_score:
         raise HTTPException(status_code=400, detail="Score bajo - posible bot")
-    
+
     return data
 ```
 
@@ -253,6 +257,7 @@ curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
 ```
 
 **Respuesta esperada** (si RECAPTCHA_SECRET_KEY está configurada):
+
 ```json
 {
   "detail": "Token de reCAPTCHA requerido pero no proporcionado"
@@ -275,6 +280,7 @@ curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
 ```
 
 **Respuesta esperada**:
+
 ```json
 {
   "success": true,
@@ -298,6 +304,7 @@ curl -X POST "http://localhost:8000/api/v1/contact/send-message" \
 ```
 
 **Log del servidor**:
+
 ```
 [WARNING] RECAPTCHA_SECRET_KEY no configurada. Saltando validación de reCAPTCHA.
 ```
@@ -317,6 +324,7 @@ await verify_recaptcha(message.recaptcha_token, min_score=0.3)
 ```
 
 **Recomendaciones**:
+
 - **0.7-1.0**: Muy estricto - puede bloquear usuarios legítimos
 - **0.5**: Recomendado - balance entre seguridad y usabilidad
 - **0.0-0.4**: Muy permisivo - puede dejar pasar algunos bots
@@ -376,6 +384,7 @@ Los logs del servidor muestran información útil:
 **Causa**: El frontend no está enviando el token
 
 **Solución**:
+
 1. Verifica que el frontend esté generando el token
 2. Verifica que el campo `recaptcha_token` esté en el request body
 3. Usa las herramientas de desarrollo del navegador para inspeccionar el request
@@ -385,6 +394,7 @@ Los logs del servidor muestran información útil:
 **Causa**: El token es inválido o ya expiró (tokens duran ~2 minutos)
 
 **Solución**:
+
 1. Genera un nuevo token para cada submit
 2. No reutilices tokens
 3. Verifica que la Secret Key sea correcta
@@ -394,6 +404,7 @@ Los logs del servidor muestran información útil:
 **Causa**: El score es menor al umbral (0.5)
 
 **Solución**:
+
 1. Verifica que estés en un navegador real (no curl o Postman sin configurar)
 2. Intenta con un navegador diferente
 3. Revisa los logs del servidor para ver el score exacto
@@ -404,6 +415,7 @@ Los logs del servidor muestran información útil:
 **Causa**: La variable de entorno no está configurada
 
 **Solución**:
+
 - **Desarrollo**: Agrega `RECAPTCHA_SECRET_KEY` al `.env`
 - **Producción**: Agrega como secret en GitHub Actions
 
@@ -412,6 +424,7 @@ Los logs del servidor muestran información útil:
 **Causa**: Problema de red o Google reCAPTCHA está caído
 
 **Solución**:
+
 1. Verifica tu conexión a internet
 2. Verifica el status de Google reCAPTCHA
 3. Aumenta el timeout en `app/utils/recaptcha.py` si es necesario
@@ -450,4 +463,3 @@ Los logs del servidor muestran información útil:
 
 **Última actualización**: 2025-11-20  
 **Estado**: ✅ Implementado y documentado
-

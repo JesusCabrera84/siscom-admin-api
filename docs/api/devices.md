@@ -48,15 +48,15 @@ Endpoints para gestionar el ciclo de vida completo de dispositivos GPS/IoT con s
 
 El campo `status` representa el estado actual del dispositivo en su ciclo de vida:
 
-| Estado | Descripción | `client_id` | Puede asignarse |
-|--------|-------------|-------------|-----------------|
-| `nuevo` | Recién ingresado al inventario | NULL | No |
-| `preparado` | Asignado a un cliente, listo para envío | Asignado | No |
-| `enviado` | En camino al cliente | Asignado | No |
-| `entregado` | Recibido y confirmado por cliente | Asignado | Sí |
-| `asignado` | Instalado en una unidad | Asignado | No |
-| `devuelto` | Devuelto al inventario | NULL | Sí |
-| `inactivo` | Baja definitiva, fuera de uso | Asignado | No |
+| Estado      | Descripción                             | `client_id` | Puede asignarse |
+| ----------- | --------------------------------------- | ----------- | --------------- |
+| `nuevo`     | Recién ingresado al inventario          | NULL        | No              |
+| `preparado` | Asignado a un cliente, listo para envío | Asignado    | No              |
+| `enviado`   | En camino al cliente                    | Asignado    | No              |
+| `entregado` | Recibido y confirmado por cliente       | Asignado    | Sí              |
+| `asignado`  | Instalado en una unidad                 | Asignado    | No              |
+| `devuelto`  | Devuelto al inventario                  | NULL        | Sí              |
+| `inactivo`  | Baja definitiva, fuera de uso           | Asignado    | No              |
 
 ---
 
@@ -64,16 +64,16 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 
 ### Por Evento
 
-| Evento | Regla | Acción |
-|--------|-------|--------|
-| Registrar nuevo dispositivo | `status='nuevo'` y sin cliente asignado | Insertar registro en `devices` |
-| Preparar dispositivo | Cambiar `status='preparado'` y asignar `client_id` | `PATCH /devices/{device_id}/status` |
-| Enviar dispositivo | Cambiar `status='enviado'`, debe estar en estado `preparado` | `PATCH /devices/{device_id}/status` |
-| Confirmar entrega | `status='entregado'`, actualizar `client_id` | Cliente o maestro lo valida |
-| Asignar a unidad | `status='asignado'`, actualizar `last_assignment_at` | Se crea relación con unidad |
-| Devolución | `status='devuelto'`, quitar `client_id` | Puede reintegrarse al inventario |
-| Baja definitiva | `status='inactivo'` | No puede reasignarse |
-| Eliminación | ❌ **Prohibida** | Trigger impide `DELETE` |
+| Evento                      | Regla                                                        | Acción                              |
+| --------------------------- | ------------------------------------------------------------ | ----------------------------------- |
+| Registrar nuevo dispositivo | `status='nuevo'` y sin cliente asignado                      | Insertar registro en `devices`      |
+| Preparar dispositivo        | Cambiar `status='preparado'` y asignar `client_id`           | `PATCH /devices/{device_id}/status` |
+| Enviar dispositivo          | Cambiar `status='enviado'`, debe estar en estado `preparado` | `PATCH /devices/{device_id}/status` |
+| Confirmar entrega           | `status='entregado'`, actualizar `client_id`                 | Cliente o maestro lo valida         |
+| Asignar a unidad            | `status='asignado'`, actualizar `last_assignment_at`         | Se crea relación con unidad         |
+| Devolución                  | `status='devuelto'`, quitar `client_id`                      | Puede reintegrarse al inventario    |
+| Baja definitiva             | `status='inactivo'`                                          | No puede reasignarse                |
+| Eliminación                 | ❌ **Prohibida**                                             | Trigger impide `DELETE`             |
 
 ### Consideraciones Importantes
 
@@ -397,6 +397,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Validaciones**:
+
 - Requiere `client_id` válido
 - El cliente debe existir en el sistema
 
@@ -410,6 +411,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Validaciones**:
+
 - El dispositivo debe estar en estado `preparado`
 
 ##### Confirmar Entrega (`enviado` → `entregado`)
@@ -422,6 +424,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Validaciones**:
+
 - El dispositivo debe tener `client_id` asignado
 
 ##### Asignar a Unidad (`entregado` → `asignado`)
@@ -435,6 +438,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Validaciones**:
+
 - Requiere `unit_id` válido
 - La unidad debe pertenecer al cliente del dispositivo
 - Actualiza `installed_in_unit_id` y `last_assignment_at`
@@ -449,6 +453,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Efecto**:
+
 - Quita `client_id` (vuelve a NULL)
 - Quita `installed_in_unit_id` (vuelve a NULL)
 - Puede reintegrarse al inventario
@@ -463,6 +468,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Efecto**:
+
 - Baja definitiva
 - No puede reasignarse
 
@@ -610,17 +616,17 @@ POST /api/v1/devices/123456789012345/notes?note=Dispositivo%20revisado%20y%20fun
 
 ## Tipos de Eventos
 
-| Tipo | Descripción | Cuándo se genera |
-|------|-------------|------------------|
-| `creado` | Dispositivo registrado | Al crear dispositivo |
-| `preparado` | Dispositivo preparado para envío | Al cambiar a estado `preparado` |
-| `enviado` | Dispositivo enviado a cliente | Al cambiar a estado `enviado` |
-| `entregado` | Dispositivo recibido | Al confirmar entrega |
-| `asignado` | Dispositivo instalado en unidad | Al asignar a unidad |
-| `devuelto` | Dispositivo devuelto | Al marcar como devuelto |
-| `firmware_actualizado` | Actualización de firmware | Al actualizar `firmware_version` |
-| `nota` | Nota administrativa | Al agregar nota |
-| `estado_cambiado` | Cambio de estado genérico | En cambios no específicos |
+| Tipo                   | Descripción                      | Cuándo se genera                 |
+| ---------------------- | -------------------------------- | -------------------------------- |
+| `creado`               | Dispositivo registrado           | Al crear dispositivo             |
+| `preparado`            | Dispositivo preparado para envío | Al cambiar a estado `preparado`  |
+| `enviado`              | Dispositivo enviado a cliente    | Al cambiar a estado `enviado`    |
+| `entregado`            | Dispositivo recibido             | Al confirmar entrega             |
+| `asignado`             | Dispositivo instalado en unidad  | Al asignar a unidad              |
+| `devuelto`             | Dispositivo devuelto             | Al marcar como devuelto          |
+| `firmware_actualizado` | Actualización de firmware        | Al actualizar `firmware_version` |
+| `nota`                 | Nota administrativa              | Al agregar nota                  |
+| `estado_cambiado`      | Cambio de estado genérico        | En cambios no específicos        |
 
 ---
 
@@ -647,22 +653,22 @@ FOR EACH ROW EXECUTE FUNCTION prevent_device_delete();
 ```
 1. REGISTRAR
    POST /devices/ → status='nuevo'
-   
+
 2. PREPARAR
    PATCH /devices/{id}/status → status='preparado', client_id=<cliente>
-   
+
 3. ENVIAR
    PATCH /devices/{id}/status → status='enviado'
-   
+
 4. CONFIRMAR ENTREGA
    PATCH /devices/{id}/status → status='entregado'
-   
+
 5. ASIGNAR A UNIDAD
    PATCH /devices/{id}/status → status='asignado', unit_id=<unidad>
-   
+
 6a. DEVOLVER (opcional)
     PATCH /devices/{id}/status → status='devuelto', client_id=NULL
-    
+
 6b. DAR DE BAJA (opcional)
     PATCH /devices/{id}/status → status='inactivo'
 ```

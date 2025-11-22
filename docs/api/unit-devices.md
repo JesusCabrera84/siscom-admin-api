@@ -104,6 +104,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Campos:**
+
 - `unit_id` (UUID, requerido): ID de la unidad donde se instalará el dispositivo
 - `device_id` (string, requerido): ID del dispositivo GPS (IMEI)
 
@@ -117,6 +118,7 @@ Authorization: Bearer <access_token>
 #### Efectos Secundarios
 
 Cuando se crea una asignación:
+
 1. Se crea el registro en `unit_devices`
 2. El estado del dispositivo cambia a `asignado`
 3. Se actualiza `device.last_assignment_at`
@@ -176,6 +178,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Campos adicionales:**
+
 - `unit_name`: Nombre de la unidad
 - `device_brand`: Marca del dispositivo
 - `device_model`: Modelo del dispositivo
@@ -211,6 +214,7 @@ Authorization: Bearer <access_token>
 #### Efectos Secundarios
 
 Cuando se desasigna un dispositivo:
+
 1. Se marca `unassigned_at` con la fecha/hora actual (no se elimina el registro)
 2. El estado del dispositivo cambia a `entregado`
 3. Se crea un evento en `device_events` para auditoría
@@ -278,6 +282,7 @@ GET /api/v1/unit-devices/?active_only=false
 ```
 
 Esto permite:
+
 - Auditar cuándo se instaló cada dispositivo
 - Ver cuánto tiempo estuvo instalado
 - Detectar dispositivos que se reasignaron frecuentemente
@@ -293,21 +298,21 @@ Una unidad que tuvo 3 dispositivos en su historia:
     "unit_id": "camion-123",
     "device_id": "IMEI-789",
     "assigned_at": "2025-11-01T08:00:00Z",
-    "unassigned_at": null  // Actual
+    "unassigned_at": null // Actual
   },
   {
     "id": "assign-2",
     "unit_id": "camion-123",
     "device_id": "IMEI-456",
     "assigned_at": "2025-09-15T10:00:00Z",
-    "unassigned_at": "2025-10-31T17:00:00Z"  // Estuvo 1.5 meses
+    "unassigned_at": "2025-10-31T17:00:00Z" // Estuvo 1.5 meses
   },
   {
     "id": "assign-1",
     "unit_id": "camion-123",
     "device_id": "IMEI-123",
     "assigned_at": "2025-08-01T09:00:00Z",
-    "unassigned_at": "2025-09-14T16:00:00Z"  // Estuvo 1.5 meses
+    "unassigned_at": "2025-09-14T16:00:00Z" // Estuvo 1.5 meses
   }
 ]
 ```
@@ -365,6 +370,7 @@ POST /api/v1/unit-devices/
 ```
 
 Resultado:
+
 - Dispositivo pasa de `entregado` → `asignado`
 - Se crea registro en `unit_devices`
 - Se genera evento de auditoría
@@ -388,6 +394,7 @@ POST /api/v1/unit-devices/
 ```
 
 Resultado:
+
 - Dispositivo viejo: `asignado` → `entregado`
 - Dispositivo nuevo: `entregado` → `asignado`
 - Se mantiene historial completo
@@ -403,6 +410,7 @@ GET /api/v1/unit-devices/?active_only=true
 ```
 
 Útil para:
+
 - Inventario de dispositivos en uso
 - Planificación de mantenimientos
 - Control de activos
@@ -448,10 +456,12 @@ GET /api/v1/unit-devices/?active_only=false
 ### Estados Válidos para Asignar
 
 Solo se pueden asignar dispositivos en estados:
+
 - `entregado`: Dispositivo disponible para instalar
 - `devuelto`: Dispositivo que fue desinstalado y está listo para reinstalar
 
 No se pueden asignar dispositivos en estados:
+
 - `nuevo`: Aún no ha sido entregado al cliente
 - `asignado`: Ya está instalado en otra unidad
 - `activo`, `suspendido`, `inactivo`: Estados de servicio
@@ -475,6 +485,7 @@ Estos endpoints son equivalentes pero organizados jerárquicamente. La elección
 ### Ventaja del Endpoint Jerárquico
 
 El endpoint `POST /api/v1/units/{unit_id}/device` tiene lógica adicional:
+
 - Reemplaza automáticamente si ya hay un dispositivo asignado
 - No requiere desasignar manualmente el dispositivo anterior
 - Simplifica el flujo para el cliente
@@ -513,5 +524,3 @@ El endpoint `POST /api/v1/units/{unit_id}/device` tiene lógica adicional:
 - Solo usuarios maestros pueden gestionar asignaciones
 - No se permite modificar asignaciones de otros clientes
 - Los UUIDs son no predecibles y seguros
-
-

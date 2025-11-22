@@ -13,6 +13,7 @@ Endpoints para gestionar unidades (vehículos, maquinaria, etc.) del cliente. La
 **GET** `/api/v1/units/`
 
 Lista las unidades visibles para el usuario autenticado según sus permisos:
+
 - **Usuario maestro**: Ve todas las unidades del cliente
 - **Usuario regular**: Solo ve las unidades asignadas en `user_units`
 
@@ -75,6 +76,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Campos:**
+
 - `name` (string, requerido): Nombre de la unidad (1-200 caracteres)
 - `description` (string, opcional): Descripción adicional (máx. 500 caracteres)
 
@@ -128,6 +130,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Campos adicionales:**
+
 - `active_devices_count`: Número de dispositivos actualmente asignados
 - `total_devices_count`: Total de dispositivos asignados (histórico)
 
@@ -387,10 +390,12 @@ Authorization: Bearer <access_token>
 ```
 
 **Campos:**
+
 - `user_id` (UUID, requerido): ID del usuario a asignar
 - `role` (string, opcional): Rol del usuario. Default: `"viewer"`
 
 **Roles disponibles:**
+
 - `viewer`: Solo puede ver la unidad y sus datos
 - `editor`: Puede ver y editar la unidad
 - `admin`: Puede ver, editar y gestionar dispositivos
@@ -513,5 +518,3 @@ Cuando se requiere un rol específico, se acepta ese rol o cualquiera superior. 
 - Todas las asignaciones registran quién las realizó (`granted_by`)
 - Los cambios de dispositivos crean eventos en `device_events`
 - Las fechas de asignación/desasignación se registran para historial
-
-

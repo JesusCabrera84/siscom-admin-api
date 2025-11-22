@@ -35,10 +35,7 @@ Si tu aplicación corre en EC2, asegúrate de que el IAM Role tenga esta políti
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "ses:SendEmail",
-        "ses:SendRawEmail"
-      ],
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
       "Resource": "*"
     }
   ]
@@ -79,10 +76,12 @@ El sistema envía 3 tipos de emails:
 
 **Template**: `app/templates/verification_email.html`
 
-**Se envía cuando**: 
+**Se envía cuando**:
+
 - Un nuevo cliente se registra en el sistema
 
 **Rutas del frontend esperadas**:
+
 - `{FRONTEND_URL}/verify-email?token={token}`
 
 ### 2. Invitación de usuarios
@@ -90,10 +89,12 @@ El sistema envía 3 tipos de emails:
 **Template**: `app/templates/invitation.html`
 
 **Se envía cuando**:
+
 - Un usuario maestro invita a un nuevo usuario
 - Se reenvía una invitación
 
 **Rutas del frontend esperadas**:
+
 - `{FRONTEND_URL}/accept-invitation?token={token}`
 
 ### 3. Restablecimiento de contraseña
@@ -101,9 +102,11 @@ El sistema envía 3 tipos de emails:
 **Template**: `app/templates/password_reset.html`
 
 **Se envía cuando**:
+
 - Un usuario solicita restablecer su contraseña
 
 **Rutas del frontend esperadas**:
+
 - `{FRONTEND_URL}/reset-password?token={token}`
 
 ## Personalización de templates
@@ -171,7 +174,8 @@ O errores:
 
 ### Error: "MessageRejected"
 
-**Solución**: 
+**Solución**:
+
 - Si estás en sandbox mode, verifica también el email del destinatario
 - Revisa los límites de envío de tu cuenta SES
 
@@ -182,6 +186,7 @@ O errores:
 ### Los emails no llegan
 
 **Checklist**:
+
 1. ✅ Email remitente verificado en SES
 2. ✅ Si estás en sandbox, email destino también verificado
 3. ✅ Variable `SES_FROM_EMAIL` configurada correctamente
@@ -204,6 +209,7 @@ O errores:
 ### Logs de la aplicación
 
 Los logs incluyen:
+
 - `[EMAIL]`: Email enviado correctamente
 - `[EMAIL ERROR]`: Error al enviar email
 - `[WARNING]`: Email no pudo ser enviado pero la operación continuó
@@ -222,4 +228,3 @@ Los logs incluyen:
 - [AWS SES Documentation](https://docs.aws.amazon.com/ses/)
 - [Moving out of SES Sandbox](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
 - [SES Sending Authorization](https://docs.aws.amazon.com/ses/latest/dg/sending-authorization.html)
-

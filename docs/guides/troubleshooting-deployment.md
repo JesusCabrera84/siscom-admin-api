@@ -7,11 +7,12 @@ Esta guía te ayudará a resolver problemas comunes durante el deployment de SIS
 ### Descripción del Problema
 
 ```
-Error response from daemon: driver failed programming external connectivity 
+Error response from daemon: driver failed programming external connectivity
 on endpoint siscom-admin-api: Bind for 0.0.0.0:8100 failed: port is already allocated
 ```
 
 Este error ocurre cuando:
+
 - Hay un contenedor anterior que no se detuvo correctamente
 - Otro proceso está usando el puerto 8100
 - Hay contenedores huérfanos que siguen usando el puerto
@@ -26,6 +27,7 @@ El workflow de GitHub Actions ahora incluye limpieza automática. Si el deployme
 4. Click en **Run workflow**
 
 El workflow ahora:
+
 - ✅ Detecta automáticamente contenedores usando el puerto 8100
 - ✅ Los detiene y elimina
 - ✅ Limpia contenedores huérfanos
@@ -114,6 +116,7 @@ La variable **debe estar configurada como Variable**, NO como Secret:
 #### 2. Verificar el valor
 
 Regiones válidas de AWS:
+
 - `us-east-1` (Virginia del Norte)
 - `us-east-2` (Ohio)
 - `us-west-1` (California del Norte)
@@ -126,6 +129,7 @@ Regiones válidas de AWS:
 #### 3. Volver a ejecutar el workflow
 
 Después de configurar la variable, ejecuta el workflow nuevamente:
+
 1. **GitHub → Actions → Deploy to EC2**
 2. Click en **Run workflow**
 3. Selecciona la rama `master`
@@ -246,7 +250,13 @@ El `docker-compose.prod.yml` tiene configurado:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()"]
+  test:
+    [
+      "CMD",
+      "python",
+      "-c",
+      "import urllib.request; urllib.request.urlopen('http://localhost:8100/health').read()",
+    ]
   interval: 30s
   timeout: 10s
   retries: 3
@@ -256,7 +266,7 @@ healthcheck:
 Si la aplicación tarda mucho en iniciar, aumenta el `start_period`:
 
 ```yaml
-start_period: 60s  # o más
+start_period: 60s # o más
 ```
 
 #### 3. Deshabilitar health check temporalmente (debugging)
@@ -402,6 +412,7 @@ nc -zv tu-ip-ec2 22
 #### 3. Verificar Security Group
 
 El Security Group debe permitir:
+
 - SSH (puerto 22) desde las IPs de GitHub Actions
 - O mejor: desde 0.0.0.0/0 (con autenticación por clave)
 
@@ -473,6 +484,7 @@ mkdir -p siscom-admin-api
 Si ninguna de estas soluciones funciona:
 
 1. **Recopila información de debugging**:
+
    ```bash
    # Ejecuta este script y guarda la salida
    echo "=== Docker PS ===" && \
@@ -492,4 +504,3 @@ Si ninguna de estas soluciones funciona:
 ---
 
 **Última actualización:** Noviembre 2025
-

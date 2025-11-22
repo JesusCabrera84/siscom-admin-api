@@ -21,11 +21,11 @@ Para que el pipeline de CI/CD funcione correctamente con el sistema de emails, n
 
 Estas se agregan en el tab **Variables**:
 
-| Nombre | Valor de Ejemplo | Descripción |
-|--------|------------------|-------------|
-| `SES_FROM_EMAIL` | `noreply@tudominio.com` | Email verificado en AWS SES que se usará como remitente |
-| `SES_REGION` | `us-east-1` | Región de AWS SES (puede ser la misma que COGNITO_REGION) |
-| `FRONTEND_URL` | `https://app.tudominio.com` | URL base de tu aplicación frontend (sin trailing slash) |
+| Nombre           | Valor de Ejemplo            | Descripción                                               |
+| ---------------- | --------------------------- | --------------------------------------------------------- |
+| `SES_FROM_EMAIL` | `noreply@tudominio.com`     | Email verificado en AWS SES que se usará como remitente   |
+| `SES_REGION`     | `us-east-1`                 | Región de AWS SES (puede ser la misma que COGNITO_REGION) |
+| `FRONTEND_URL`   | `https://app.tudominio.com` | URL base de tu aplicación frontend (sin trailing slash)   |
 
 #### Pasos para agregar Variables:
 
@@ -59,6 +59,7 @@ Los siguientes secrets ya deben estar configurados:
 Tu configuración en GitHub debería verse así:
 
 ### Variables (Repository Variables):
+
 ```
 PROJECT_NAME          = SISCOM Admin API
 DB_HOST               = tu-db-host
@@ -72,6 +73,7 @@ FRONTEND_URL          = https://app.tudominio.com ← NUEVA
 ```
 
 ### Secrets (Repository Secrets):
+
 ```
 EC2_HOST
 EC2_USERNAME
@@ -141,6 +143,7 @@ docker exec siscom-admin-api env | grep -E "SES|FRONTEND"
 **Causa**: La variable no está configurada en GitHub
 
 **Solución**:
+
 ```bash
 1. Ve a Settings → Secrets and variables → Actions → Variables
 2. Verifica que SES_FROM_EMAIL esté configurada
@@ -153,6 +156,7 @@ docker exec siscom-admin-api env | grep -E "SES|FRONTEND"
 **Causa**: Las variables no se están pasando correctamente al SSH
 
 **Solución**:
+
 ```bash
 1. Verifica que las variables estén en el campo "envs" del deploy.yml
 2. Debe incluir: SES_FROM_EMAIL,SES_REGION,FRONTEND_URL
@@ -164,6 +168,7 @@ docker exec siscom-admin-api env | grep -E "SES|FRONTEND"
 **Causa 1**: Las variables no se pasaron al contenedor
 
 **Solución**:
+
 ```bash
 # Verificar en el servidor
 docker exec siscom-admin-api python -c "from app.core.config import settings; print(settings.SES_FROM_EMAIL)"
@@ -172,6 +177,7 @@ docker exec siscom-admin-api python -c "from app.core.config import settings; pr
 **Causa 2**: El email no está verificado en AWS SES
 
 **Solución**:
+
 ```bash
 # Ir a AWS SES Console y verificar el email
 ```
@@ -275,4 +281,3 @@ Antes de hacer push a master y disparar el deployment, verifica:
 ---
 
 **Fecha de actualización**: 2025-11-08
-
