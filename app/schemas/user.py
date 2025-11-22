@@ -356,10 +356,16 @@ class LogoutResponse(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Schema para la petición de refresh token."""
 
+    email: EmailStr = Field(..., description="Correo electrónico del usuario")
     refresh_token: str = Field(..., description="Refresh token obtenido en el login")
 
     class Config:
-        json_schema_extra = {"example": {"refresh_token": "eyJjdHkiOiJ..."}}
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@example.com",
+                "refresh_token": "eyJjdHkiOiJ...",
+            }
+        }
 
 
 class RefreshTokenResponse(BaseModel):
