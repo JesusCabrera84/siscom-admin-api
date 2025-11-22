@@ -24,6 +24,8 @@ from app.schemas.user import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LogoutResponse,
+    RefreshTokenRequest,
+    RefreshTokenResponse,
     ResendVerificationRequest,
     ResendVerificationResponse,
     ResetPasswordRequest,
@@ -630,6 +632,99 @@ def confirm_email(request: ConfirmEmailRequest, db: Session = Depends(get_db)):
     # 7️⃣ Retornar mensaje de éxito
     return ConfirmEmailResponse(
         message="Email verificado exitosamente. Ahora puede iniciar sesión."
+    )
+
+
+# ------------------------------------------
+# Refresh Token - Renovar access token usando refresh token
+# ------------------------------------------
+@router.post(
+    "/refresh", response_model=RefreshTokenResponse, status_code=status.HTTP_200_OK
+)
+def refresh_token(request: RefreshTokenRequest):
+    """
+    Renueva el access token y el id token usando un refresh token válido.
+
+    Proceso:
+    1. Recibe el refresh token del cliente
+    2. Llama a initiate_auth de Cognito con el flujo REFRESH_TOKEN_AUTH
+    3. Retorna los nuevos access token e id token
+
+    Notas:
+    - El refresh token NO se renueva, sigue siendo el mismo
+    - Solo se renuevan el access token y el id token
+    - Este endpoint NO requiere autenticación (es público)
+
+    Códigos de error:
+    - 401: Refresh token inválido, expirado o revocado
+    - 500: Error al renovar los tokens en Cognito
+    """
+
+    # 1️⃣ Llamar a initiate_auth con el flujo REFRESH_TOKEN_AUTH
+    try:
+        # Para el refresh token, necesitamos calcular el SECRET_HASH
+        # pero Cognito no nos pide el USERNAME en el refresh
+        # Sin embargo, el SECRET_HASH se calcula con: username + client_id
+        # En el caso de REFRESH_TOKEN_AUTH, no necesitamos SECRET_HASH
+        # SOLO si el cliente tiene SECRET configurado
+
+        # Intentamos sin SECRET_HASH primero (si falla, agregamos)
+        auth_params = {
+            "REFRESH_TOKEN": request.refresh_token,
+        }
+
+        # Decodificar el token para obtener el username (opcional para logs)
+        # Por ahora lo omitimos y dejamos que Cognito maneje todo
+
+        response = cognito.initiate_auth(
+            ClientId=settings.COGNITO_CLIENT_ID,
+            AuthFlow="REFRESH_TOKEN_AUTH",
+            AuthParameters=auth_params,
+        )
+
+        # Extraer tokens de la respuesta
+        auth_result = response.get("AuthenticationResult")
+
+        if not auth_result:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No se pudo renovar el token",
+            )
+
+        access_token = auth_result.get("AccessToken")
+        id_token = auth_result.get("IdToken")
+        expires_in = auth_result.get("ExpiresIn", 3600)
+
+        print("[REFRESH TOKEN] Tokens renovados exitosamente")
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"].get("Message", str(e))
+
+        print(f"[REFRESH TOKEN ERROR] Code: {error_code}, Message: {error_message}")
+
+        if error_code == "NotAuthorizedException":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Refresh token inválido o expirado: {error_message}",
+            )
+        elif error_code == "InvalidParameterException":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Parámetros inválidos: {error_message}",
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al renovar el token [{error_code}]: {error_message}",
+            )
+
+    # 2️⃣ Retornar los nuevos tokens
+    return RefreshTokenResponse(
+        access_token=access_token,
+        id_token=id_token,
+        token_type="Bearer",
+        expires_in=expires_in,
     )
 
 

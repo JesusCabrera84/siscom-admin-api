@@ -351,3 +351,31 @@ class LogoutResponse(BaseModel):
 
     class Config:
         json_schema_extra = {"example": {"message": "Sesión cerrada exitosamente."}}
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema para la petición de refresh token."""
+
+    refresh_token: str = Field(..., description="Refresh token obtenido en el login")
+
+    class Config:
+        json_schema_extra = {"example": {"refresh_token": "eyJjdHkiOiJ..."}}
+
+
+class RefreshTokenResponse(BaseModel):
+    """Schema para la respuesta de refresh token."""
+
+    access_token: str
+    id_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "access_token": "eyJraWQiOiJ...",
+                "id_token": "eyJraWQiOiJ...",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            }
+        }
