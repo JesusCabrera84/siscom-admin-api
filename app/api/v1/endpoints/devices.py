@@ -53,7 +53,7 @@ def create_device_event(
 # ============================================
 
 
-@router.post("/", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
 def create_device(
     device_in: DeviceCreate,
     db: Session = Depends(get_db),
@@ -100,7 +100,7 @@ def create_device(
     return device
 
 
-@router.get("/", response_model=List[DeviceOut])
+@router.get("", response_model=List[DeviceOut])
 def list_devices(
     db: Session = Depends(get_db),
     status_filter: Optional[str] = None,

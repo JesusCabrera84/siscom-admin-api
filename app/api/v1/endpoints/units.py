@@ -117,7 +117,7 @@ def get_units_for_user(db: Session, user: User, include_deleted: bool = False):
 # ============================================
 
 
-@router.get("/", response_model=List[UnitWithDevice])
+@router.get("", response_model=List[UnitWithDevice])
 def list_units(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
@@ -190,7 +190,7 @@ def list_units(
     return units
 
 
-@router.post("/", response_model=UnitOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UnitOut, status_code=status.HTTP_201_CREATED)
 def create_unit(
     unit: UnitCreate,
     db: Session = Depends(get_db),

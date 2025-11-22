@@ -33,7 +33,7 @@ def require_master(user: User):
 # ============================================
 
 
-@router.get("/", response_model=List[UserUnitDetail])
+@router.get("", response_model=List[UserUnitDetail])
 def list_user_units(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
@@ -98,7 +98,7 @@ def list_user_units(
     return result
 
 
-@router.post("/", response_model=UserUnitOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UserUnitOut, status_code=status.HTTP_201_CREATED)
 def create_user_unit(
     assignment: UserUnitCreate,
     db: Session = Depends(get_db),

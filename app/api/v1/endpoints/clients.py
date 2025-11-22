@@ -24,7 +24,7 @@ router = APIRouter()
 cognito = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
 
 
-@router.post("/", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
 def create_client(data: ClientCreate, db: Session = Depends(get_db)):
     """
     Crea un nuevo cliente con usuario master asociado.
@@ -262,7 +262,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/", response_model=ClientOut)
+@router.get("", response_model=ClientOut)
 def get_client_info(
     client_id: UUID = Depends(get_current_client_id),
     db: Session = Depends(get_db),

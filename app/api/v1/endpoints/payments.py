@@ -12,7 +12,7 @@ from app.schemas.payment import PaymentOut
 router = APIRouter()
 
 
-@router.get("/", response_model=List[PaymentOut])
+@router.get("", response_model=List[PaymentOut])
 def list_payments(
     client_id: UUID = Depends(get_current_client_id),
     db: Session = Depends(get_db),

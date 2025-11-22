@@ -10,7 +10,7 @@ from app.services.subscriptions import get_all_plans
 router = APIRouter()
 
 
-@router.get("/", response_model=List[PlanOut])
+@router.get("", response_model=List[PlanOut])
 def list_plans(
     db: Session = Depends(get_db),
 ):

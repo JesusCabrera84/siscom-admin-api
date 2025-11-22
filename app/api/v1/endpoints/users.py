@@ -33,7 +33,7 @@ router = APIRouter()
 cognito = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
 
 
-@router.get("/", response_model=List[UserOut])
+@router.get("", response_model=List[UserOut])
 def list_users(
     client_id: UUID = Depends(get_current_client_id),
     db: Session = Depends(get_db),

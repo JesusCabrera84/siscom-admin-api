@@ -47,7 +47,7 @@ def create_device_event(
 # ============================================
 
 
-@router.get("/", response_model=List[UnitDeviceOut])
+@router.get("", response_model=List[UnitDeviceOut])
 def list_unit_devices(
     client_id: UUID = Depends(get_current_client_id),
     db: Session = Depends(get_db),
@@ -73,7 +73,7 @@ def list_unit_devices(
     return assignments
 
 
-@router.post("/", response_model=UnitDeviceOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=UnitDeviceOut, status_code=status.HTTP_201_CREATED)
 def create_unit_device(
     assignment: UnitDeviceCreate,
     client_id: UUID = Depends(get_current_client_id),

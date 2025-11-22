@@ -15,7 +15,7 @@ from app.schemas.order import OrderCreate, OrderOut
 router = APIRouter()
 
 
-@router.post("/", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
 def create_order(
     order_in: OrderCreate,
     client_id: UUID = Depends(get_current_client_id),
@@ -76,7 +76,7 @@ def create_order(
     return order
 
 
-@router.get("/", response_model=List[OrderOut])
+@router.get("", response_model=List[OrderOut])
 def list_orders(
     client_id: UUID = Depends(get_current_client_id),
     db: Session = Depends(get_db),
