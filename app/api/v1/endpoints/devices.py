@@ -156,7 +156,7 @@ def list_unassigned_devices(
 ):
     """
     Lista dispositivos del cliente que no están asignados a ninguna unidad activamente.
-    Estados válidos: 'entregado' o 'devuelto'
+    Estados válidos: 'preparado', 'enviado', 'entregado' o 'devuelto'
 
     Verifica que no exista una asignación activa en unit_devices.
     """
@@ -172,7 +172,7 @@ def list_unassigned_devices(
         db.query(Device)
         .filter(
             Device.client_id == client_id,
-            Device.status.in_(["entregado", "devuelto"]),
+            Device.status.in_(["preparado", "enviado", "entregado", "devuelto"]),
             ~Device.device_id.in_(active_assignments_subquery),
         )
         .all()

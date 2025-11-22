@@ -244,7 +244,7 @@ Authorization: Bearer <client_token>
 **GET** `/api/v1/devices/unassigned`
 
 Lista dispositivos del cliente que NO están instalados en ninguna unidad.  
-Solo incluye dispositivos con estado `entregado` o `devuelto`.
+Solo incluye dispositivos con estado `preparado`, `enviado`, `entregado` o `devuelto`.
 
 #### Headers
 

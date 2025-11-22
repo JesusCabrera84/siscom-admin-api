@@ -49,6 +49,35 @@ class UnitOut(UnitBase):
         }
 
 
+class UnitWithDevice(UnitBase):
+    """Schema de unidad con información del dispositivo asignado"""
+
+    id: UUID
+    client_id: UUID
+    deleted_at: Optional[datetime] = None
+    # Información del dispositivo asignado (null si no tiene)
+    device_id: Optional[str] = None
+    device_brand: Optional[str] = None
+    device_model: Optional[str] = None
+    assigned_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "abc12345-e89b-12d3-a456-426614174000",
+                "client_id": "def45678-e89b-12d3-a456-426614174000",
+                "name": "Camión #45",
+                "description": "Camión de reparto zona norte",
+                "deleted_at": None,
+                "device_id": "864537040123456",
+                "device_brand": "Suntech",
+                "device_model": "ST300",
+                "assigned_at": "2025-11-15T10:30:00Z",
+            }
+        }
+
+
 class UnitDetail(UnitOut):
     """Schema detallado de unidad con dispositivos asignados"""
 

@@ -16,7 +16,7 @@ from app.models.unit_device import UnitDevice
 from app.models.user import User
 from app.models.user_unit import UserUnit
 from app.schemas.device import DeviceOut
-from app.schemas.unit import UnitCreate, UnitDetail, UnitOut, UnitUpdate
+from app.schemas.unit import UnitCreate, UnitDetail, UnitOut, UnitUpdate, UnitWithDevice
 from app.schemas.unit_device import UnitDeviceAssign, UnitDeviceOut
 from app.schemas.user_unit import UserUnitAssign, UserUnitDetail
 
@@ -117,22 +117,74 @@ def get_units_for_user(db: Session, user: User, include_deleted: bool = False):
 # ============================================
 
 
-@router.get("/", response_model=List[UnitOut])
+@router.get("/", response_model=List[UnitWithDevice])
 def list_units(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
     include_deleted: bool = False,
 ):
     """
-    Lista las unidades visibles para el usuario autenticado.
+    Lista las unidades visibles para el usuario autenticado con información del dispositivo asignado.
 
     - Si es maestro → todas las unidades del cliente
     - Si no es maestro → solo las unidades en user_units
 
+    Incluye información del dispositivo actualmente asignado (si existe).
+
     Parámetros:
     - include_deleted: incluir unidades eliminadas (solo para maestros)
     """
-    units = get_units_for_user(db, current_user, include_deleted)
+    # Construir query base con LEFT JOINs
+    query = (
+        db.query(
+            Unit.id,
+            Unit.client_id,
+            Unit.name,
+            Unit.description,
+            Unit.deleted_at,
+            Device.device_id,
+            Device.brand.label("device_brand"),
+            Device.model.label("device_model"),
+            UnitDevice.assigned_at,
+        )
+        .outerjoin(
+            UnitDevice,
+            (UnitDevice.unit_id == Unit.id) & (UnitDevice.unassigned_at.is_(None)),
+        )
+        .outerjoin(Device, Device.device_id == UnitDevice.device_id)
+        .filter(Unit.client_id == current_user.client_id)
+    )
+
+    # Filtrar unidades eliminadas
+    if not include_deleted:
+        query = query.filter(Unit.deleted_at.is_(None))
+
+    # Filtrar por permisos si no es maestro
+    if not current_user.is_master:
+        user_unit_ids = (
+            db.query(UserUnit.unit_id).filter(UserUnit.user_id == current_user.id).subquery()
+        )
+        query = query.filter(Unit.id.in_(user_unit_ids))
+
+    # Ejecutar query
+    results = query.all()
+
+    # Construir respuesta
+    units = []
+    for row in results:
+        unit = UnitWithDevice(
+            id=row.id,
+            client_id=row.client_id,
+            name=row.name,
+            description=row.description,
+            deleted_at=row.deleted_at,
+            device_id=row.device_id,
+            device_brand=row.device_brand,
+            device_model=row.device_model,
+            assigned_at=row.assigned_at,
+        )
+        units.append(unit)
+
     return units
 
 
