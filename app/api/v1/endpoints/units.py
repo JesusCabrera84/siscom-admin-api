@@ -162,7 +162,9 @@ def list_units(
     # Filtrar por permisos si no es maestro
     if not current_user.is_master:
         user_unit_ids = (
-            db.query(UserUnit.unit_id).filter(UserUnit.user_id == current_user.id).subquery()
+            db.query(UserUnit.unit_id)
+            .filter(UserUnit.user_id == current_user.id)
+            .subquery()
         )
         query = query.filter(Unit.id.in_(user_unit_ids))
 
