@@ -134,7 +134,7 @@ def list_units(
     Parámetros:
     - include_deleted: incluir unidades eliminadas (solo para maestros)
     """
-    # Construir query base con LEFT JOINs
+    # Construir query base con LEFT JOINs optimizados
     query = (
         db.query(
             Unit.id,
@@ -155,23 +155,25 @@ def list_units(
         .filter(Unit.client_id == current_user.client_id)
     )
 
-    # Filtrar unidades eliminadas
-    if not include_deleted:
+    # Filtrar unidades eliminadas (solo maestros pueden ver eliminadas)
+    if not include_deleted or not current_user.is_master:
         query = query.filter(Unit.deleted_at.is_(None))
 
-    # Filtrar por permisos si no es maestro
+    # Aplicar lógica de visibilidad según tipo de usuario
     if not current_user.is_master:
+        # Usuario NO maestro: solo ve unidades en user_units
         user_unit_ids = (
             db.query(UserUnit.unit_id)
             .filter(UserUnit.user_id == current_user.id)
             .subquery()
         )
         query = query.filter(Unit.id.in_(user_unit_ids))
+    # Usuario maestro: ve todas las unidades del cliente (sin filtros adicionales)
 
-    # Ejecutar query
+    # Ejecutar query única (sin N+1 queries)
     results = query.all()
 
-    # Construir respuesta
+    # Construir respuesta con los datos del JOIN
     units = []
     for row in results:
         unit = UnitWithDevice(

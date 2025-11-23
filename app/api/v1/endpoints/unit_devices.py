@@ -122,10 +122,10 @@ def create_unit_device(
         )
 
     # Validar estado del dispositivo
-    if device.status not in ["entregado", "devuelto"]:
+    if device.status not in ["entregado"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El dispositivo debe estar en estado 'entregado' o 'devuelto' (estado actual: {device.status})",
+            detail=f"El dispositivo debe estar en estado 'entregado' (estado actual: {device.status})",
         )
 
     # Verificar que no existe una asignación activa
