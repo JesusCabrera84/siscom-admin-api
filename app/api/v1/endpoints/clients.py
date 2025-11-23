@@ -144,12 +144,19 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Cliente no encontrado.")
 
-    # 5️⃣ Validar que el token tenga contraseña temporal
+    # 5️⃣ Si el token NO trae password_temp significa que NO proviene del flujo de creación de cliente.
+    # En este caso, solo verificamos el email del usuario y activamos su cuenta, sin crear Cognito.
     if not token_record.password_temp:
-        raise HTTPException(
-            status_code=500,
-            detail="Token sin contraseña temporal. No se puede completar la verificación.",
-        )
+        user.email_verified = True
+        client.status = ClientStatus.ACTIVE
+        token_record.used = True
+        db.commit()
+
+        return {
+            "message": "Email verificado exitosamente.",
+            "email": user.email,
+            "client_id": str(client.id),
+        }
 
     # 6️⃣ Verificar si el usuario ya existe en Cognito
     cognito_sub = None
