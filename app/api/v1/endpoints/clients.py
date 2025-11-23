@@ -144,11 +144,19 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     if not client:
         raise HTTPException(status_code=404, detail="Cliente no encontrado.")
 
-    # 5️⃣ Si el token NO trae password_temp significa que NO proviene del flujo de creación de cliente.
-    # En este caso, solo verificamos el email del usuario y activamos su cuenta, sin crear Cognito.
+    # 5️⃣ Si el token NO trae password_temp significa que NO es el flujo de creación de cliente.
+    # Pero SI es un usuario master (is_master=True) entonces es inválido: los masters SIEMPRE requieren password_temp.
     if not token_record.password_temp:
+
+        # Si es un usuario master → error
+        if user.is_master:
+            raise HTTPException(
+                status_code=500,
+                detail="Token inválido para usuarios master. Solicita un nuevo enlace de verificación.",
+            )
+
+        # Si NO es master → simplemente marcar email verificado (el usuario ya debe existir en Cognito)
         user.email_verified = True
-        client.status = ClientStatus.ACTIVE
         token_record.used = True
         db.commit()
 
