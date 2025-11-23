@@ -1,13 +1,9 @@
-from datetime import datetime
 from uuid import UUID
 
-import boto3
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_client_id
-from app.core.config import settings
 from app.db.session import get_db
 from app.models.client import Client, ClientStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
@@ -17,11 +13,6 @@ from app.services.notifications import send_verification_email
 from app.utils.security import generate_verification_token
 
 router = APIRouter()
-
-# ------------------------------------------
-# Cognito client
-# ------------------------------------------
-cognito = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
 
 
 @router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
@@ -91,190 +82,6 @@ def create_client(data: ClientCreate, db: Session = Depends(get_db)):
         print(f"[WARNING] No se pudo enviar el correo de verificación a {user.email}")
 
     return client
-
-
-@router.post("/verify-email", status_code=status.HTTP_200_OK)
-def verify_email(token: str, db: Session = Depends(get_db)):
-    """
-    Verifica el email del usuario mediante el token enviado por correo.
-
-    Flujo:
-    1. Buscar token en la tabla tokens_confirmacion
-    2. Validar que el token no haya sido usado y no esté expirado
-    3. Buscar usuario asociado al token
-    4. Crear usuario en Cognito con email_verified=true
-    5. Actualizar usuario con cognito_sub y email_verified=true
-    6. Actualizar cliente a status ACTIVE
-    7. Marcar token como usado
-    """
-
-    # 1️⃣ Buscar token en la tabla tokens_confirmacion
-    token_record = (
-        db.query(TokenConfirmacion)
-        .filter(
-            TokenConfirmacion.token == token,
-            TokenConfirmacion.type == TokenType.EMAIL_VERIFICATION,
-        )
-        .first()
-    )
-
-    if not token_record:
-        raise HTTPException(status_code=400, detail="Token de verificación inválido.")
-
-    # 2️⃣ Validar que el token no haya sido usado
-    if token_record.used:
-        raise HTTPException(status_code=400, detail="Este token ya ha sido utilizado.")
-
-    # 3️⃣ Validar que el token no esté expirado
-    if token_record.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Token de verificación expirado.")
-
-    # 4️⃣ Buscar usuario asociado al token
-    user = db.query(User).filter(User.id == token_record.user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
-
-    if user.email_verified:
-        raise HTTPException(status_code=400, detail="Este email ya ha sido verificado.")
-
-    # 2️⃣ Buscar el cliente asociado
-    client = db.query(Client).filter(Client.id == user.client_id).first()
-
-    if not client:
-        raise HTTPException(status_code=404, detail="Cliente no encontrado.")
-
-    # 5️⃣ Si el token NO trae password_temp significa que NO es el flujo de creación de cliente.
-    # Pero SI es un usuario master (is_master=True) entonces es inválido: los masters SIEMPRE requieren password_temp.
-    if not token_record.password_temp:
-
-        # Si es un usuario master → error
-        if user.is_master:
-            raise HTTPException(
-                status_code=500,
-                detail="Token inválido para usuarios master. Solicita un nuevo enlace de verificación.",
-            )
-
-        # Si NO es master → simplemente marcar email verificado (el usuario ya debe existir en Cognito)
-        user.email_verified = True
-        token_record.used = True
-        db.commit()
-
-        return {
-            "message": "Email verificado exitosamente.",
-            "email": user.email,
-            "client_id": str(client.id),
-        }
-
-    # 6️⃣ Verificar si el usuario ya existe en Cognito
-    cognito_sub = None
-    user_exists = False
-
-    try:
-        # Intentar obtener el usuario de Cognito
-        existing_cognito_user = cognito.admin_get_user(
-            UserPoolId=settings.COGNITO_USER_POOL_ID, Username=user.email
-        )
-        user_exists = True
-
-        # Obtener el cognito_sub del usuario existente
-        cognito_sub = next(
-            (
-                attr["Value"]
-                for attr in existing_cognito_user["UserAttributes"]
-                if attr["Name"] == "sub"
-            ),
-            None,
-        )
-
-        print(f"[VERIFY EMAIL] Usuario ya existe en Cognito: {user.email}")
-
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "UserNotFoundException":
-            # Usuario no existe, continuar con la creación
-            user_exists = False
-        else:
-            # Otro error, re-lanzarlo
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error al verificar usuario en Cognito: {e.response['Error'].get('Message', str(e))}",
-            )
-
-    try:
-        if not user_exists:
-            # 7️⃣ Crear usuario en Cognito con email verificado
-            cognito_resp = cognito.admin_create_user(
-                UserPoolId=settings.COGNITO_USER_POOL_ID,
-                Username=user.email,
-                UserAttributes=[
-                    {"Name": "email", "Value": user.email},
-                    {"Name": "email_verified", "Value": "true"},
-                    {"Name": "name", "Value": user.full_name or ""},
-                ],
-                MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
-            )
-
-            # Obtener el cognito_sub del usuario creado
-            cognito_sub = next(
-                (
-                    attr["Value"]
-                    for attr in cognito_resp["User"]["Attributes"]
-                    if attr["Name"] == "sub"
-                ),
-                None,
-            )
-
-            print(f"[VERIFY EMAIL] Usuario creado en Cognito: {user.email}")
-
-        # 8️⃣ Establecer contraseña permanente del usuario (ya sea nuevo o existente)
-        cognito.admin_set_user_password(
-            UserPoolId=settings.COGNITO_USER_POOL_ID,
-            Username=user.email,
-            Password=token_record.password_temp,
-            Permanent=True,  # Contraseña permanente, no temporal
-        )
-
-        # 9️⃣ Asegurarse de que el email esté verificado en Cognito
-        if user_exists:
-            cognito.admin_update_user_attributes(
-                UserPoolId=settings.COGNITO_USER_POOL_ID,
-                Username=user.email,
-                UserAttributes=[
-                    {"Name": "email_verified", "Value": "true"},
-                ],
-            )
-
-        if not cognito_sub:
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudo obtener el cognito_sub del usuario",
-            )
-
-    except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al configurar usuario en Cognito [{error_code}]: {e.response['Error'].get('Message', str(e))}",
-        )
-
-    # 9️⃣ Actualizar usuario en la base de datos
-    user.cognito_sub = cognito_sub
-    user.email_verified = True
-
-    # 🔟 Actualizar cliente a ACTIVE
-    client.status = ClientStatus.ACTIVE
-
-    # 1️⃣1️⃣ Marcar token como usado y limpiar contraseña temporal
-    token_record.used = True
-    token_record.password_temp = None  # Limpiar contraseña por seguridad
-
-    db.commit()
-
-    return {
-        "message": "Email verificado exitosamente. Tu cuenta ha sido activada.",
-        "email": user.email,
-        "client_id": str(client.id),
-    }
 
 
 @router.get("", response_model=ClientOut)

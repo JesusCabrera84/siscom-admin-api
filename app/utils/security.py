@@ -49,3 +49,20 @@ def generate_verification_token() -> str:
         str: Token de 32 caracteres hexadecimales
     """
     return secrets.token_urlsafe(32)
+
+
+def generate_temporary_password() -> str:
+    """
+    Genera una contraseña temporal segura para usuarios master.
+
+    La contraseña cumple con los requisitos de Cognito:
+    - Al menos 8 caracteres
+    - Incluye mayúsculas, minúsculas, números y símbolos
+
+    Returns:
+        str: Contraseña temporal segura
+    """
+    # Generar una contraseña segura de 16 caracteres
+    # Usamos token_urlsafe que genera caracteres alfanuméricos seguros
+    # y agregamos un símbolo para cumplir con requisitos de Cognito
+    return secrets.token_urlsafe(12) + "!Aa1"

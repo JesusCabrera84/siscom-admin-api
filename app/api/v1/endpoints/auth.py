@@ -2,7 +2,6 @@ import base64
 import hashlib
 import hmac
 import random
-import uuid
 from datetime import datetime, timedelta
 
 import boto3
@@ -14,12 +13,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user_full
 from app.core.config import settings
 from app.db.session import get_db
+from app.models.client import Client, ClientStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.user import User
 from app.schemas.user import (
     ChangePasswordRequest,
     ChangePasswordResponse,
-    ConfirmEmailRequest,
     ConfirmEmailResponse,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
@@ -37,6 +36,7 @@ from app.services.notifications import (
     send_password_reset_email,
     send_verification_email,
 )
+from app.utils.security import generate_temporary_password, generate_verification_token
 
 router = APIRouter()
 
@@ -485,15 +485,16 @@ def resend_verification(
     3. Si existe y no está verificado:
        a. Invalida todos los tokens de verificación anteriores no usados
        b. Genera un nuevo token UUID
-       c. Guarda el token en tokens_confirmacion con tipo EMAIL_VERIFICATION
-       d. TODO: Envía correo con el token
+       c. Si es usuario master: genera password_temp para Cognito
+       d. Si no es master: genera token sin password_temp
+       e. Guarda el token en tokens_confirmacion con tipo EMAIL_VERIFICATION
+       f. Envía el correo de verificación
     4. Retorna mensaje genérico
 
     Notas de seguridad:
     - Siempre retorna el mismo mensaje, sin revelar si el usuario existe o ya está verificado
     - Invalida tokens anteriores para evitar que se usen tokens antiguos
     """
-
     # 1️⃣ Buscar el usuario en la base de datos
     user = db.query(User).filter(User.email == request.email).first()
 
@@ -514,36 +515,62 @@ def resend_verification(
 
     # 3️⃣ Usuario existe y no está verificado, continuar con el reenvío
 
-    # a) Invalidar tokens anteriores no usados del usuario
+    # a) Buscar tokens anteriores de verificación del usuario (para reutilizar password_temp si es master)
     previous_tokens = (
         db.query(TokenConfirmacion)
         .filter(
             TokenConfirmacion.user_id == user.id,
             TokenConfirmacion.type == TokenType.EMAIL_VERIFICATION,
-            ~TokenConfirmacion.used,
         )
+        .order_by(TokenConfirmacion.created_at.desc())
         .all()
     )
 
+    # b) Si es usuario master, intentar reutilizar password_temp del token más reciente
+    password_temp = None
+    if user.is_master:
+        # Buscar el password_temp del token más reciente (usado o no usado)
+        for prev_token in previous_tokens:
+            if prev_token.password_temp:
+                password_temp = prev_token.password_temp
+                print(
+                    f"[RESEND VERIFICATION] Reutilizando password_temp existente para master: {user.email}"
+                )
+                break
+
+        # Si no se encontró password_temp previo, generar uno nuevo (caso excepcional)
+        if not password_temp:
+            password_temp = generate_temporary_password()
+            print(
+                f"[RESEND VERIFICATION] Generando nuevo password_temp para master (no existía previo): {user.email}"
+            )
+    else:
+        print(
+            f"[RESEND VERIFICATION] Token sin password_temp para usuario normal: {user.email}"
+        )
+
+    # c) Invalidar tokens anteriores no usados del usuario
     for token in previous_tokens:
-        token.used = True
+        if not token.used:
+            token.used = True
 
-    # b) Generar nuevo token UUID
-    verification_token = str(uuid.uuid4())
+    # d) Generar nuevo token UUID
+    verification_token = generate_verification_token()
 
-    # c) Guardar el token en la base de datos
+    # e) Guardar el token en la base de datos
     token_record = TokenConfirmacion(
         token=verification_token,
         type=TokenType.EMAIL_VERIFICATION,
         user_id=user.id,
         email=user.email,
+        password_temp=password_temp,  # Reutilizado para masters, None para usuarios normales
         expires_at=datetime.utcnow() + timedelta(hours=24),  # Expira en 24 horas
         used=False,
     )
     db.add(token_record)
     db.commit()
 
-    # d) Enviar correo electrónico con el token
+    # f) Enviar correo electrónico con el token
     email_sent = send_verification_email(user.email, verification_token)
     if email_sent:
         print(f"[RESEND VERIFICATION] Correo enviado a {user.email}")
@@ -557,35 +584,51 @@ def resend_verification(
 
 
 # ------------------------------------------
-# Confirm Email - Confirmar email con token
+# Verify Email - Verificar email con token (unificado)
 # ------------------------------------------
 @router.post(
-    "/confirm-email",
+    "/verify-email",
     response_model=ConfirmEmailResponse,
     status_code=status.HTTP_200_OK,
 )
-def confirm_email(request: ConfirmEmailRequest, db: Session = Depends(get_db)):
+def verify_email(token: str, db: Session = Depends(get_db)):
     """
-    Confirma el email de un usuario utilizando un token de verificación.
+    Verifica el email de un usuario utilizando un token de verificación.
 
-    Proceso:
-    1. Busca y valida el token en la base de datos
-    2. Verifica que el token no haya expirado
-    3. Verifica que el token no haya sido usado
-    4. Marca el token como usado
-    5. Actualiza user.email_verified = True
-    6. Retorna mensaje de éxito
+    Este endpoint unificado maneja tres flujos diferentes:
+
+    FLUJO A - Usuario master con password_temp:
+        - Crea el usuario en Cognito (si no existe)
+        - Establece la contraseña usando password_temp
+        - Marca email_verified=True en Cognito
+        - Actualiza user.cognito_sub en la base local
+        - Activa el cliente (client.status = ACTIVE)
+        - Marca el token como usado
+
+    FLUJO B - Usuario master sin password_temp:
+        - Error controlado indicando que el token es inválido
+        - Solicita reenvío de verificación
+
+    FLUJO C - Usuario normal (no master):
+        - Marca el email como verificado en base de datos
+        - NO crea usuario en Cognito (ya debe existir)
+        - NO asigna contraseña
+        - NO toca el cliente
+        - Marca el token como usado
+
+    Parámetros:
+    - token: Token de verificación (query parameter)
 
     Códigos de error:
     - 400: Token inválido, expirado o ya usado
-    - 404: Usuario no encontrado
+    - 404: Usuario o cliente no encontrado
+    - 500: Error al configurar usuario en Cognito
     """
-
     # 1️⃣ Buscar el token en la base de datos
     token_record = (
         db.query(TokenConfirmacion)
         .filter(
-            TokenConfirmacion.token == request.token,
+            TokenConfirmacion.token == token,
             TokenConfirmacion.type == TokenType.EMAIL_VERIFICATION,
         )
         .first()
@@ -601,7 +644,7 @@ def confirm_email(request: ConfirmEmailRequest, db: Session = Depends(get_db)):
     if token_record.expires_at < datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El token de verificación ha expirado. Por favor, solicita un nuevo código.",
+            detail="El token de verificación ha expirado. Por favor, solicita uno nuevo.",
         )
 
     # 3️⃣ Verificar que el token no haya sido usado
@@ -619,19 +662,187 @@ def confirm_email(request: ConfirmEmailRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado"
         )
 
-    # 5️⃣ Marcar el token como usado
-    token_record.used = True
+    # 5️⃣ Si el usuario ya está verificado, retornar error amigable
+    if user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este email ya ha sido verificado",
+        )
 
-    # 6️⃣ Actualizar email_verified del usuario
+    # ========================================
+    # FLUJO C - Usuario normal (NO master)
+    # ========================================
+    if not user.is_master:
+        # Simplemente marcar email verificado
+        user.email_verified = True
+        token_record.used = True
+        db.commit()
+
+        print(
+            f"[VERIFY EMAIL - FLUJO C] Email verificado para usuario normal: {user.email}"
+        )
+
+        return ConfirmEmailResponse(
+            message="Email verificado exitosamente. Ahora puede iniciar sesión."
+        )
+
+    # ========================================
+    # Usuario ES master - validar password_temp
+    # ========================================
+
+    # FLUJO B - Usuario master sin password_temp
+    if not token_record.password_temp:
+        print(
+            f"[VERIFY EMAIL - FLUJO B] Token sin password_temp para usuario master: {user.email}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token inválido para usuarios master. Por favor, solicita un nuevo enlace de verificación.",
+        )
+
+    # ========================================
+    # FLUJO A - Usuario master con password_temp
+    # ========================================
+
+    # Buscar el cliente asociado
+    client = db.query(Client).filter(Client.id == user.client_id).first()
+
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado"
+        )
+
+    # Verificar si el usuario ya existe en Cognito
+    cognito_sub = None
+    user_exists = False
+
+    try:
+        # Intentar obtener el usuario de Cognito
+        existing_cognito_user = cognito.admin_get_user(
+            UserPoolId=settings.COGNITO_USER_POOL_ID, Username=user.email
+        )
+        user_exists = True
+
+        # Obtener el cognito_sub del usuario existente
+        cognito_sub = next(
+            (
+                attr["Value"]
+                for attr in existing_cognito_user["UserAttributes"]
+                if attr["Name"] == "sub"
+            ),
+            None,
+        )
+
+        print(
+            f"[VERIFY EMAIL - FLUJO A] Usuario master ya existe en Cognito: {user.email}"
+        )
+
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "UserNotFoundException":
+            # Usuario no existe, continuar con la creación
+            user_exists = False
+            print(
+                f"[VERIFY EMAIL - FLUJO A] Usuario master no existe en Cognito, creando: {user.email}"
+            )
+        else:
+            # Otro error, re-lanzarlo
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al verificar usuario en Cognito: {e.response['Error'].get('Message', str(e))}",
+            )
+
+    try:
+        if not user_exists:
+            # Crear usuario en Cognito con email verificado
+            cognito_resp = cognito.admin_create_user(
+                UserPoolId=settings.COGNITO_USER_POOL_ID,
+                Username=user.email,
+                UserAttributes=[
+                    {"Name": "email", "Value": user.email},
+                    {"Name": "email_verified", "Value": "true"},
+                    {"Name": "name", "Value": user.full_name or ""},
+                ],
+                MessageAction="SUPPRESS",  # No enviar correo automático de Cognito
+            )
+
+            # Obtener el cognito_sub del usuario creado
+            cognito_sub = next(
+                (
+                    attr["Value"]
+                    for attr in cognito_resp["User"]["Attributes"]
+                    if attr["Name"] == "sub"
+                ),
+                None,
+            )
+
+            print(
+                f"[VERIFY EMAIL - FLUJO A] Usuario master creado en Cognito: {user.email}"
+            )
+
+        # Establecer contraseña permanente del usuario (ya sea nuevo o existente)
+        cognito.admin_set_user_password(
+            UserPoolId=settings.COGNITO_USER_POOL_ID,
+            Username=user.email,
+            Password=token_record.password_temp,
+            Permanent=True,  # Contraseña permanente, no temporal
+        )
+
+        # Asegurarse de que el email esté verificado en Cognito
+        if user_exists:
+            cognito.admin_update_user_attributes(
+                UserPoolId=settings.COGNITO_USER_POOL_ID,
+                Username=user.email,
+                UserAttributes=[
+                    {"Name": "email_verified", "Value": "true"},
+                ],
+            )
+
+        if not cognito_sub:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo obtener el cognito_sub del usuario",
+            )
+
+        print(
+            f"[VERIFY EMAIL - FLUJO A] Contraseña establecida para master: {user.email}"
+        )
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"].get("Message", str(e))
+
+        print(
+            f"[VERIFY EMAIL ERROR] Code: {error_code}, Message: {error_message}, Email: {user.email}"
+        )
+
+        if error_code == "InvalidPasswordException":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Contraseña inválida: {error_message}",
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al configurar usuario en Cognito [{error_code}]: {error_message}",
+            )
+
+    # Actualizar usuario en la base de datos
+    user.cognito_sub = cognito_sub
     user.email_verified = True
+
+    # Actualizar cliente a ACTIVE
+    client.status = ClientStatus.ACTIVE
+
+    # Marcar token como usado y limpiar contraseña temporal
+    token_record.used = True
+    token_record.password_temp = None  # Limpiar contraseña por seguridad
 
     db.commit()
 
-    print(f"[EMAIL VERIFICATION] Email verificado exitosamente para {user.email}")
+    print(f"[VERIFY EMAIL - FLUJO A] Cliente activado exitosamente: {client.name}")
 
-    # 7️⃣ Retornar mensaje de éxito
     return ConfirmEmailResponse(
-        message="Email verificado exitosamente. Ahora puede iniciar sesión."
+        message="Email verificado exitosamente. Tu cuenta ha sido activada y ahora puedes iniciar sesión."
     )
 
 
