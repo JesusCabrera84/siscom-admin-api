@@ -24,15 +24,15 @@ def main():
     print("=" * 60)
     print("Aplicando migración 005: Renombrar imei a device_id")
     print("=" * 60)
-    
+
     try:
         # Configurar Alembic
         alembic_cfg = Config("alembic.ini")
-        
+
         # Aplicar la migración específica
         print("\n📦 Aplicando migración...")
         command.upgrade(alembic_cfg, "005_rename_device_id")
-        
+
         print("\n" + "=" * 60)
         print("✓ Migración aplicada exitosamente!")
         print("=" * 60)
@@ -40,7 +40,7 @@ def main():
         print("  - Columna 'imei' renombrada a 'device_id'")
         print("  - Índice 'idx_devices_imei' actualizado a 'idx_devices_device_id'")
         print("=" * 60)
-        
+
     except Exception as e:
         print(f"\n❌ Error al aplicar migración: {e}")
         print("\nPuedes aplicar la migración manualmente con:")
@@ -50,4 +50,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

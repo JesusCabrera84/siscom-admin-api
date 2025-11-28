@@ -101,6 +101,54 @@ class DeviceOut(BaseModel):
         }
 
 
+class DeviceWithProfileOut(DeviceOut):
+    """Schema de salida para dispositivos con información del perfil de la unidad asignada"""
+
+    # Información del perfil de la unidad (unit_profile)
+    unit_id: Optional[UUID] = Field(None, description="ID de la unidad asignada")
+    unit_name: Optional[str] = Field(None, description="Nombre de la unidad")
+    profile_color: Optional[str] = Field(None, description="Color del vehículo/unidad")
+    profile_icon_type: Optional[str] = Field(
+        None, description="Tipo de ícono del vehículo/unidad"
+    )
+    profile_brand: Optional[str] = Field(None, description="Marca del vehículo/unidad")
+    profile_model: Optional[str] = Field(None, description="Modelo del vehículo/unidad")
+    profile_year: Optional[int] = Field(None, description="Año del vehículo/unidad")
+    profile_serial: Optional[str] = Field(
+        None, description="Número de serie del vehículo/unidad"
+    )
+    profile_description: Optional[str] = Field(
+        None, description="Descripción del vehículo/unidad"
+    )
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "device_id": "864537040123456",
+                "brand": "Suntech",
+                "model": "ST300",
+                "firmware_version": "1.0.17",
+                "client_id": "d1e92a7a-bab3-4d87-8219-9cb8471a0c2b",
+                "status": "asignado",
+                "last_comm_at": "2025-01-15T10:30:00Z",
+                "created_at": "2025-11-01T10:20:00Z",
+                "updated_at": "2025-11-03T08:00:00Z",
+                "last_assignment_at": "2025-11-03T08:00:00Z",
+                "notes": "Instalado en unidad #45",
+                "unit_id": "abc12345-e89b-12d3-a456-426614174000",
+                "unit_name": "Camión #45",
+                "profile_color": "Rojo",
+                "profile_icon_type": "truck",
+                "profile_brand": "Ford",
+                "profile_model": "F-350",
+                "profile_year": 2020,
+                "profile_serial": "1FDUF3GT5GED12345",
+                "profile_description": "Camión de carga pesada",
+            }
+        }
+
+
 # ============================================
 # DeviceEvent Schemas
 # ============================================

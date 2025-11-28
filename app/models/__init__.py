@@ -15,14 +15,18 @@ from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
+from app.models.unit_profile import UnitProfile
 from app.models.user import User
 from app.models.user_unit import UserUnit
+from app.models.vehicle_profile import VehicleProfile
 
 __all__ = [
     "Client",
     "ClientStatus",
     "User",
     "Unit",
+    "UnitProfile",
+    "VehicleProfile",
     "Device",
     "DeviceEvent",
     "UnitDevice",

@@ -11,11 +11,13 @@ from app.models.client import Client
 from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
+from app.models.unit_profile import UnitProfile
 from app.schemas.device import (
     DeviceCreate,
     DeviceOut,
     DeviceStatusUpdate,
     DeviceUpdate,
+    DeviceWithProfileOut,
 )
 
 router = APIRouter()
@@ -130,22 +132,90 @@ def list_devices(
     return devices
 
 
-@router.get("/my-devices", response_model=List[DeviceOut])
+@router.get("/my-devices", response_model=List[DeviceWithProfileOut])
 def list_my_devices(
     client_id: UUID = Depends(get_current_client_id),
     db: Session = Depends(get_db),
     status_filter: Optional[str] = None,
 ):
     """
-    Lista todos los dispositivos del cliente autenticado.
+    Lista todos los dispositivos del cliente autenticado con información del perfil de la unidad asignada.
+
+    Incluye:
+    - Datos del dispositivo
+    - Información de la unidad asignada (si tiene asignación activa)
+    - Perfil de la unidad (color, icon_type, brand, model, year, serial, description)
+
     Se puede filtrar por estado.
     """
-    query = db.query(Device).filter(Device.client_id == client_id)
+    # Query con JOINs para obtener información del perfil
+    query = (
+        db.query(
+            Device.device_id,
+            Device.brand,
+            Device.model,
+            Device.firmware_version,
+            Device.client_id,
+            Device.status,
+            Device.last_comm_at,
+            Device.created_at,
+            Device.updated_at,
+            Device.last_assignment_at,
+            Device.notes,
+            # Datos de la unidad asignada
+            Unit.id.label("unit_id"),
+            Unit.name.label("unit_name"),
+            # Datos del perfil de la unidad
+            UnitProfile.color.label("profile_color"),
+            UnitProfile.icon_type.label("profile_icon_type"),
+            UnitProfile.brand.label("profile_brand"),
+            UnitProfile.model.label("profile_model"),
+            UnitProfile.year.label("profile_year"),
+            UnitProfile.serial.label("profile_serial"),
+            UnitProfile.description.label("profile_description"),
+        )
+        .outerjoin(
+            UnitDevice,
+            (UnitDevice.device_id == Device.device_id)
+            & (UnitDevice.unassigned_at.is_(None)),  # Solo asignaciones activas
+        )
+        .outerjoin(Unit, Unit.id == UnitDevice.unit_id)
+        .outerjoin(UnitProfile, UnitProfile.unit_id == Unit.id)
+        .filter(Device.client_id == client_id)
+    )
 
     if status_filter:
         query = query.filter(Device.status == status_filter)
 
-    devices = query.order_by(Device.created_at.desc()).all()
+    results = query.order_by(Device.created_at.desc()).all()
+
+    # Construir respuesta con los datos del perfil
+    devices = []
+    for row in results:
+        device = DeviceWithProfileOut(
+            device_id=row.device_id,
+            brand=row.brand,
+            model=row.model,
+            firmware_version=row.firmware_version,
+            client_id=row.client_id,
+            status=row.status,
+            last_comm_at=row.last_comm_at,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            last_assignment_at=row.last_assignment_at,
+            notes=row.notes,
+            unit_id=row.unit_id,
+            unit_name=row.unit_name,
+            profile_color=row.profile_color,
+            profile_icon_type=row.profile_icon_type,
+            profile_brand=row.profile_brand,
+            profile_model=row.profile_model,
+            profile_year=row.profile_year,
+            profile_serial=row.profile_serial,
+            profile_description=row.profile_description,
+        )
+        devices.append(device)
+
     return devices
 
 

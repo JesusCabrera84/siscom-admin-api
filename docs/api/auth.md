@@ -229,7 +229,7 @@ Renueva el access token y el id token usando un refresh token válido.
 
 **POST** `/api/v1/auth/resend-verification`
 
-Reenvía el código de verificación al email del usuario.
+Reenvía el correo de verificación de email a un usuario no verificado. Este endpoint funciona tanto para usuarios master como para usuarios normales.
 
 #### Request Body
 
@@ -243,41 +243,102 @@ Reenvía el código de verificación al email del usuario.
 
 ```json
 {
-  "message": "Si el email existe y no está verificado, recibirás un nuevo código.",
-  "email": "usuario@ejemplo.com"
+  "message": "Si la cuenta existe, se ha reenviado el correo de verificación."
 }
 ```
+
+#### Notas Importantes
+
+- **Usuarios Master**: El sistema reutiliza la misma contraseña temporal generada al crear el cliente. Esto permite reenviar la verificación múltiples veces sin perder la contraseña original.
+- **Usuarios Normales**: Se genera un token de verificación sin contraseña temporal.
+- **Seguridad**: Siempre retorna el mismo mensaje sin revelar si el usuario existe o ya está verificado.
+- El token de verificación expira en **24 horas**.
+- Los tokens anteriores no usados se invalidan automáticamente.
+- El usuario puede solicitar reenvío múltiples veces sin problemas.
+
+#### Flujo de Reutilización de Contraseña (Usuarios Master)
+
+1. Al crear un cliente, se genera `password_temp` con la contraseña proporcionada
+2. Si el usuario solicita reenvío, el sistema busca el `password_temp` del token más reciente
+3. El nuevo token reutiliza exactamente la misma `password_temp`
+4. Esto garantiza que la contraseña funcione sin importar cuántas veces se reenvíe
+5. Solo al verificar exitosamente, se elimina la `password_temp` de forma permanente
 
 ---
 
-### 8. Confirmar Email
+### 8. Verificar Email
 
-**POST** `/api/v1/auth/confirm-email`
+**POST** `/api/v1/auth/verify-email`
 
-Confirma el email del usuario usando el código enviado.
+Verifica el email de un usuario utilizando un token de verificación. Este endpoint unificado maneja tanto usuarios master como usuarios normales.
 
-#### Request Body
+#### Query Parameters
 
-```json
-{
-  "email": "usuario@ejemplo.com",
-  "code": "123456"
-}
+- `token` (string, requerido): Token de verificación recibido por email
+
+#### Ejemplo de Petición
+
+```bash
+POST /api/v1/auth/verify-email?token=abc123def456ghi789
 ```
 
 #### Response 200 OK
 
 ```json
 {
-  "message": "Email verificado exitosamente. Ahora puedes iniciar sesión.",
-  "email": "usuario@ejemplo.com"
+  "message": "Email verificado exitosamente. Tu cuenta ha sido activada y ahora puedes iniciar sesión."
 }
 ```
 
 #### Errores Comunes
 
-- **400 Bad Request**: Código inválido o expirado
+- **400 Bad Request**: Token inválido, expirado o ya usado
 - **400 Bad Request**: Email ya verificado
+- **400 Bad Request**: Token inválido para usuarios master (sin password_temp)
+- **404 Not Found**: Usuario o cliente no encontrado
+- **500 Internal Server Error**: Error al configurar usuario en Cognito
+
+#### Flujos de Verificación
+
+##### FLUJO A - Usuario Master con password_temp
+
+Para usuarios master (is_master=True) que tienen un token con contraseña temporal:
+
+1. Busca y valida el token de verificación
+2. Verifica que no esté expirado ni usado
+3. Busca el usuario y el cliente asociados
+4. Si el usuario no existe en Cognito:
+   - Crea el usuario en AWS Cognito con email verificado
+   - Establece la contraseña usando `password_temp`
+5. Si el usuario ya existe en Cognito:
+   - Actualiza la contraseña usando `password_temp`
+   - Marca el email como verificado
+6. Actualiza el usuario local:
+   - Asigna `cognito_sub` del usuario de Cognito
+   - Marca `email_verified = True`
+7. Activa el cliente (`status = ACTIVE`)
+8. Marca el token como usado
+9. **Elimina** `password_temp` permanentemente por seguridad
+
+##### FLUJO B - Usuario Master sin password_temp (Token Inválido)
+
+Si un usuario master tiene un token sin `password_temp`:
+
+- Retorna error: "Token inválido para usuarios master. Por favor, solicita un nuevo enlace de verificación."
+- Este caso solo ocurre con tokens antiguos o corruptos
+- El usuario debe solicitar reenvío de verificación
+
+##### FLUJO C - Usuario Normal (no master)
+
+Para usuarios normales (is_master=False):
+
+1. Busca y valida el token de verificación
+2. Verifica que no esté expirado ni usado
+3. Marca el email como verificado en la base de datos local
+4. Marca el token como usado
+5. **NO** crea usuario en Cognito (debe existir previamente)
+6. **NO** asigna contraseña
+7. **NO** modifica el estado del cliente
 
 ---
 
@@ -333,14 +394,53 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 
 ---
 
+## Flujo Completo de Verificación de Email
+
+### Para Usuarios Master (Creación de Cliente)
+
+1. Usuario se registra con `POST /api/v1/clients/` (nombre, email, password)
+2. Sistema crea:
+   - Cliente en estado `PENDING`
+   - Usuario master con `email_verified=False`
+   - Token con `password_temp` (guarda la contraseña proporcionada)
+3. Usuario recibe email con link de verificación
+4. Usuario hace clic en el link → `POST /api/v1/auth/verify-email?token=...`
+5. Sistema:
+   - Crea usuario en AWS Cognito
+   - Establece la contraseña usando `password_temp`
+   - Activa el cliente (`ACTIVE`)
+   - Elimina `password_temp`
+6. Usuario puede hacer login con su contraseña
+
+### Si el Usuario Master No Recibe el Email
+
+1. Usuario solicita reenvío → `POST /api/v1/auth/resend-verification`
+2. Sistema:
+   - Busca el `password_temp` del token más reciente
+   - **Reutiliza** la misma contraseña temporal (no genera una nueva)
+   - Crea nuevo token con el mismo `password_temp`
+   - Envía nuevo email
+3. Usuario puede reenviar cuantas veces necesite
+4. La contraseña siempre será la misma hasta que verifique
+
+### Para Usuarios Normales (Invitados)
+
+1. Usuario master invita a otro usuario
+2. Sistema crea usuario y envía token de verificación (sin `password_temp`)
+3. Usuario verifica email → `POST /api/v1/auth/verify-email?token=...`
+4. Sistema solo marca `email_verified=True` (no toca Cognito)
+
+---
+
 ## Notas de Seguridad
 
 - Los tokens de acceso expiran en 1 hora
-- Los códigos de verificación de email expiran en 24 horas
+- Los tokens de verificación de email expiran en 24 horas
 - Los códigos de recuperación de contraseña expiran en 1 hora
 - Los códigos son de 6 dígitos numéricos y se pueden usar solo una vez
 - El refresh token puede usarse para obtener nuevos access tokens sin reautenticar
 - Los refresh tokens tienen una duración mayor (típicamente 30 días)
-- Los endpoints públicos (no requieren autenticación): login, forgot-password, reset-password, resend-verification, confirm-email, refresh
+- **Contraseñas temporales**: Se reutilizan en reenvíos para usuarios master, nunca se envían por correo, solo se usan internamente para Cognito
+- Los endpoints públicos (no requieren autenticación): login, forgot-password, reset-password, resend-verification, verify-email, refresh
 - Los endpoints protegidos (requieren autenticación): password (cambiar contraseña), logout
 - Por seguridad, los endpoints forgot-password y resend-verification siempre retornan el mismo mensaje sin revelar si el email existe

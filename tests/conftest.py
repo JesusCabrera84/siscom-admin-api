@@ -1,18 +1,23 @@
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
-from uuid import uuid4
 
-from app.main import app
+from app.api.deps import (
+    get_current_client_id,
+    get_current_user_full,
+    get_current_user_id,
+)
 from app.db.session import get_db
-from app.api.deps import get_current_client_id, get_current_user_full, get_current_user_id
+from app.main import app
 from app.models.client import Client
-from app.models.user import User
 from app.models.device import Device
 from app.models.plan import Plan
 from app.models.unit import Unit
+from app.models.user import User
 
 # Base de datos SQLite en memoria para tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -44,17 +49,18 @@ def client(db_session):
     """
     Cliente de prueba de FastAPI con base de datos mockeada.
     """
+
     def override_get_db():
         try:
             yield db_session
         finally:
             pass
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -159,20 +165,20 @@ def authenticated_client(client, test_client_data, test_user_data):
     """
     Cliente autenticado que bypasea la validación de Cognito.
     """
+
     def override_get_current_client_id():
         return test_client_data.id
-    
+
     def override_get_current_user_full():
         return test_user_data
-    
+
     def override_get_current_user_id():
         return test_user_data.id
-    
+
     app.dependency_overrides[get_current_client_id] = override_get_current_client_id
     app.dependency_overrides[get_current_user_full] = override_get_current_user_full
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
-    
-    yield client
-    
-    app.dependency_overrides.clear()
 
+    yield client
+
+    app.dependency_overrides.clear()

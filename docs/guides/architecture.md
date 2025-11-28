@@ -113,13 +113,35 @@ Enviar email de verificación
 ```
 Usuario hace clic en link del email
   ↓
-POST /api/v1/clients/confirm-email
+POST /api/v1/auth/verify-email?token=...
+  ↓
+Validar token (no expirado, no usado)
   ↓
 Crear usuario en AWS Cognito
+  ↓
+Establecer contraseña usando password_temp
   ↓
 Actualizar User.cognito_sub
   ↓
 Actualizar Client.status = ACTIVE
+  ↓
+Eliminar password_temp permanentemente
+```
+
+**Reenvío de Verificación:**
+
+```
+Usuario solicita reenvío
+  ↓
+POST /api/v1/auth/resend-verification
+  ↓
+Buscar password_temp del token previo
+  ↓
+Crear nuevo token con MISMO password_temp
+  ↓
+Invalidar tokens anteriores
+  ↓
+Enviar nuevo email
 ```
 
 ### 3. Login

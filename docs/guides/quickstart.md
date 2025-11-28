@@ -112,16 +112,24 @@ curl -X POST http://localhost:8000/api/v1/clients/ \
 
 ### Verificar Email
 
-1. Revisa tu email para el código de verificación
-2. Confirma el email:
+1. Revisa tu email para el link de verificación
+2. Confirma el email usando el token del link:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/clients/confirm-email \
+curl -X POST "http://localhost:8000/api/v1/auth/verify-email?token=token_recibido_por_email"
+```
+
+**Si no recibes el email, puedes solicitar reenvío:**
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/resend-verification \
   -H "Content-Type: application/json" \
   -d '{
-    "token": "token_recibido_por_email"
+    "email": "admin@miempresa.com"
   }'
 ```
+
+**Nota:** El sistema reutiliza la misma contraseña en todos los reenvíos, garantizando consistencia.
 
 ---
 

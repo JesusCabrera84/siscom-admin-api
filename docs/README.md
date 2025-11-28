@@ -28,6 +28,11 @@ Comienza aquí si eres nuevo en el proyecto:
 - **[Servicios](api/services.md)** - Activación y gestión de suscripciones de rastreo
 - **[Planes](api/plans.md)** - Catálogo de planes disponibles
 
+### Gestión de Unidades
+
+- **[Unidades](api/units.md)** - Administración de unidades (vehículos, activos, etc.)
+- **[Perfiles de Unidades](api/unit-profiles.md)** - Administración de perfiles de unidades y vehículos
+
 ### Comercial
 
 - **[Órdenes](api/orders.md)** - Compra de dispositivos GPS
@@ -97,10 +102,12 @@ Estos endpoints **NO** requieren autenticación:
 - `GET /` - Health check
 - `GET /api/v1/plans/` - Listar planes
 - `POST /api/v1/clients/` - Crear cliente (registro)
-- `POST /api/v1/clients/confirm-email` - Confirmar email
+- `POST /api/v1/auth/verify-email?token=...` - Verificar email (unificado)
+- `POST /api/v1/auth/resend-verification` - Reenviar verificación (unificado)
 - `POST /api/v1/auth/login` - Login
 - `POST /api/v1/auth/forgot-password` - Recuperar contraseña
 - `POST /api/v1/auth/reset-password` - Restablecer contraseña
+- `POST /api/v1/auth/refresh` - Renovar tokens
 
 ---
 
@@ -118,18 +125,23 @@ POST /api/v1/clients/
 }
 
 # 2. Verificar email (usar token del email)
-POST /api/v1/clients/confirm-email
+POST /api/v1/auth/verify-email?token=abc123...
+
+# 3. Si no recibe el email, puede solicitar reenvío
+POST /api/v1/auth/resend-verification
 {
-  "token": "..."
+  "email": "admin@abc.com"
 }
 
-# 3. Login
+# 4. Login (después de verificar el email)
 POST /api/v1/auth/login
 {
   "email": "admin@abc.com",
   "password": "Password123!"
 }
 ```
+
+**Nota importante:** El sistema reutiliza la misma contraseña en todos los reenvíos de verificación, garantizando que la contraseña que eligió al registrarse siempre funcione.
 
 ### 2. Comprar y Activar Dispositivo
 

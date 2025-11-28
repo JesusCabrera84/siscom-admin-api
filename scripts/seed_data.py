@@ -2,19 +2,22 @@
 Script para poblar datos iniciales en la base de datos.
 Ejecutar después de las migraciones: python scripts/seed_data.py
 """
+
 import sys
 from pathlib import Path
 
 # Agregar el directorio raíz al path
 sys.path.append(str(Path(__file__).parent.parent))
 
+from uuid import uuid4
+
 from sqlalchemy.orm import Session
+
 from app.db.session import SessionLocal
 from app.models.client import Client, ClientStatus
-from app.models.user import User
-from app.models.plan import Plan
 from app.models.device import Device
-from uuid import uuid4
+from app.models.plan import Plan
+from app.models.user import User
 
 
 def seed_plans(db: Session):
@@ -71,7 +74,7 @@ def seed_plans(db: Session):
             },
         ),
     ]
-    
+
     for plan in plans:
         existing = db.query(Plan).filter(Plan.name == plan.name).first()
         if not existing:
@@ -79,7 +82,7 @@ def seed_plans(db: Session):
             print(f"✓ Plan creado: {plan.name}")
         else:
             print(f"- Plan ya existe: {plan.name}")
-    
+
     db.commit()
 
 
@@ -91,16 +94,16 @@ def seed_test_client(db: Session):
         name="Transportes Demo",
         status=ClientStatus.ACTIVE.value,
     )
-    
+
     existing_client = db.query(Client).filter(Client.name == client.name).first()
     if existing_client:
         print(f"- Cliente ya existe: {client.name}")
         return existing_client
-    
+
     db.add(client)
     db.flush()
     print(f"✓ Cliente creado: {client.name}")
-    
+
     # Crear usuario de prueba
     # Nota: En producción, el cognito_sub vendría de AWS Cognito
     user = User(
@@ -114,7 +117,7 @@ def seed_test_client(db: Session):
     db.add(user)
     db.flush()
     print(f"✓ Usuario creado: {user.email}")
-    
+
     # Crear algunos dispositivos de prueba
     devices = [
         Device(
@@ -142,13 +145,13 @@ def seed_test_client(db: Session):
             active=True,
         ),
     ]
-    
+
     for device in devices:
         db.add(device)
         print(f"✓ Dispositivo creado: {device.device_id}")
-    
+
     db.commit()
-    
+
     return client
 
 
@@ -156,18 +159,18 @@ def main():
     print("=" * 60)
     print("Poblando base de datos con datos iniciales...")
     print("=" * 60)
-    
+
     db = SessionLocal()
-    
+
     try:
         # Crear planes
         print("\n📋 Creando planes...")
         seed_plans(db)
-        
+
         # Crear cliente y usuario de prueba
         print("\n👥 Creando cliente de prueba...")
         seed_test_client(db)
-        
+
         print("\n" + "=" * 60)
         print("✓ Datos iniciales creados exitosamente!")
         print("=" * 60)
@@ -176,7 +179,7 @@ def main():
         print("  Cognito Sub: demo-user-cognito-sub-123")
         print("\nPuedes usar estos datos para testing.")
         print("=" * 60)
-        
+
     except Exception as e:
         print(f"\n❌ Error al poblar datos: {e}")
         db.rollback()
@@ -187,4 +190,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

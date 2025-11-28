@@ -13,12 +13,20 @@ from app.db.session import get_db
 from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
+from app.models.unit_profile import UnitProfile
 from app.models.user import User
 from app.models.user_unit import UserUnit
+from app.models.vehicle_profile import VehicleProfile
 from app.schemas.device import DeviceOut
 from app.schemas.unit import UnitCreate, UnitDetail, UnitOut, UnitUpdate, UnitWithDevice
 from app.schemas.unit_device import UnitDeviceAssign, UnitDeviceOut
+from app.schemas.unit_profile import UnitProfileComplete, UnitProfileUpdate
 from app.schemas.user_unit import UserUnitAssign, UserUnitDetail
+from app.schemas.vehicle_profile import (
+    VehicleProfileCreate,
+    VehicleProfileOut,
+    VehicleProfileUpdate,
+)
 
 router = APIRouter()
 
@@ -202,6 +210,8 @@ def create_unit(
     Crea una nueva unidad.
 
     Requiere: Usuario maestro del cliente.
+
+    Automáticamente crea un unit_profile con unit_type="vehicle" por defecto.
     """
     # Validar que sea maestro
     if not current_user.is_master:
@@ -217,6 +227,16 @@ def create_unit(
         description=unit.description,
     )
     db.add(new_unit)
+    db.flush()  # Flush para obtener el ID sin hacer commit aún
+
+    # Crear unit_profile automáticamente
+    unit_profile = UnitProfile(
+        unit_id=new_unit.id,
+        unit_type="vehicle",  # Tipo por defecto
+    )
+    db.add(unit_profile)
+
+    # Commit de ambos
     db.commit()
     db.refresh(new_unit)
 
@@ -545,6 +565,323 @@ def assign_device_to_unit(
     db.refresh(new_assignment)
 
     return new_assignment
+
+
+# ============================================
+# Unit Profile Endpoints
+# ============================================
+
+
+@router.get("/{unit_id}/profile", response_model=UnitProfileComplete)
+def get_unit_profile(
+    unit_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Obtiene el perfil completo de una unidad (unit_profile + vehicle_profile).
+
+    Requiere: Acceso a la unidad (maestro o en user_units).
+
+    El unit_profile siempre debe existir (se crea automáticamente con la unidad).
+    Si por alguna razón no existe, lo crea como medida de seguridad.
+    Si unit_type ≠ "vehicle", el campo "vehicle" viene como null.
+    """
+    # Verificar acceso a la unidad
+    check_unit_access(db, unit_id, current_user)
+
+    # Buscar o crear unit_profile (por seguridad, aunque debe existir siempre)
+    unit_profile = db.query(UnitProfile).filter(UnitProfile.unit_id == unit_id).first()
+
+    if not unit_profile:
+        # Crear profile por defecto con unit_type "vehicle" (fallback de seguridad)
+        unit_profile = UnitProfile(
+            unit_id=unit_id,
+            unit_type="vehicle",
+        )
+        db.add(unit_profile)
+        db.commit()
+        db.refresh(unit_profile)
+
+    # Buscar vehicle_profile si es un vehículo
+    vehicle_profile = None
+    if unit_profile.unit_type == "vehicle":
+        vehicle_profile = (
+            db.query(VehicleProfile).filter(VehicleProfile.unit_id == unit_id).first()
+        )
+
+    # Construir respuesta
+    response = UnitProfileComplete(
+        unit_id=unit_profile.unit_id,
+        unit_type=unit_profile.unit_type,
+        icon_type=unit_profile.icon_type,
+        description=unit_profile.description,
+        brand=unit_profile.brand,
+        model=unit_profile.model,
+        color=unit_profile.color,
+        year=unit_profile.year,
+        vehicle=vehicle_profile,
+    )
+
+    return response
+
+
+@router.patch("/{unit_id}/profile", response_model=UnitProfileComplete)
+def update_unit_profile(
+    unit_id: UUID,
+    profile_update: UnitProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Actualiza el perfil de una unidad (unit_profile + vehicle_profile de forma unificada).
+
+    Requiere:
+    - Usuario maestro, o
+    - Usuario con rol 'editor' o 'admin' en user_units
+
+    Comportamiento:
+    - Actualiza campos universales de unit_profile (icon_type, description, brand, model, color, year)
+    - Si unit_type = "vehicle" y se envían campos de vehículo (plate, vin, fuel_type, passengers):
+      * Si vehicle_profile NO existe → lo crea automáticamente (upsert)
+      * Si vehicle_profile existe → lo actualiza
+    - Ignora campos de vehículo si unit_type ≠ "vehicle"
+    - Retorna el perfil completo unificado
+
+    Body puede incluir cualquier combinación de campos:
+    {
+      "icon_type": "truck",
+      "brand": "Ford",
+      "model": "F-350",
+      "color": "Rojo",
+      "year": 2020,
+      "plate": "ABC-123",
+      "vin": "1FDUF3GT5GED12345",
+      "fuel_type": "Diesel",
+      "passengers": 5
+    }
+    """
+    # Verificar acceso con rol editor o superior
+    check_unit_access(db, unit_id, current_user, required_role="editor")
+
+    # Buscar o crear unit_profile
+    unit_profile = db.query(UnitProfile).filter(UnitProfile.unit_id == unit_id).first()
+
+    if not unit_profile:
+        # Crear profile por defecto (fallback de seguridad, aunque debe existir siempre)
+        unit_profile = UnitProfile(
+            unit_id=unit_id,
+            unit_type="vehicle",
+        )
+        db.add(unit_profile)
+        db.flush()
+
+    # Obtener datos del body
+    update_data = profile_update.model_dump(exclude_unset=True)
+
+    # Separar campos de unit_profile y vehicle_profile
+    unit_profile_fields = {
+        "icon_type",
+        "description",
+        "brand",
+        "model",
+        "color",
+        "year",
+    }
+    vehicle_profile_fields = {"plate", "vin", "fuel_type", "passengers"}
+
+    # Actualizar campos de unit_profile
+    for field in unit_profile_fields:
+        if field in update_data:
+            setattr(unit_profile, field, update_data[field])
+
+    unit_profile.updated_at = datetime.utcnow()
+    db.add(unit_profile)
+    db.flush()
+
+    # Manejar vehicle_profile si es un vehículo
+    vehicle_profile = None
+    if unit_profile.unit_type == "vehicle":
+        # Verificar si hay campos de vehículo en el body
+        vehicle_data = {
+            field: update_data[field]
+            for field in vehicle_profile_fields
+            if field in update_data
+        }
+
+        if vehicle_data:
+            # Buscar o crear vehicle_profile (upsert)
+            vehicle_profile = (
+                db.query(VehicleProfile)
+                .filter(VehicleProfile.unit_id == unit_id)
+                .first()
+            )
+
+            if vehicle_profile:
+                # Actualizar existente
+                for field, value in vehicle_data.items():
+                    setattr(vehicle_profile, field, value)
+                vehicle_profile.updated_at = datetime.utcnow()
+            else:
+                # Crear nuevo (upsert)
+                vehicle_profile = VehicleProfile(
+                    unit_id=unit_id,
+                    plate=vehicle_data.get("plate"),
+                    vin=vehicle_data.get("vin"),
+                    fuel_type=vehicle_data.get("fuel_type"),
+                    passengers=vehicle_data.get("passengers"),
+                )
+
+            db.add(vehicle_profile)
+        else:
+            # No hay campos de vehículo, solo buscar si existe
+            vehicle_profile = (
+                db.query(VehicleProfile)
+                .filter(VehicleProfile.unit_id == unit_id)
+                .first()
+            )
+
+    # Commit de todos los cambios
+    db.commit()
+    db.refresh(unit_profile)
+    if vehicle_profile:
+        db.refresh(vehicle_profile)
+
+    # Construir respuesta
+    response = UnitProfileComplete(
+        unit_id=unit_profile.unit_id,
+        unit_type=unit_profile.unit_type,
+        icon_type=unit_profile.icon_type,
+        description=unit_profile.description,
+        brand=unit_profile.brand,
+        model=unit_profile.model,
+        color=unit_profile.color,
+        year=unit_profile.year,
+        vehicle=vehicle_profile,
+    )
+
+    return response
+
+
+@router.post(
+    "/{unit_id}/profile/vehicle",
+    response_model=VehicleProfileOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_vehicle_profile(
+    unit_id: UUID,
+    vehicle_data: VehicleProfileCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Crea un perfil de vehículo (vehicle_profile) para una unidad.
+
+    NOTA: Este endpoint se mantiene por compatibilidad.
+    Se recomienda usar PATCH /units/{unit_id}/profile con campos de vehículo incluidos,
+    que hace upsert automático.
+
+    Requiere:
+    - Usuario maestro, o
+    - Usuario con rol 'editor' o 'admin' en user_units
+
+    Validaciones:
+    - El unit_profile debe existir y tener unit_type = "vehicle"
+    - No debe existir ya un vehicle_profile para esta unidad
+    """
+    # Verificar acceso con rol editor o superior
+    check_unit_access(db, unit_id, current_user, required_role="editor")
+
+    # Verificar que existe unit_profile
+    unit_profile = db.query(UnitProfile).filter(UnitProfile.unit_id == unit_id).first()
+
+    if not unit_profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El perfil de unidad no existe. Usa GET /units/{unit_id}/profile primero para crearlo.",
+        )
+
+    # Validar que sea un vehículo
+    if unit_profile.unit_type != "vehicle":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El perfil de vehículo solo se puede crear para unidades de tipo 'vehicle' (tipo actual: {unit_profile.unit_type})",
+        )
+
+    # Verificar que no exista ya un vehicle_profile
+    existing_vehicle = (
+        db.query(VehicleProfile).filter(VehicleProfile.unit_id == unit_id).first()
+    )
+
+    if existing_vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe un perfil de vehículo para esta unidad. Usa PATCH para actualizarlo.",
+        )
+
+    # Crear vehicle_profile
+    vehicle_profile = VehicleProfile(
+        unit_id=unit_id,
+        plate=vehicle_data.plate,
+        vin=vehicle_data.vin,
+        fuel_type=vehicle_data.fuel_type,
+        passengers=vehicle_data.passengers,
+    )
+
+    db.add(vehicle_profile)
+    db.commit()
+    db.refresh(vehicle_profile)
+
+    return vehicle_profile
+
+
+@router.patch("/{unit_id}/profile/vehicle", response_model=VehicleProfileOut)
+def update_vehicle_profile(
+    unit_id: UUID,
+    vehicle_update: VehicleProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Actualiza el perfil de vehículo (vehicle_profile) de una unidad.
+
+    NOTA: Este endpoint se mantiene por compatibilidad.
+    Se recomienda usar PATCH /units/{unit_id}/profile con campos de vehículo incluidos,
+    que hace upsert automático.
+
+    Requiere:
+    - Usuario maestro, o
+    - Usuario con rol 'editor' o 'admin' en user_units
+
+    Validaciones:
+    - El vehicle_profile debe existir (retorna 404 si no existe)
+    """
+    # Verificar acceso con rol editor o superior
+    check_unit_access(db, unit_id, current_user, required_role="editor")
+
+    # Buscar vehicle_profile
+    vehicle_profile = (
+        db.query(VehicleProfile).filter(VehicleProfile.unit_id == unit_id).first()
+    )
+
+    if not vehicle_profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El perfil de vehículo no existe. Usa POST /units/{unit_id}/profile/vehicle para crearlo.",
+        )
+
+    # Actualizar campos
+    update_data = vehicle_update.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(vehicle_profile, field, value)
+
+    vehicle_profile.updated_at = datetime.utcnow()
+    db.add(vehicle_profile)
+    db.commit()
+    db.refresh(vehicle_profile)
+
+    return vehicle_profile
 
 
 @router.get("/{unit_id}/users", response_model=List[UserUnitDetail])

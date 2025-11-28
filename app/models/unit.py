@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel
 if TYPE_CHECKING:
     from app.models.client import Client
     from app.models.unit_device import UnitDevice
+    from app.models.unit_profile import UnitProfile
     from app.models.user_unit import UserUnit
 
 
@@ -49,4 +50,8 @@ class Unit(SQLModel, table=True):
     )
     user_units: list["UserUnit"] = Relationship(
         back_populates="unit", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    unit_profile: Optional["UnitProfile"] = Relationship(
+        back_populates="unit",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": False},
     )

@@ -1,7 +1,7 @@
 """
 Tests de órdenes.
 """
-import pytest
+
 from fastapi import status
 
 
@@ -25,10 +25,10 @@ def test_create_order(authenticated_client, test_client_data):
             },
         ]
     }
-    
+
     response = authenticated_client.post("/api/v1/orders/", json=order_data)
     assert response.status_code == status.HTTP_201_CREATED
-    
+
     data = response.json()
     assert data["status"] == "PENDING"
     assert float(data["total_amount"]) == 3400.00  # (1500*2) + (200*2)
@@ -52,11 +52,11 @@ def test_list_orders(authenticated_client, test_client_data):
         ]
     }
     authenticated_client.post("/api/v1/orders/", json=order_data)
-    
+
     # Listar órdenes
     response = authenticated_client.get("/api/v1/orders/")
     assert response.status_code == status.HTTP_200_OK
-    
+
     data = response.json()
     assert isinstance(data, list)
     assert len(data) >= 1
@@ -79,12 +79,11 @@ def test_get_order_detail(authenticated_client, test_client_data):
     }
     create_response = authenticated_client.post("/api/v1/orders/", json=order_data)
     order_id = create_response.json()["id"]
-    
+
     # Obtener detalle
     response = authenticated_client.get(f"/api/v1/orders/{order_id}")
     assert response.status_code == status.HTTP_200_OK
-    
+
     data = response.json()
     assert data["id"] == order_id
     assert float(data["total_amount"]) == 299.00
-

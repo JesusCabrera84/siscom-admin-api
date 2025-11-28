@@ -1,13 +1,13 @@
 """
 Tests de endpoints de dispositivos con nueva estructura de estados y eventos.
 """
-import pytest
-from fastapi import status
 
+from fastapi import status
 
 # ============================================
 # Tests de Creación y Listado
 # ============================================
+
 
 def test_create_device(authenticated_client, test_client_data):
     """
@@ -18,7 +18,7 @@ def test_create_device(authenticated_client, test_client_data):
         "brand": "TestBrand",
         "model": "TestModel",
         "firmware_version": "1.0.0",
-        "notes": "Dispositivo de prueba"
+        "notes": "Dispositivo de prueba",
     }
     response = authenticated_client.post("/api/v1/devices/", json=device_data)
     assert response.status_code == status.HTTP_201_CREATED
@@ -78,11 +78,11 @@ def test_list_my_devices(authenticated_client, test_device_data, test_client_dat
         json={
             "new_status": "enviado",
             "client_id": str(test_client_data.id),
-            "notes": "Test envío"
-        }
+            "notes": "Test envío",
+        },
     )
     assert response.status_code == status.HTTP_200_OK
-    
+
     # Ahora listar mis dispositivos
     response = authenticated_client.get("/api/v1/devices/my-devices")
     assert response.status_code == status.HTTP_200_OK
@@ -113,6 +113,7 @@ def test_get_device_not_found(authenticated_client):
 # Tests de Actualización
 # ============================================
 
+
 def test_update_device_info(authenticated_client, test_device_data):
     """
     Test que actualiza información básica del dispositivo.
@@ -121,11 +122,10 @@ def test_update_device_info(authenticated_client, test_device_data):
         "brand": "UpdatedBrand",
         "model": "UpdatedModel",
         "firmware_version": "2.0.0",
-        "notes": "Actualizado"
+        "notes": "Actualizado",
     }
     response = authenticated_client.patch(
-        f"/api/v1/devices/{test_device_data.device_id}",
-        json=update_data
+        f"/api/v1/devices/{test_device_data.device_id}", json=update_data
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -138,7 +138,10 @@ def test_update_device_info(authenticated_client, test_device_data):
 # Tests de Cambios de Estado
 # ============================================
 
-def test_status_change_to_enviado(authenticated_client, test_device_data, test_client_data):
+
+def test_status_change_to_enviado(
+    authenticated_client, test_device_data, test_client_data
+):
     """
     Test que cambia estado a 'enviado' con cliente asignado.
     """
@@ -147,8 +150,8 @@ def test_status_change_to_enviado(authenticated_client, test_device_data, test_c
         json={
             "new_status": "enviado",
             "client_id": str(test_client_data.id),
-            "notes": "Enviado via DHL"
-        }
+            "notes": "Enviado via DHL",
+        },
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -156,71 +159,65 @@ def test_status_change_to_enviado(authenticated_client, test_device_data, test_c
     assert data["client_id"] == str(test_client_data.id)
 
 
-def test_status_change_to_enviado_without_client(authenticated_client, test_device_data):
+def test_status_change_to_enviado_without_client(
+    authenticated_client, test_device_data
+):
     """
     Test que falla al cambiar a 'enviado' sin client_id.
     """
     response = authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "enviado",
-            "notes": "Test sin cliente"
-        }
+        json={"new_status": "enviado", "notes": "Test sin cliente"},
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_status_change_to_entregado(authenticated_client, test_device_data, test_client_data):
+def test_status_change_to_entregado(
+    authenticated_client, test_device_data, test_client_data
+):
     """
     Test que cambia estado a 'entregado'.
     """
     # Primero enviar
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "enviado",
-            "client_id": str(test_client_data.id)
-        }
+        json={"new_status": "enviado", "client_id": str(test_client_data.id)},
     )
-    
+
     # Luego marcar como entregado
     response = authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "entregado",
-            "notes": "Recibido por Juan"
-        }
+        json={"new_status": "entregado", "notes": "Recibido por Juan"},
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["status"] == "entregado"
 
 
-def test_status_change_to_asignado(authenticated_client, test_device_data, test_client_data, test_unit_data):
+def test_status_change_to_asignado(
+    authenticated_client, test_device_data, test_client_data, test_unit_data
+):
     """
     Test que cambia estado a 'asignado' con unidad.
     """
     # Preparar: enviar y entregar
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "enviado",
-            "client_id": str(test_client_data.id)
-        }
+        json={"new_status": "enviado", "client_id": str(test_client_data.id)},
     )
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={"new_status": "entregado"}
+        json={"new_status": "entregado"},
     )
-    
+
     # Asignar a unidad
     response = authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
         json={
             "new_status": "asignado",
             "unit_id": str(test_unit_data.id),
-            "notes": "Instalado en camión"
-        }
+            "notes": "Instalado en camión",
+        },
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -229,54 +226,46 @@ def test_status_change_to_asignado(authenticated_client, test_device_data, test_
     assert data["last_assignment_at"] is not None
 
 
-def test_status_change_to_asignado_without_unit(authenticated_client, test_device_data, test_client_data):
+def test_status_change_to_asignado_without_unit(
+    authenticated_client, test_device_data, test_client_data
+):
     """
     Test que falla al cambiar a 'asignado' sin unit_id.
     """
     # Preparar
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "enviado",
-            "client_id": str(test_client_data.id)
-        }
+        json={"new_status": "enviado", "client_id": str(test_client_data.id)},
     )
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={"new_status": "entregado"}
+        json={"new_status": "entregado"},
     )
-    
+
     # Intentar asignar sin unidad
     response = authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "asignado",
-            "notes": "Sin unidad"
-        }
+        json={"new_status": "asignado", "notes": "Sin unidad"},
     )
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_status_change_to_devuelto(authenticated_client, test_device_data, test_client_data):
+def test_status_change_to_devuelto(
+    authenticated_client, test_device_data, test_client_data
+):
     """
     Test que cambia estado a 'devuelto' y quita cliente.
     """
     # Preparar: enviar
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "enviado",
-            "client_id": str(test_client_data.id)
-        }
+        json={"new_status": "enviado", "client_id": str(test_client_data.id)},
     )
-    
+
     # Devolver
     response = authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "devuelto",
-            "notes": "Cliente canceló servicio"
-        }
+        json={"new_status": "devuelto", "notes": "Cliente canceló servicio"},
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -290,10 +279,7 @@ def test_status_change_to_inactivo(authenticated_client, test_device_data):
     """
     response = authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "inactivo",
-            "notes": "Dispositivo dañado"
-        }
+        json={"new_status": "inactivo", "notes": "Dispositivo dañado"},
     )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
@@ -304,11 +290,14 @@ def test_status_change_to_inactivo(authenticated_client, test_device_data):
 # Tests de Eventos
 # ============================================
 
+
 def test_get_device_events(authenticated_client, test_device_data):
     """
     Test que obtiene el historial de eventos de un dispositivo.
     """
-    response = authenticated_client.get(f"/api/v1/devices/{test_device_data.device_id}/events")
+    response = authenticated_client.get(
+        f"/api/v1/devices/{test_device_data.device_id}/events"
+    )
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert isinstance(data, list)
@@ -327,9 +316,11 @@ def test_add_device_note(authenticated_client, test_device_data):
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert "Test nota administrativa" in data["notes"]
-    
+
     # Verificar que se creó el evento
-    response = authenticated_client.get(f"/api/v1/devices/{test_device_data.device_id}/events")
+    response = authenticated_client.get(
+        f"/api/v1/devices/{test_device_data.device_id}/events"
+    )
     events = response.json()
     assert any(e["event_type"] == "nota" for e in events)
 
@@ -338,23 +329,23 @@ def test_add_device_note(authenticated_client, test_device_data):
 # Tests de Listado Especial
 # ============================================
 
-def test_list_unassigned_devices(authenticated_client, test_device_data, test_client_data):
+
+def test_list_unassigned_devices(
+    authenticated_client, test_device_data, test_client_data
+):
     """
     Test que lista dispositivos no asignados a unidades (entregados o devueltos).
     """
     # Preparar: poner dispositivo en estado 'entregado'
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={
-            "new_status": "enviado",
-            "client_id": str(test_client_data.id)
-        }
+        json={"new_status": "enviado", "client_id": str(test_client_data.id)},
     )
     authenticated_client.patch(
         f"/api/v1/devices/{test_device_data.device_id}/status",
-        json={"new_status": "entregado"}
+        json={"new_status": "entregado"},
     )
-    
+
     # Listar no asignados
     response = authenticated_client.get("/api/v1/devices/unassigned")
     assert response.status_code == status.HTTP_200_OK
@@ -362,4 +353,3 @@ def test_list_unassigned_devices(authenticated_client, test_device_data, test_cl
     assert isinstance(data, list)
     # El dispositivo debe aparecer
     assert any(d["device_id"] == test_device_data.device_id for d in data)
-

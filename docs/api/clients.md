@@ -45,9 +45,18 @@ Crea un nuevo cliente con un usuario maestro asociado. Este es el endpoint de re
 
 1. Crea el cliente con estado `PENDING`
 2. Crea el usuario maestro asociado (sin `cognito_sub` aún)
-3. Genera token de verificación de email
-4. Envía email de verificación
-5. El usuario debe confirmar su email antes de poder iniciar sesión
+3. Genera token de verificación de email con `password_temp`
+4. Guarda la contraseña temporalmente en el token (para usarla en Cognito después)
+5. Envía email de verificación con link al token
+6. El usuario debe confirmar su email con `POST /api/v1/auth/verify-email?token=...` antes de poder iniciar sesión
+
+#### Nota Importante
+
+La contraseña proporcionada en este endpoint se guarda temporalmente en el token de verificación (`password_temp`). Esta contraseña temporal:
+- Se reutiliza en todos los reenvíos de verificación
+- Solo se usa internamente para crear el usuario en AWS Cognito
+- Nunca se envía por correo electrónico
+- Se elimina permanentemente después de la verificación exitosa
 
 ---
 
@@ -71,71 +80,6 @@ Authorization: Bearer <access_token>
   "name": "Transportes XYZ",
   "status": "ACTIVE",
   "created_at": "2024-01-15T10:30:00Z"
-}
-```
-
----
-
-### 3. Confirmar Email del Cliente
-
-**POST** `/api/v1/clients/confirm-email`
-
-Confirma el email del usuario maestro y activa el cliente en Cognito.
-
-#### Request Body
-
-```json
-{
-  "token": "abc123def456..."
-}
-```
-
-#### Validaciones
-
-- El token debe ser válido y no estar expirado
-- El token no debe haber sido usado
-- Debe ser un token de tipo `EMAIL_VERIFICATION`
-
-#### Response 200 OK
-
-```json
-{
-  "message": "Email verificado exitosamente. Cliente activado.",
-  "client_id": "456e4567-e89b-12d3-a456-426614174000",
-  "email": "admin@transportesxyz.com"
-}
-```
-
-#### Proceso Interno
-
-1. Valida el token de verificación
-2. Crea el usuario en AWS Cognito
-3. Actualiza el usuario con `cognito_sub`
-4. Actualiza el cliente a estado `ACTIVE`
-5. Marca el token como usado
-
----
-
-### 4. Reenviar Email de Verificación
-
-**POST** `/api/v1/clients/resend-verification`
-
-Reenvía el email de verificación a un cliente pendiente.
-
-#### Request Body
-
-```json
-{
-  "email": "admin@transportesxyz.com"
-}
-```
-
-#### Response 200 OK
-
-```json
-{
-  "message": "Si el email existe y no está verificado, recibirás un nuevo código.",
-  "email": "admin@transportesxyz.com"
 }
 ```
 
@@ -175,7 +119,7 @@ Usuario → POST /api/v1/clients/
         ↓
   Usuario master creado (sin cognito_sub)
         ↓
-  Token de verificación generado
+  Token de verificación generado con password_temp
         ↓
   Email enviado con link de verificación
 ```
@@ -185,24 +129,38 @@ Usuario → POST /api/v1/clients/
 ```
 Usuario → Clic en link del email
         ↓
-  POST /api/v1/clients/confirm-email
+  POST /api/v1/auth/verify-email?token=...
         ↓
   Usuario creado en AWS Cognito
         ↓
+  Contraseña establecida desde password_temp
+        ↓
   Cliente actualizado a ACTIVE
         ↓
-  Usuario puede hacer login
-```
-
-### 3. Email No Recibido
-
-```
-Usuario → POST /api/v1/clients/resend-verification
+  password_temp eliminado permanentemente
         ↓
-  Token renovado
+  Usuario puede hacer login con su contraseña
+```
+
+### 3. Email No Recibido (Reenvío)
+
+```
+Usuario → POST /api/v1/auth/resend-verification
+        ↓
+  Sistema busca password_temp del token previo
+        ↓
+  Nuevo token generado con el MISMO password_temp
+        ↓
+  Tokens anteriores invalidados
         ↓
   Nuevo email enviado
 ```
+
+**Ventaja del Sistema de Reenvío:**
+- El usuario puede solicitar reenvío 1, 10 o 100 veces
+- La contraseña siempre será la misma (la que eligió al registrarse)
+- No hay riesgo de inconsistencias
+- Funciona incluso si los tokens expiran
 
 ---
 
@@ -254,6 +212,17 @@ Un cliente tiene:
 - Endpoint público (no requiere autenticación)
 - Rate limiting recomendado
 - Validación de email para evitar spam
+- La contraseña se guarda temporalmente solo durante el proceso de verificación
+- El `password_temp` se elimina permanentemente después de la verificación exitosa
+
+### Verificación de Email
+
+- Los endpoints de verificación están en `/api/v1/auth/`:
+  - `POST /api/v1/auth/resend-verification` - Reenviar verificación
+  - `POST /api/v1/auth/verify-email?token=...` - Verificar email
+- El sistema reutiliza `password_temp` en reenvíos para garantizar consistencia
+- Los tokens expiran en 24 horas pero pueden reenviarse indefinidamente
+- La contraseña nunca se envía por correo, solo se usa internamente
 
 ### Acceso a Datos
 
@@ -267,3 +236,4 @@ Un cliente tiene:
 - `is_master=True` por defecto
 - Tiene permisos para invitar usuarios
 - No puede eliminarse sin eliminar el cliente
+- Solo los usuarios master tienen `password_temp` en el token de verificación
