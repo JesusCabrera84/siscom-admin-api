@@ -2,10 +2,14 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_client_id, get_current_user_id
+from app.api.deps import (
+    get_current_client_id,
+    get_current_user_full,
+    get_current_user_id,
+)
 from app.db.session import get_db
 from app.models.client import Client
 from app.models.device import Device, DeviceEvent
@@ -538,3 +542,126 @@ def add_device_note(
     db.refresh(device)
 
     return device
+
+
+@router.get("/{device_id}/trips")
+def get_device_trips(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_full),
+    start_date: datetime = Query(
+        ..., description="Fecha de inicio (ISO 8601, obligatorio)"
+    ),
+    end_date: datetime = Query(..., description="Fecha de fin (ISO 8601, obligatorio)"),
+    limit: int = Query(50, ge=1, le=500, description="Límite de resultados"),
+    cursor: Optional[datetime] = Query(
+        None, description="Cursor de paginación (timestamp del último trip)"
+    ),
+    include_alerts: bool = Query(False, description="Incluir alertas en la respuesta"),
+    include_points: bool = Query(
+        False, description="Incluir puntos GPS en la respuesta"
+    ),
+    include_events: bool = Query(False, description="Incluir eventos en la respuesta"),
+):
+    """
+    Obtiene los trips de un dispositivo específico en un rango de fechas.
+
+    **IMPORTANTE:** Este endpoint requiere obligatoriamente `start_date` y `end_date`
+    para optimizar las consultas en la base de datos Timescale.
+
+    **Permisos:**
+    - El usuario debe tener acceso a la unidad donde está o estuvo asignado el dispositivo.
+    - Se valida que el dispositivo pertenezca al cliente del usuario autenticado.
+
+    **Filtros obligatorios:**
+    - `start_date`: Fecha de inicio del rango (ISO 8601)
+    - `end_date`: Fecha de fin del rango (ISO 8601)
+
+    **Filtros opcionales:**
+    - `limit`: Número máximo de resultados (default: 50, max: 500)
+    - `cursor`: Timestamp del último trip recibido (para paginación)
+
+    **Expansiones:**
+    - `include_alerts`: Incluye las alertas de cada trip
+    - `include_points`: Incluye los puntos GPS de cada trip
+    - `include_events`: Incluye los eventos de cada trip
+    """
+    from app.api.v1.endpoints.trips import (
+        build_trip_detail,
+        build_trip_out,
+        check_device_access,
+    )
+    from app.models.trip import Trip
+    from app.schemas.trip import TripListResponse
+
+    # Verificar que el dispositivo existe y pertenece al cliente
+    device = (
+        db.query(Device)
+        .filter(
+            Device.device_id == device_id, Device.client_id == current_user.client_id
+        )
+        .first()
+    )
+
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dispositivo no encontrado o no pertenece a tu cliente",
+        )
+
+    # Verificar acceso al dispositivo
+    if not check_device_access(db, device_id, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes acceso a este dispositivo",
+        )
+
+    # Construir query con filtros obligatorios de fecha
+    query = db.query(Trip).filter(
+        Trip.device_id == device_id,
+        Trip.start_time >= start_date,
+        Trip.start_time <= end_date,
+    )
+
+    # Aplicar cursor de paginación
+    if cursor:
+        query = query.filter(Trip.start_time < cursor)
+
+    # Contar total
+    total = query.count()
+
+    # Ordenar y limitar
+    trips = query.order_by(Trip.start_time.desc()).limit(limit + 1).all()
+
+    # Determinar si hay más resultados
+    has_more = len(trips) > limit
+    if has_more:
+        trips = trips[:limit]
+
+    # Construir respuesta
+    if include_alerts or include_points or include_events:
+        trip_list = [
+            build_trip_detail(
+                db,
+                trip,
+                include_alerts=include_alerts,
+                include_points=include_points,
+                include_events=include_events,
+            )
+            for trip in trips
+        ]
+    else:
+        trip_list = [build_trip_out(trip) for trip in trips]
+
+    # Calcular nuevo cursor
+    new_cursor = None
+    if trips:
+        new_cursor = trips[-1].start_time.isoformat()
+
+    return TripListResponse(
+        trips=trip_list,
+        total=total,
+        limit=limit,
+        cursor=new_cursor if has_more else None,
+        has_more=has_more,
+    )

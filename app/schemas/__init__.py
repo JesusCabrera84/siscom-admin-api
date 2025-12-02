@@ -16,6 +16,15 @@ from app.schemas.device_service import (
 from app.schemas.order import OrderCreate, OrderItemCreate, OrderItemOut, OrderOut
 from app.schemas.payment import PaymentBase, PaymentCreate, PaymentOut
 from app.schemas.plan import PlanBase, PlanOut
+from app.schemas.trip import (
+    TripAlertOut,
+    TripBase,
+    TripDetail,
+    TripEventOut,
+    TripListResponse,
+    TripOut,
+    TripPointOut,
+)
 from app.schemas.user import UserBase, UserCreate, UserOut
 
 __all__ = [
@@ -43,4 +52,11 @@ __all__ = [
     "OrderOut",
     "OrderItemCreate",
     "OrderItemOut",
+    "TripBase",
+    "TripOut",
+    "TripDetail",
+    "TripPointOut",
+    "TripAlertOut",
+    "TripEventOut",
+    "TripListResponse",
 ]

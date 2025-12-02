@@ -13,6 +13,7 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.plan import Plan
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
+from app.models.trip import Trip, TripAlert, TripEvent, TripPoint
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.models.unit_profile import UnitProfile
@@ -47,4 +48,8 @@ __all__ = [
     "Invitation",
     "TokenConfirmacion",
     "TokenType",
+    "Trip",
+    "TripPoint",
+    "TripAlert",
+    "TripEvent",
 ]
