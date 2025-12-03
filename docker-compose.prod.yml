@@ -37,6 +37,9 @@ services:
 
       # Google reCAPTCHA v3 - Secret key
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
+
+      # PASETO - Token para compartir ubicación
+      PASETO_SECRET_KEY: ${PASETO_SECRET_KEY}
     healthcheck:
       test:
         [

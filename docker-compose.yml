@@ -46,6 +46,8 @@ services:
       CONTACT_EMAIL: ${CONTACT_EMAIL:-contacto@geminislabs.com}
       # Google reCAPTCHA v3
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
+      # PASETO - Token para compartir ubicación
+      PASETO_SECRET_KEY: ${PASETO_SECRET_KEY}
     ports:
       - "8100:8100"
     volumes:

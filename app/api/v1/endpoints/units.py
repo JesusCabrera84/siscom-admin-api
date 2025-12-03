@@ -9,6 +9,7 @@ from app.api.deps import (
     get_current_user_full,
     get_current_user_id,
 )
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
@@ -18,7 +19,14 @@ from app.models.user import User
 from app.models.user_unit import UserUnit
 from app.models.vehicle_profile import VehicleProfile
 from app.schemas.device import DeviceOut
-from app.schemas.unit import UnitCreate, UnitDetail, UnitOut, UnitUpdate, UnitWithDevice
+from app.schemas.unit import (
+    ShareLocationResponse,
+    UnitCreate,
+    UnitDetail,
+    UnitOut,
+    UnitUpdate,
+    UnitWithDevice,
+)
 from app.schemas.unit_device import UnitDeviceAssign, UnitDeviceOut
 from app.schemas.unit_profile import UnitProfileComplete, UnitProfileUpdate
 from app.schemas.user_unit import UserUnitAssign, UserUnitDetail
@@ -27,6 +35,7 @@ from app.schemas.vehicle_profile import (
     VehicleProfileOut,
     VehicleProfileUpdate,
 )
+from app.utils.paseto_token import generate_location_share_token
 
 router = APIRouter()
 
@@ -1205,4 +1214,75 @@ def get_unit_trips(
         limit=limit,
         cursor=new_cursor if has_more else None,
         has_more=has_more,
+    )
+
+
+# ============================================
+# Share Location Endpoints
+# ============================================
+
+
+@router.post(
+    "/{unit_id}/share-location",
+    response_model=ShareLocationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def share_unit_location(
+    unit_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Genera un token PASETO para compartir la ubicación de una unidad.
+
+    **Funcionamiento:**
+    - Verifica que el usuario tenga acceso a la unidad
+    - Obtiene el device_id del dispositivo actualmente asignado
+    - Genera un token PASETO v4.local con expiración de 30 minutos
+
+    **Requiere:**
+    - Acceso a la unidad (maestro o en user_units)
+    - La unidad debe tener un dispositivo asignado activamente
+
+    **Retorna:**
+    - `token`: Token PASETO para compartir
+    - `unit_id`: ID de la unidad
+    - `device_id`: ID del dispositivo asignado
+    - `expires_at`: Fecha y hora de expiración
+    - `share_url`: URL para compartir (si FRONTEND_URL está configurado)
+    """
+    # Verificar acceso a la unidad
+    check_unit_access(db, unit_id, current_user)
+
+    # Obtener el dispositivo activo asignado a la unidad
+    active_assignment = (
+        db.query(UnitDevice)
+        .filter(UnitDevice.unit_id == unit_id, UnitDevice.unassigned_at.is_(None))
+        .first()
+    )
+
+    if not active_assignment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La unidad no tiene un dispositivo asignado actualmente",
+        )
+
+    # Generar el token PASETO con el device_id
+    token, expires_at = generate_location_share_token(
+        unit_id=unit_id,
+        device_id=active_assignment.device_id,
+        expires_in_minutes=30,
+    )
+
+    # Construir URL de compartir si está configurado FRONTEND_URL
+    share_url = None
+    if settings.FRONTEND_URL:
+        share_url = f"{settings.FRONTEND_URL}/share/{token}"
+
+    return ShareLocationResponse(
+        token=token,
+        unit_id=unit_id,
+        device_id=active_assignment.device_id,
+        expires_at=expires_at,
+        share_url=share_url,
     )

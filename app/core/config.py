@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # reCAPTCHA v3 - Secret key para validación
     RECAPTCHA_SECRET_KEY: Optional[str] = None
 
+    # PASETO - Token para compartir ubicación
+    PASETO_SECRET_KEY: str
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

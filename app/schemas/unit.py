@@ -101,3 +101,28 @@ class UnitDetail(UnitOut):
                 "total_devices_count": 3,
             }
         }
+
+
+class ShareLocationResponse(BaseModel):
+    """Schema de respuesta para compartir ubicación"""
+
+    token: str = Field(..., description="Token PASETO para compartir ubicación")
+    unit_id: UUID = Field(..., description="ID de la unidad")
+    device_id: str = Field(..., description="ID del dispositivo asignado")
+    expires_at: datetime = Field(
+        ..., description="Fecha y hora de expiración del token"
+    )
+    share_url: Optional[str] = Field(
+        None, description="URL para compartir (si FRONTEND_URL está configurado)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "v4.local.xxxxxxxxxxxxx",
+                "unit_id": "abc12345-e89b-12d3-a456-426614174000",
+                "device_id": "864537040123456",
+                "expires_at": "2025-12-03T15:30:00Z",
+                "share_url": "https://app.example.com/share/v4.local.xxxxxxxxxxxxx",
+            }
+        }
