@@ -105,8 +105,6 @@ class TripPoint(SQLModel, table=True):
         default=None, sa_column=Column(Float, nullable=True)
     )
 
-    ignition_on: Optional[bool] = Field(default=None)
-
     correlation_id: UUID = Field(sa_column=Column(PGUUID(as_uuid=True), nullable=False))
 
 

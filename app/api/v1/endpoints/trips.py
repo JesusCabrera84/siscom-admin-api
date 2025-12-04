@@ -98,9 +98,7 @@ def check_unit_access(db: Session, unit_id: UUID, user: User) -> bool:
     return unit_id in accessible_units
 
 
-def parse_day_to_date_range(
-    day: str, tz: str = "UTC"
-) -> Tuple[datetime, datetime]:
+def parse_day_to_date_range(day: str, tz: str = "UTC") -> Tuple[datetime, datetime]:
     """
     Convierte un día (YYYY-MM-DD) y una zona horaria a un rango de fechas en UTC.
 
@@ -116,9 +114,7 @@ def parse_day_to_date_range(
     """
     # Validar formato del día (YYYY-MM-DD)
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
-        raise ValueError(
-            f"Formato de día inválido: '{day}'. Use el formato YYYY-MM-DD"
-        )
+        raise ValueError(f"Formato de día inválido: '{day}'. Use el formato YYYY-MM-DD")
 
     try:
         # Parsear la fecha
@@ -381,7 +377,6 @@ def list_trips(
             .distinct()
             .all()
         )
-        print(unit_device_ids)
         unit_device_ids = [d[0] for d in unit_device_ids]
 
         if not unit_device_ids:
