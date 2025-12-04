@@ -1,6 +1,8 @@
-from datetime import datetime
-from typing import List, Optional
+import re
+from datetime import datetime, time
+from typing import List, Optional, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, or_
@@ -94,6 +96,56 @@ def check_unit_access(db: Session, unit_id: UUID, user: User) -> bool:
     """
     accessible_units = get_accessible_unit_ids(db, user)
     return unit_id in accessible_units
+
+
+def parse_day_to_date_range(
+    day: str, tz: str = "UTC"
+) -> Tuple[datetime, datetime]:
+    """
+    Convierte un día (YYYY-MM-DD) y una zona horaria a un rango de fechas en UTC.
+
+    Args:
+        day: Fecha en formato YYYY-MM-DD
+        tz: Zona horaria (ej: "America/Mexico_City", default: "UTC")
+
+    Returns:
+        Tuple[datetime, datetime]: (start_date, end_date) en UTC
+
+    Raises:
+        ValueError: Si el formato del día es inválido o la zona horaria no existe
+    """
+    # Validar formato del día (YYYY-MM-DD)
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+        raise ValueError(
+            f"Formato de día inválido: '{day}'. Use el formato YYYY-MM-DD"
+        )
+
+    try:
+        # Parsear la fecha
+        date_obj = datetime.strptime(day, "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError(
+            f"Fecha inválida: '{day}'. Verifique que sea una fecha válida en formato YYYY-MM-DD"
+        )
+
+    try:
+        # Obtener la zona horaria
+        timezone = ZoneInfo(tz)
+    except ZoneInfoNotFoundError:
+        raise ValueError(
+            f"Zona horaria inválida: '{tz}'. Use formato IANA (ej: 'America/Mexico_City')"
+        )
+
+    # Crear datetime al inicio del día en la zona horaria especificada
+    start_local = datetime.combine(date_obj, time.min, tzinfo=timezone)
+    # Crear datetime al final del día (23:59:59.999999)
+    end_local = datetime.combine(date_obj, time.max, tzinfo=timezone)
+
+    # Convertir a UTC
+    start_utc = start_local.astimezone(ZoneInfo("UTC"))
+    end_utc = end_local.astimezone(ZoneInfo("UTC"))
+
+    return start_utc, end_utc
 
 
 def build_trip_out(trip: Trip) -> TripOut:
@@ -231,9 +283,22 @@ def list_trips(
     unit_id: Optional[UUID] = Query(None, description="Filtrar por unidad"),
     device_id: Optional[str] = Query(None, description="Filtrar por dispositivo"),
     start_date: Optional[datetime] = Query(
-        None, description="Fecha de inicio (ISO 8601)"
+        None, description="Fecha de inicio (ISO 8601). Ignorado si se envía 'day'"
     ),
-    end_date: Optional[datetime] = Query(None, description="Fecha de fin (ISO 8601)"),
+    end_date: Optional[datetime] = Query(
+        None, description="Fecha de fin (ISO 8601). Ignorado si se envía 'day'"
+    ),
+    day: Optional[str] = Query(
+        None,
+        description="Día específico en formato YYYY-MM-DD. Si se envía, ignora start_date y end_date",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        examples=["2025-12-03"],
+    ),
+    tz: str = Query(
+        "UTC",
+        description="Zona horaria para interpretar 'day' (formato IANA, ej: 'America/Mexico_City')",
+        examples=["UTC", "America/Mexico_City", "America/New_York"],
+    ),
     limit: int = Query(50, ge=1, le=500, description="Límite de resultados"),
     cursor: Optional[datetime] = Query(
         None, description="Cursor de paginación (timestamp del último trip)"
@@ -251,11 +316,22 @@ def list_trips(
     - Usuario maestro: puede ver todos los trips de todas las unidades del cliente
     - Usuario regular: solo trips de unidades asignadas en user_units
 
-    **Filtros:**
-    - `unit_id`: Filtra trips por unidad específica
-    - `device_id`: Filtra trips por dispositivo específico
+    **Filtros de fecha (dos opciones mutuamente excluyentes):**
+
+    *Opción 1 - Por día específico:*
+    - `day`: Día en formato YYYY-MM-DD (ej: "2025-12-03")
+    - `tz`: Zona horaria para interpretar el día (default: UTC, ej: "America/Mexico_City")
+    - Filtra trips cuyo `end_time` esté dentro del día especificado
+
+    *Opción 2 - Por rango de fechas:*
     - `start_date`: Fecha de inicio del rango (trips que inician después de esta fecha)
     - `end_date`: Fecha de fin del rango (trips que inician antes de esta fecha)
+
+    **Nota:** Si se envía `day`, los parámetros `start_date` y `end_date` son ignorados.
+
+    **Otros filtros:**
+    - `unit_id`: Filtra trips por unidad específica
+    - `device_id`: Filtra trips por dispositivo específico
     - `limit`: Número máximo de resultados (default: 50, max: 500)
     - `cursor`: Timestamp del último trip recibido (para paginación)
 
@@ -266,6 +342,17 @@ def list_trips(
 
     **Nota:** Los filtros de fecha son altamente recomendados para optimizar el rendimiento.
     """
+    # Procesar parámetro 'day' si está presente
+    filter_by_end_time = False
+    if day:
+        try:
+            start_date, end_date = parse_day_to_date_range(day, tz)
+            filter_by_end_time = True  # Cuando se usa 'day', filtramos por end_time
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
     # Obtener dispositivos accesibles para el usuario
     accessible_device_ids = get_accessible_device_ids(db, current_user)
 
@@ -294,6 +381,7 @@ def list_trips(
             .distinct()
             .all()
         )
+        print(unit_device_ids)
         unit_device_ids = [d[0] for d in unit_device_ids]
 
         if not unit_device_ids:
@@ -312,11 +400,19 @@ def list_trips(
             )
         query = query.filter(Trip.device_id == device_id)
 
-    if start_date:
-        query = query.filter(Trip.start_time >= start_date)
-
-    if end_date:
-        query = query.filter(Trip.start_time <= end_date)
+    # Aplicar filtros de fecha
+    if filter_by_end_time:
+        # Cuando se usa 'day', filtramos por end_time
+        if start_date:
+            query = query.filter(Trip.end_time >= start_date)
+        if end_date:
+            query = query.filter(Trip.end_time <= end_date)
+    else:
+        # Comportamiento original: filtrar por start_time
+        if start_date:
+            query = query.filter(Trip.start_time >= start_date)
+        if end_date:
+            query = query.filter(Trip.start_time <= end_date)
 
     # Aplicar cursor de paginación
     if cursor:

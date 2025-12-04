@@ -42,16 +42,47 @@ Lista todos los trips accesibles para el usuario autenticado.
 |-----------|------|-----------|---------|-------------|
 | `unit_id` | UUID | No | - | Filtrar por unidad específica |
 | `device_id` | String | No | - | Filtrar por dispositivo específico |
-| `start_date` | DateTime | No | - | Fecha de inicio del rango (ISO 8601) |
-| `end_date` | DateTime | No | - | Fecha de fin del rango (ISO 8601) |
+| `start_date` | DateTime | No | - | Fecha de inicio del rango (ISO 8601). **Ignorado si se envía `day`** |
+| `end_date` | DateTime | No | - | Fecha de fin del rango (ISO 8601). **Ignorado si se envía `day`** |
+| `day` | String | No | - | Día específico en formato `YYYY-MM-DD`. Si se envía, ignora `start_date` y `end_date` |
+| `tz` | String | No | `UTC` | Zona horaria para interpretar `day` (formato IANA, ej: `America/Mexico_City`) |
 | `limit` | Integer | No | 50 | Límite de resultados (1-500) |
 | `cursor` | DateTime | No | - | Cursor para paginación |
 | `include_alerts` | Boolean | No | false | Incluir alertas del trip |
 | `include_points` | Boolean | No | false | Incluir puntos GPS del trip |
 | `include_events` | Boolean | No | false | Incluir eventos del trip |
 
-#### Ejemplo de Request
+#### Filtros de Fecha
 
+Existen **dos opciones mutuamente excluyentes** para filtrar por fecha:
+
+**Opción 1 - Por día específico (recomendado para dashboards):**
+- Usar `day` con formato `YYYY-MM-DD`
+- Opcionalmente especificar `tz` con la zona horaria del usuario
+- Filtra trips cuyo `end_time` esté dentro del día especificado
+- El sistema convierte automáticamente el rango a UTC
+
+**Opción 2 - Por rango de fechas:**
+- Usar `start_date` y `end_date` en formato ISO 8601
+- Filtra trips cuyo `start_time` esté dentro del rango
+
+> ⚠️ **Nota:** Si se envía `day`, los parámetros `start_date` y `end_date` son ignorados.
+
+#### Ejemplos de Request
+
+**Filtrar por día específico (zona horaria de México):**
+```bash
+curl -X GET "http://localhost:8000/api/v1/trips?day=2025-12-03&tz=America/Mexico_City&limit=10" \
+  -H "Authorization: Bearer ${TOKEN}"
+```
+
+**Filtrar por día específico (UTC por defecto):**
+```bash
+curl -X GET "http://localhost:8000/api/v1/trips?day=2025-12-03&limit=10" \
+  -H "Authorization: Bearer ${TOKEN}"
+```
+
+**Filtrar por rango de fechas (comportamiento original):**
 ```bash
 curl -X GET "http://localhost:8000/api/v1/trips?start_date=2025-11-01T00:00:00Z&end_date=2025-11-30T23:59:59Z&limit=10" \
   -H "Authorization: Bearer ${TOKEN}"
@@ -459,6 +490,14 @@ curl -X GET "${API_BASE}/api/v1/trips?limit=5" \
   -H "Content-Type: application/json"
 ```
 
+### Filtrado por Día con Zona Horaria
+
+```bash
+# Trips del 3 de diciembre 2025 en hora de México
+curl -X GET "${API_BASE}/api/v1/trips?day=2025-12-03&tz=America/Mexico_City&limit=10" \
+  -H "Authorization: Bearer ${TOKEN}"
+```
+
 ### Filtrado por Rango de Fechas
 
 ```bash
@@ -503,34 +542,51 @@ curl -X GET "${API_BASE}/api/v1/trips?limit=10&cursor=2025-11-29T08:00:00Z" \
 
 ## 📈 Casos de Uso Comunes
 
-### 1. Dashboard de Viajes del Día
+### 1. Dashboard de Viajes del Día (con zona horaria)
+
+```bash
+# Trips del día para un usuario en México
+GET /api/v1/trips?day=2025-12-03&tz=America/Mexico_City&limit=100
+
+# Trips del día en UTC
+GET /api/v1/trips?day=2025-12-03&limit=100
+```
+
+### 2. Dashboard de Viajes del Día (método tradicional)
 
 ```bash
 GET /api/v1/trips?start_date=2025-11-29T00:00:00Z&end_date=2025-11-29T23:59:59Z&limit=100
 ```
 
-### 2. Historial de Viajes de un Vehículo
+### 3. Historial de Viajes de un Vehículo
 
 ```bash
 GET /api/v1/units/{unit_id}/trips?start_date=2025-11-01T00:00:00Z&end_date=2025-11-30T23:59:59Z
 ```
 
-### 3. Análisis de Alertas de un Trip
+### 4. Análisis de Alertas de un Trip
 
 ```bash
 GET /api/v1/trips/{trip_id}?include_alerts=true&include_events=true
 ```
 
-### 4. Replay de Ruta (con puntos GPS)
+### 5. Replay de Ruta (con puntos GPS)
 
 ```bash
 GET /api/v1/trips/{trip_id}?include_points=true
 ```
 
-### 5. Reporte Mensual de Dispositivo
+### 6. Reporte Mensual de Dispositivo
 
 ```bash
 GET /api/v1/devices/{device_id}/trips?start_date=2025-11-01T00:00:00Z&end_date=2025-11-30T23:59:59Z&limit=500
+```
+
+### 7. Viajes que Terminaron un Día Específico
+
+```bash
+# Ideal para reportes diarios - filtra por end_time
+GET /api/v1/trips?day=2025-12-03&tz=America/Mexico_City&unit_id={unit_id}
 ```
 
 ---
@@ -612,6 +668,28 @@ GROUP BY usr.email, usr.is_master, usr.client_id;
 
 7. **Multi-tenant Automático**: El sistema automáticamente filtra los datos por `client_id` del usuario autenticado.
 
+8. **Parámetro `day` y Zonas Horarias**: 
+   - El parámetro `day` facilita consultas por día específico desde el frontend
+   - Usa zonas horarias IANA (ej: `America/Mexico_City`, `America/New_York`, `Europe/Madrid`)
+   - Cuando se usa `day`, el filtro aplica sobre `end_time` (trips que terminaron ese día)
+   - Cuando se usa `start_date`/`end_date`, el filtro aplica sobre `start_time` (comportamiento original)
+
+### Zonas Horarias Comunes (IANA)
+
+| Zona Horaria | Descripción |
+|--------------|-------------|
+| `UTC` | Tiempo Universal Coordinado (default) |
+| `America/Mexico_City` | México (Centro) |
+| `America/Tijuana` | México (Pacífico) |
+| `America/Cancun` | México (Sureste) |
+| `America/New_York` | Estados Unidos (Este) |
+| `America/Los_Angeles` | Estados Unidos (Pacífico) |
+| `America/Bogota` | Colombia |
+| `America/Lima` | Perú |
+| `America/Santiago` | Chile |
+| `America/Buenos_Aires` | Argentina |
+| `Europe/Madrid` | España |
+
 ---
 
 ## 📦 Archivos de Código
@@ -634,5 +712,10 @@ Para más información, consulta:
 
 ---
 
-**Última actualización**: 29 de noviembre de 2025  
-**Versión**: 1.0
+**Última actualización**: 3 de diciembre de 2025  
+**Versión**: 1.1
+
+### Changelog
+
+- **v1.1** (2025-12-03): Agregados parámetros `day` y `tz` para filtrado por día con soporte de zonas horarias
+- **v1.0** (2025-11-29): Versión inicial
