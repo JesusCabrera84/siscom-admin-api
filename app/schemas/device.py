@@ -43,6 +43,12 @@ class DeviceCreate(BaseModel):
     )
     firmware_version: Optional[str] = Field(None, description="Versión de firmware")
     notes: Optional[str] = Field(None, description="Notas administrativas")
+    iccid: Optional[str] = Field(
+        None,
+        min_length=18,
+        max_length=22,
+        description="ICCID de la tarjeta SIM (opcional)",
+    )
 
 
 class DeviceUpdate(BaseModel):
@@ -52,6 +58,12 @@ class DeviceUpdate(BaseModel):
     model: Optional[str] = Field(None, max_length=100)
     firmware_version: Optional[str] = Field(None)
     notes: Optional[str] = Field(None)
+    iccid: Optional[str] = Field(
+        None,
+        min_length=18,
+        max_length=22,
+        description="ICCID de la tarjeta SIM",
+    )
 
 
 class DeviceStatusUpdate(BaseModel):
@@ -81,6 +93,7 @@ class DeviceOut(BaseModel):
     updated_at: datetime
     last_assignment_at: Optional[datetime] = None
     notes: Optional[str] = None
+    iccid: Optional[str] = Field(None, description="ICCID de la tarjeta SIM asignada")
 
     class Config:
         from_attributes = True
@@ -97,6 +110,7 @@ class DeviceOut(BaseModel):
                 "updated_at": "2025-11-03T08:00:00Z",
                 "last_assignment_at": "2025-11-03T08:00:00Z",
                 "notes": "Instalado en unidad #45",
+                "iccid": "89340123456789012345",
             }
         }
 
@@ -136,6 +150,7 @@ class DeviceWithProfileOut(DeviceOut):
                 "updated_at": "2025-11-03T08:00:00Z",
                 "last_assignment_at": "2025-11-03T08:00:00Z",
                 "notes": "Instalado en unidad #45",
+                "iccid": "89340123456789012345",
                 "unit_id": "abc12345-e89b-12d3-a456-426614174000",
                 "unit_name": "Camión #45",
                 "profile_color": "Rojo",

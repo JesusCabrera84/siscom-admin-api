@@ -1,6 +1,7 @@
 from app.models.client import Client, ClientStatus
 from app.models.device import Device, DeviceEvent
 from app.models.device_installation import DeviceInstallation
+from app.models.sim_card import SimCard
 from app.models.device_service import (
     DeviceService,
     DeviceServiceStatus,
@@ -52,4 +53,5 @@ __all__ = [
     "TripPoint",
     "TripAlert",
     "TripEvent",
+    "SimCard",
 ]

@@ -2,7 +2,7 @@
 
 ## Descripción
 
-Endpoints para gestionar el ciclo de vida completo de dispositivos GPS/IoT con seguimiento de estados, historial de eventos y trazabilidad administrativa.
+Endpoints para gestionar el ciclo de vida completo de dispositivos GPS/IoT con seguimiento de estados, historial de eventos, tarjetas SIM asociadas y trazabilidad administrativa.
 
 ---
 
@@ -18,12 +18,26 @@ Endpoints para gestionar el ciclo de vida completo de dispositivos GPS/IoT con s
   "firmware_version": "1.2.3",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "asignado",
-  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
   "last_comm_at": "2024-01-15T10:30:00Z",
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-15T10:30:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
-  "notes": "Dispositivo en óptimas condiciones"
+  "notes": "Dispositivo en óptimas condiciones",
+  "iccid": "89340123456789012345"
+}
+```
+
+### SimCard
+
+Cada dispositivo puede tener una tarjeta SIM asociada. La relación es 1:1 (un dispositivo = una SIM activa).
+
+```json
+{
+  "id": "abc12345-e89b-12d3-a456-426614174000",
+  "device_id": "123456789012345",
+  "iccid": "89340123456789012345",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-15T08:00:00Z"
 }
 ```
 
@@ -75,6 +89,15 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 | Baja definitiva             | `status='inactivo'`                                          | No puede reasignarse                |
 | Eliminación                 | ❌ **Prohibida**                                             | Trigger impide `DELETE`             |
 
+### Gestión de SIM Cards (ICCID)
+
+| Acción              | Descripción                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| Crear con ICCID     | Si se proporciona `iccid` al crear, se crea registro en `sim_cards` |
+| Actualizar ICCID    | Si se proporciona `iccid` al actualizar, se crea o actualiza `sim_cards` |
+| Consultar ICCID     | Todos los endpoints de consulta incluyen el `iccid` si existe |
+| Constraint UNIQUE   | Un dispositivo solo puede tener una SIM activa               |
+
 ### Consideraciones Importantes
 
 - ✅ **SIEMPRE** registrar eventos administrativos para trazabilidad
@@ -82,6 +105,7 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 - ✅ Actualizar `last_assignment_at` cada vez que el dispositivo se asigne a una unidad
 - ✅ Sincronizar `status='asignado'` con la existencia de una fila activa en unidades
 - ✅ `firmware_version` puede actualizarse y genera un evento `firmware_actualizado`
+- ✅ `iccid` es opcional y puede agregarse en cualquier momento
 - ❌ **NUNCA** eliminar registros de dispositivos (usar estados y bitácora)
 
 ---
@@ -93,6 +117,7 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 **POST** `/api/v1/devices/`
 
 Registra un nuevo dispositivo en el inventario con estado `nuevo` y sin cliente asignado.
+Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM.
 
 #### Headers
 
@@ -108,7 +133,8 @@ Authorization: Bearer <admin_token>
   "brand": "Queclink",
   "model": "GV300",
   "firmware_version": "1.2.3",
-  "notes": "Lote 2024-01"
+  "notes": "Lote 2024-01",
+  "iccid": "89340123456789012345"
 }
 ```
 
@@ -119,6 +145,7 @@ Authorization: Bearer <admin_token>
 - `model`: Obligatorio, máximo 100 caracteres
 - `firmware_version`: Opcional
 - `notes`: Opcional
+- `iccid`: Opcional, 18-22 caracteres (identificador de SIM)
 
 #### Response 201 Created
 
@@ -130,16 +157,16 @@ Authorization: Bearer <admin_token>
   "firmware_version": "1.2.3",
   "client_id": null,
   "status": "nuevo",
-  "installed_in_unit_id": null,
   "last_comm_at": null,
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-15T08:00:00Z",
   "last_assignment_at": null,
-  "notes": "Lote 2024-01"
+  "notes": "Lote 2024-01",
+  "iccid": "89340123456789012345"
 }
 ```
 
-**Evento generado**: `creado` con `new_status='nuevo'`
+**Evento generado**: `creado` con `new_status='nuevo'`. Si incluye ICCID, el detalle del evento lo menciona.
 
 ---
 
@@ -148,6 +175,7 @@ Authorization: Bearer <admin_token>
 **GET** `/api/v1/devices/`
 
 Lista todos los dispositivos del inventario con filtros opcionales.
+Incluye el ICCID de la tarjeta SIM si tienen una asignada.
 
 #### Headers
 
@@ -157,7 +185,7 @@ Authorization: Bearer <access_token>
 
 #### Query Parameters
 
-- `status_filter` (opcional): Filtrar por estado específico (`nuevo`, `enviado`, `entregado`, `asignado`, `devuelto`, `inactivo`)
+- `status_filter` (opcional): Filtrar por estado específico (`nuevo`, `preparado`, `enviado`, `entregado`, `asignado`, `devuelto`, `inactivo`)
 - `client_id` (opcional): Filtrar por cliente específico
 - `brand` (opcional): Buscar por marca (búsqueda parcial)
 
@@ -172,12 +200,26 @@ Authorization: Bearer <access_token>
     "firmware_version": "1.2.3",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
     "status": "asignado",
-    "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
     "last_comm_at": "2024-01-15T10:30:00Z",
     "created_at": "2024-01-15T08:00:00Z",
     "updated_at": "2024-01-15T10:30:00Z",
     "last_assignment_at": "2024-01-15T09:00:00Z",
-    "notes": "Dispositivo en óptimas condiciones"
+    "notes": "Dispositivo en óptimas condiciones",
+    "iccid": "89340123456789012345"
+  },
+  {
+    "device_id": "987654321098765",
+    "brand": "Teltonika",
+    "model": "FMB920",
+    "firmware_version": "1.0.5",
+    "client_id": null,
+    "status": "nuevo",
+    "last_comm_at": null,
+    "created_at": "2024-01-16T08:00:00Z",
+    "updated_at": "2024-01-16T08:00:00Z",
+    "last_assignment_at": null,
+    "notes": null,
+    "iccid": null
   }
 ]
 ```
@@ -204,7 +246,8 @@ GET /api/v1/devices/?brand=Queclink
 
 **GET** `/api/v1/devices/my-devices`
 
-Lista todos los dispositivos del cliente autenticado.
+Lista todos los dispositivos del cliente autenticado con información del perfil de la unidad asignada.
+Incluye el ICCID de la tarjeta SIM si tienen una asignada.
 
 #### Headers
 
@@ -227,12 +270,21 @@ Authorization: Bearer <client_token>
     "firmware_version": "1.2.3",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
     "status": "asignado",
-    "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
     "last_comm_at": "2024-01-15T10:30:00Z",
     "created_at": "2024-01-15T08:00:00Z",
     "updated_at": "2024-01-15T10:30:00Z",
     "last_assignment_at": "2024-01-15T09:00:00Z",
-    "notes": null
+    "notes": null,
+    "iccid": "89340123456789012345",
+    "unit_id": "789e4567-e89b-12d3-a456-426614174000",
+    "unit_name": "Camión #45",
+    "profile_color": "Rojo",
+    "profile_icon_type": "truck",
+    "profile_brand": "Ford",
+    "profile_model": "F-350",
+    "profile_year": 2020,
+    "profile_serial": "1FDUF3GT5GED12345",
+    "profile_description": "Camión de carga pesada"
   }
 ]
 ```
@@ -245,6 +297,7 @@ Authorization: Bearer <client_token>
 
 Lista dispositivos del cliente que NO están instalados en ninguna unidad.  
 Solo incluye dispositivos con estado `preparado`, `enviado`, `entregado` o `devuelto`.
+Incluye el ICCID de la tarjeta SIM si tienen una asignada.
 
 #### Headers
 
@@ -263,12 +316,12 @@ Authorization: Bearer <client_token>
     "firmware_version": "1.0.5",
     "client_id": "456e4567-e89b-12d3-a456-426614174000",
     "status": "entregado",
-    "installed_in_unit_id": null,
     "last_comm_at": null,
     "created_at": "2024-01-15T08:00:00Z",
     "updated_at": "2024-01-15T08:00:00Z",
     "last_assignment_at": null,
-    "notes": null
+    "notes": null,
+    "iccid": "89340987654321098765"
   }
 ]
 ```
@@ -280,6 +333,7 @@ Authorization: Bearer <client_token>
 **GET** `/api/v1/devices/{device_id}`
 
 Obtiene el detalle completo de un dispositivo.
+Incluye el ICCID de la tarjeta SIM si tiene una asignada.
 
 #### Headers
 
@@ -301,12 +355,12 @@ Authorization: Bearer <access_token>
   "firmware_version": "1.2.3",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "asignado",
-  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
   "last_comm_at": "2024-01-15T10:30:00Z",
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-15T10:30:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
-  "notes": "Dispositivo en óptimas condiciones"
+  "notes": "Dispositivo en óptimas condiciones",
+  "iccid": "89340123456789012345"
 }
 ```
 
@@ -320,7 +374,11 @@ Authorization: Bearer <access_token>
 
 **PATCH** `/api/v1/devices/{device_id}`
 
-Actualiza información básica del dispositivo (marca, modelo, firmware, notas).
+Actualiza información básica del dispositivo (marca, modelo, firmware, notas, ICCID).
+
+Si se proporciona un ICCID:
+- Si el dispositivo no tiene SIM asignada, se crea un nuevo registro en `sim_cards`
+- Si ya tiene SIM asignada, se actualiza el ICCID existente
 
 #### Headers
 
@@ -339,11 +397,20 @@ Authorization: Bearer <access_token>
   "brand": "Queclink",
   "model": "GV300W",
   "firmware_version": "1.3.0",
-  "notes": "Actualizado a nueva versión"
+  "notes": "Actualizado a nueva versión",
+  "iccid": "89340123456789012345"
 }
 ```
 
 Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
+
+#### Validaciones
+
+- `brand`: Opcional, máximo 100 caracteres
+- `model`: Opcional, máximo 100 caracteres
+- `firmware_version`: Opcional
+- `notes`: Opcional
+- `iccid`: Opcional, 18-22 caracteres
 
 #### Response 200 OK
 
@@ -355,12 +422,12 @@ Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
   "firmware_version": "1.3.0",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "asignado",
-  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
   "last_comm_at": "2024-01-15T10:30:00Z",
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-16T11:00:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
-  "notes": "Actualizado a nueva versión"
+  "notes": "Actualizado a nueva versión",
+  "iccid": "89340123456789012345"
 }
 ```
 
@@ -441,7 +508,7 @@ Authorization: Bearer <access_token>
 
 - Requiere `unit_id` válido
 - La unidad debe pertenecer al cliente del dispositivo
-- Actualiza `installed_in_unit_id` y `last_assignment_at`
+- Actualiza `last_assignment_at`
 
 ##### Devolver Dispositivo (`cualquier estado` → `devuelto`)
 
@@ -455,7 +522,7 @@ Authorization: Bearer <access_token>
 **Efecto**:
 
 - Quita `client_id` (vuelve a NULL)
-- Quita `installed_in_unit_id` (vuelve a NULL)
+- Desasigna de la unidad si estaba asignado
 - Puede reintegrarse al inventario
 
 ##### Dar de Baja (`cualquier estado` → `inactivo`)
@@ -482,12 +549,12 @@ Authorization: Bearer <access_token>
   "firmware_version": "1.2.3",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "asignado",
-  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
   "last_comm_at": "2024-01-15T10:30:00Z",
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-16T11:00:00Z",
   "last_assignment_at": "2024-01-16T11:00:00Z",
-  "notes": "Instalado en camión ABC-123"
+  "notes": "Instalado en camión ABC-123",
+  "iccid": "89340123456789012345"
 }
 ```
 
@@ -544,10 +611,10 @@ Authorization: Bearer <access_token>
     "id": "ghi78901-e89b-12d3-a456-426614174000",
     "device_id": "123456789012345",
     "event_type": "enviado",
-    "old_status": "nuevo",
+    "old_status": "preparado",
     "new_status": "enviado",
     "performed_by": "def45678-e89b-12d3-a456-426614174000",
-    "event_details": "Dispositivo enviado a cliente ACME Corp",
+    "event_details": "Dispositivo enviado al cliente",
     "created_at": "2024-01-10T10:00:00Z"
   },
   {
@@ -557,7 +624,7 @@ Authorization: Bearer <access_token>
     "old_status": null,
     "new_status": "nuevo",
     "performed_by": "def45678-e89b-12d3-a456-426614174000",
-    "event_details": "Dispositivo Queclink GV300 registrado en inventario",
+    "event_details": "Dispositivo Queclink GV300 registrado en inventario con SIM ICCID: 89340123456789012345",
     "created_at": "2024-01-10T08:00:00Z"
   }
 ]
@@ -601,12 +668,12 @@ POST /api/v1/devices/123456789012345/notes?note=Dispositivo%20revisado%20y%20fun
   "firmware_version": "1.2.3",
   "client_id": "456e4567-e89b-12d3-a456-426614174000",
   "status": "asignado",
-  "installed_in_unit_id": "789e4567-e89b-12d3-a456-426614174000",
   "last_comm_at": "2024-01-15T10:30:00Z",
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-16T11:00:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
-  "notes": "2024-01-16T11:00:00: Dispositivo revisado y funcionando correctamente"
+  "notes": "2024-01-16T11:00:00: Dispositivo revisado y funcionando correctamente",
+  "iccid": "89340123456789012345"
 }
 ```
 
@@ -627,6 +694,60 @@ POST /api/v1/devices/123456789012345/notes?note=Dispositivo%20revisado%20y%20fun
 | `firmware_actualizado` | Actualización de firmware        | Al actualizar `firmware_version` |
 | `nota`                 | Nota administrativa              | Al agregar nota                  |
 | `estado_cambiado`      | Cambio de estado genérico        | En cambios no específicos        |
+
+---
+
+## Gestión de SIM Cards
+
+### Descripción
+
+La tabla `sim_cards` almacena la información de las tarjetas SIM asociadas a los dispositivos. Cada dispositivo puede tener **máximo una SIM activa** debido al constraint UNIQUE en `device_id`.
+
+### ICCID
+
+El ICCID (Integrated Circuit Card Identifier) es un número único de 18-22 dígitos que identifica a cada tarjeta SIM. Ejemplo: `89340123456789012345`
+
+### Operaciones
+
+| Operación                    | Endpoint                        | Descripción                                      |
+| ---------------------------- | ------------------------------- | ------------------------------------------------ |
+| Crear dispositivo con SIM    | `POST /devices/`                | Incluir `iccid` en el body                       |
+| Agregar SIM a dispositivo    | `PATCH /devices/{id}`           | Incluir `iccid` en el body                       |
+| Cambiar SIM de dispositivo   | `PATCH /devices/{id}`           | Enviar nuevo `iccid` en el body                  |
+| Consultar SIM de dispositivo | `GET /devices/{id}`             | El campo `iccid` se incluye en la respuesta      |
+| Listar dispositivos con SIM  | `GET /devices/`                 | Cada dispositivo incluye su `iccid` si tiene SIM |
+
+### Ejemplos
+
+#### Crear dispositivo con SIM
+
+```bash
+POST /api/v1/devices/
+{
+  "device_id": "353451234567890",
+  "brand": "Queclink",
+  "model": "GV300",
+  "iccid": "89340123456789012345"
+}
+```
+
+#### Agregar SIM a dispositivo existente
+
+```bash
+PATCH /api/v1/devices/353451234567890
+{
+  "iccid": "89340123456789012345"
+}
+```
+
+#### Cambiar SIM de dispositivo
+
+```bash
+PATCH /api/v1/devices/353451234567890
+{
+  "iccid": "89340987654321098765"
+}
+```
 
 ---
 
@@ -651,8 +772,8 @@ FOR EACH ROW EXECUTE FUNCTION prevent_device_delete();
 ## Flujo Completo de Ciclo de Vida
 
 ```
-1. REGISTRAR
-   POST /devices/ → status='nuevo'
+1. REGISTRAR (con o sin SIM)
+   POST /devices/ → status='nuevo', iccid=<opcional>
 
 2. PREPARAR
    PATCH /devices/{id}/status → status='preparado', client_id=<cliente>
@@ -671,22 +792,26 @@ FOR EACH ROW EXECUTE FUNCTION prevent_device_delete();
 
 6b. DAR DE BAJA (opcional)
     PATCH /devices/{id}/status → status='inactivo'
+
+* AGREGAR/CAMBIAR SIM (en cualquier momento)
+  PATCH /devices/{id} → iccid=<nuevo_iccid>
 ```
 
 ---
 
 ## Ejemplos Completos
 
-### Caso 1: Nuevo Dispositivo a Cliente
+### Caso 1: Nuevo Dispositivo con SIM a Cliente
 
 ```bash
-# 1. Registrar dispositivo
+# 1. Registrar dispositivo con SIM
 POST /api/v1/devices/
 {
   "device_id": "353451234567890",
   "brand": "Queclink",
   "model": "GV300",
-  "firmware_version": "1.2.3"
+  "firmware_version": "1.2.3",
+  "iccid": "89340123456789012345"
 }
 
 # 2. Preparar para cliente
@@ -723,10 +848,30 @@ PATCH /api/v1/devices/353451234567890/status
 GET /api/v1/devices/353451234567890/events
 ```
 
-### Caso 2: Dispositivo Devuelto
+### Caso 2: Agregar SIM a Dispositivo Existente
 
 ```bash
-# Cliente devuelve dispositivo
+# Dispositivo ya existe sin SIM, agregar SIM
+PATCH /api/v1/devices/353451234567890
+{
+  "iccid": "89340123456789012345"
+}
+```
+
+### Caso 3: Cambiar SIM de Dispositivo
+
+```bash
+# Dispositivo tiene SIM, cambiar a otra SIM
+PATCH /api/v1/devices/353451234567890
+{
+  "iccid": "89340987654321098765"
+}
+```
+
+### Caso 4: Dispositivo Devuelto
+
+```bash
+# Cliente devuelve dispositivo (la SIM permanece asociada)
 PATCH /api/v1/devices/353451234567890/status
 {
   "new_status": "devuelto",
@@ -758,6 +903,8 @@ GET /api/v1/devices/?status_filter=devuelto
 - Relaciones con clientes y unidades validadas
 - Estados controlados por CHECK constraints
 - Eliminación bloqueada por trigger
+- ICCID validado por longitud (18-22 caracteres)
+- Un dispositivo solo puede tener una SIM activa (UNIQUE constraint)
 
 ---
 
@@ -784,4 +931,7 @@ GET /api/v1/devices/unassigned
 
 # Historial completo de un dispositivo
 GET /api/v1/devices/353451234567890/events
+
+# Obtener dispositivo con su ICCID
+GET /api/v1/devices/353451234567890
 ```

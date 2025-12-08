@@ -10,6 +10,7 @@ from sqlmodel import Field, Index, Relationship, SQLModel
 if TYPE_CHECKING:
     from app.models.client import Client
     from app.models.device_service import DeviceService
+    from app.models.sim_card import SimCard
     from app.models.unit_device import UnitDevice
     from app.models.user import User
 
@@ -95,6 +96,10 @@ class Device(SQLModel, table=True):
     unit_devices: list["UnitDevice"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    sim_card: Optional["SimCard"] = Relationship(
+        back_populates="device",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": False},
     )
 
 

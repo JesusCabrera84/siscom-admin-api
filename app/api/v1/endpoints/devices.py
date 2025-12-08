@@ -13,6 +13,7 @@ from app.api.deps import (
 from app.db.session import get_db
 from app.models.client import Client
 from app.models.device import Device, DeviceEvent
+from app.models.sim_card import SimCard
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.models.unit_profile import UnitProfile
@@ -69,6 +70,7 @@ def create_device(
     Registra un nuevo dispositivo en el inventario.
 
     Regla: El dispositivo se crea con status='nuevo' y sin cliente asignado.
+    Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM.
     """
     # Verificar que el device_id no exista
     existing = db.query(Device).filter(Device.device_id == device_in.device_id).first()
@@ -90,20 +92,47 @@ def create_device(
     )
     db.add(device)
 
+    # Si se proporciona ICCID, crear registro en sim_cards
+    sim_card = None
+    if device_in.iccid:
+        sim_card = SimCard(
+            device_id=device.device_id,
+            iccid=device_in.iccid,
+        )
+        db.add(sim_card)
+
     # Registrar evento de creación
+    event_details = f"Dispositivo {device.brand} {device.model} registrado en inventario"
+    if device_in.iccid:
+        event_details += f" con SIM ICCID: {device_in.iccid}"
+
     create_device_event(
         db=db,
         device_id=device.device_id,
         event_type="creado",
         new_status="nuevo",
         performed_by=user_id,
-        event_details=f"Dispositivo {device.brand} {device.model} registrado en inventario",
+        event_details=event_details,
     )
 
     db.commit()
     db.refresh(device)
 
-    return device
+    # Construir respuesta con ICCID
+    return DeviceOut(
+        device_id=device.device_id,
+        brand=device.brand,
+        model=device.model,
+        firmware_version=device.firmware_version,
+        client_id=device.client_id,
+        status=device.status,
+        last_comm_at=device.last_comm_at,
+        created_at=device.created_at,
+        updated_at=device.updated_at,
+        last_assignment_at=device.last_assignment_at,
+        notes=device.notes,
+        iccid=device_in.iccid,
+    )
 
 
 @router.get("", response_model=List[DeviceOut])
@@ -115,13 +144,30 @@ def list_devices(
 ):
     """
     Lista todos los dispositivos.
+    Incluye el ICCID de la tarjeta SIM si tienen una asignada.
 
     Filtros disponibles:
     - status_filter: Filtrar por estado específico
     - client_id: Filtrar por cliente
     - brand: Filtrar por marca
     """
-    query = db.query(Device)
+    query = (
+        db.query(
+            Device.device_id,
+            Device.brand,
+            Device.model,
+            Device.firmware_version,
+            Device.client_id,
+            Device.status,
+            Device.last_comm_at,
+            Device.created_at,
+            Device.updated_at,
+            Device.last_assignment_at,
+            Device.notes,
+            SimCard.iccid.label("iccid"),
+        )
+        .outerjoin(SimCard, SimCard.device_id == Device.device_id)
+    )
 
     if status_filter:
         query = query.filter(Device.status == status_filter)
@@ -132,7 +178,27 @@ def list_devices(
     if brand:
         query = query.filter(Device.brand.ilike(f"%{brand}%"))
 
-    devices = query.order_by(Device.created_at.desc()).all()
+    results = query.order_by(Device.created_at.desc()).all()
+
+    # Construir respuesta con ICCID
+    devices = [
+        DeviceOut(
+            device_id=row.device_id,
+            brand=row.brand,
+            model=row.model,
+            firmware_version=row.firmware_version,
+            client_id=row.client_id,
+            status=row.status,
+            last_comm_at=row.last_comm_at,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            last_assignment_at=row.last_assignment_at,
+            notes=row.notes,
+            iccid=row.iccid,
+        )
+        for row in results
+    ]
+
     return devices
 
 
@@ -147,12 +213,13 @@ def list_my_devices(
 
     Incluye:
     - Datos del dispositivo
+    - ICCID de la tarjeta SIM (si tiene una asignada)
     - Información de la unidad asignada (si tiene asignación activa)
     - Perfil de la unidad (color, icon_type, brand, model, year, serial, description)
 
     Se puede filtrar por estado.
     """
-    # Query con JOINs para obtener información del perfil
+    # Query con JOINs para obtener información del perfil y SIM
     query = (
         db.query(
             Device.device_id,
@@ -166,6 +233,8 @@ def list_my_devices(
             Device.updated_at,
             Device.last_assignment_at,
             Device.notes,
+            # ICCID de la SIM
+            SimCard.iccid.label("iccid"),
             # Datos de la unidad asignada
             Unit.id.label("unit_id"),
             Unit.name.label("unit_name"),
@@ -178,6 +247,7 @@ def list_my_devices(
             UnitProfile.serial.label("profile_serial"),
             UnitProfile.description.label("profile_description"),
         )
+        .outerjoin(SimCard, SimCard.device_id == Device.device_id)
         .outerjoin(
             UnitDevice,
             (UnitDevice.device_id == Device.device_id)
@@ -208,6 +278,7 @@ def list_my_devices(
             updated_at=row.updated_at,
             last_assignment_at=row.last_assignment_at,
             notes=row.notes,
+            iccid=row.iccid,
             unit_id=row.unit_id,
             unit_name=row.unit_name,
             profile_color=row.profile_color,
@@ -231,6 +302,7 @@ def list_unassigned_devices(
     """
     Lista dispositivos del cliente que no están asignados a ninguna unidad activamente.
     Estados válidos: 'preparado', 'enviado', 'entregado' o 'devuelto'
+    Incluye el ICCID de la tarjeta SIM si tienen una asignada.
 
     Verifica que no exista una asignación activa en unit_devices.
     """
@@ -242,8 +314,22 @@ def list_unassigned_devices(
         .subquery()
     )
 
-    devices = (
-        db.query(Device)
+    results = (
+        db.query(
+            Device.device_id,
+            Device.brand,
+            Device.model,
+            Device.firmware_version,
+            Device.client_id,
+            Device.status,
+            Device.last_comm_at,
+            Device.created_at,
+            Device.updated_at,
+            Device.last_assignment_at,
+            Device.notes,
+            SimCard.iccid.label("iccid"),
+        )
+        .outerjoin(SimCard, SimCard.device_id == Device.device_id)
         .filter(
             Device.client_id == client_id,
             Device.status.in_(["preparado", "enviado", "entregado", "devuelto"]),
@@ -251,6 +337,26 @@ def list_unassigned_devices(
         )
         .all()
     )
+
+    # Construir respuesta con ICCID
+    devices = [
+        DeviceOut(
+            device_id=row.device_id,
+            brand=row.brand,
+            model=row.model,
+            firmware_version=row.firmware_version,
+            client_id=row.client_id,
+            status=row.status,
+            last_comm_at=row.last_comm_at,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            last_assignment_at=row.last_assignment_at,
+            notes=row.notes,
+            iccid=row.iccid,
+        )
+        for row in results
+    ]
+
     return devices
 
 
@@ -261,6 +367,7 @@ def get_device(
 ):
     """
     Obtiene el detalle de un dispositivo específico.
+    Incluye el ICCID de la tarjeta SIM si tiene una asignada.
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -270,7 +377,23 @@ def get_device(
             detail="Dispositivo no encontrado",
         )
 
-    return device
+    # Obtener ICCID si tiene SIM asignada
+    sim_card = db.query(SimCard).filter(SimCard.device_id == device_id).first()
+
+    return DeviceOut(
+        device_id=device.device_id,
+        brand=device.brand,
+        model=device.model,
+        firmware_version=device.firmware_version,
+        client_id=device.client_id,
+        status=device.status,
+        last_comm_at=device.last_comm_at,
+        created_at=device.created_at,
+        updated_at=device.updated_at,
+        last_assignment_at=device.last_assignment_at,
+        notes=device.notes,
+        iccid=sim_card.iccid if sim_card else None,
+    )
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
@@ -282,6 +405,9 @@ def update_device(
 ):
     """
     Actualiza información básica del dispositivo.
+    Si se proporciona un ICCID:
+    - Si no existe una sim_card para el dispositivo, se crea.
+    - Si ya existe, se actualiza el ICCID.
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -308,6 +434,24 @@ def update_device(
             event_details=f"Firmware actualizado de {old_version} a {new_version}",
         )
 
+    # Manejar ICCID por separado (no es campo del modelo Device)
+    iccid = update_data.pop("iccid", None)
+    if iccid is not None:
+        # Buscar sim_card existente
+        sim_card = db.query(SimCard).filter(SimCard.device_id == device_id).first()
+
+        if sim_card:
+            # Actualizar ICCID existente
+            sim_card.iccid = iccid
+            sim_card.updated_at = datetime.utcnow()
+        else:
+            # Crear nuevo registro de sim_card
+            sim_card = SimCard(
+                device_id=device_id,
+                iccid=iccid,
+            )
+            db.add(sim_card)
+
     for key, value in update_data.items():
         setattr(device, key, value)
 
@@ -316,7 +460,23 @@ def update_device(
     db.commit()
     db.refresh(device)
 
-    return device
+    # Obtener ICCID actual para la respuesta
+    current_sim = db.query(SimCard).filter(SimCard.device_id == device_id).first()
+
+    return DeviceOut(
+        device_id=device.device_id,
+        brand=device.brand,
+        model=device.model,
+        firmware_version=device.firmware_version,
+        client_id=device.client_id,
+        status=device.status,
+        last_comm_at=device.last_comm_at,
+        created_at=device.created_at,
+        updated_at=device.updated_at,
+        last_assignment_at=device.last_assignment_at,
+        notes=device.notes,
+        iccid=current_sim.iccid if current_sim else None,
+    )
 
 
 @router.patch("/{device_id}/status", response_model=DeviceOut)

@@ -29,6 +29,26 @@ def test_create_device(authenticated_client, test_client_data):
     assert data["status"] == "nuevo"
     assert data["client_id"] is None  # Sin cliente asignado
     assert data["firmware_version"] == "1.0.0"
+    assert data["iccid"] is None  # Sin ICCID
+
+
+def test_create_device_with_iccid(authenticated_client, test_client_data):
+    """
+    Test que crea un nuevo dispositivo con ICCID de SIM.
+    """
+    device_data = {
+        "device_id": "888777666555444",
+        "brand": "TestBrand",
+        "model": "TestModel",
+        "firmware_version": "1.0.0",
+        "notes": "Dispositivo con SIM",
+        "iccid": "89340123456789012345",
+    }
+    response = authenticated_client.post("/api/v1/devices/", json=device_data)
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["device_id"] == device_data["device_id"]
+    assert data["iccid"] == device_data["iccid"]
 
 
 def test_create_device_duplicate_device_id(authenticated_client, test_device_data):
@@ -132,6 +152,78 @@ def test_update_device_info(authenticated_client, test_device_data):
     assert data["brand"] == "UpdatedBrand"
     assert data["model"] == "UpdatedModel"
     assert data["firmware_version"] == "2.0.0"
+
+
+def test_update_device_add_iccid(authenticated_client, test_device_data):
+    """
+    Test que agrega un ICCID a un dispositivo existente.
+    """
+    update_data = {
+        "iccid": "89340123456789012345",
+    }
+    response = authenticated_client.patch(
+        f"/api/v1/devices/{test_device_data.device_id}", json=update_data
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["iccid"] == update_data["iccid"]
+
+
+def test_update_device_change_iccid(authenticated_client, test_device_data):
+    """
+    Test que actualiza el ICCID de un dispositivo.
+    """
+    # Primero agregar un ICCID
+    authenticated_client.patch(
+        f"/api/v1/devices/{test_device_data.device_id}",
+        json={"iccid": "89340123456789012345"},
+    )
+
+    # Luego actualizar a otro ICCID
+    new_iccid = "89340987654321098765"
+    response = authenticated_client.patch(
+        f"/api/v1/devices/{test_device_data.device_id}", json={"iccid": new_iccid}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["iccid"] == new_iccid
+
+
+def test_get_device_with_iccid(authenticated_client, test_device_data):
+    """
+    Test que obtiene un dispositivo con su ICCID.
+    """
+    # Primero agregar un ICCID
+    iccid = "89340123456789012345"
+    authenticated_client.patch(
+        f"/api/v1/devices/{test_device_data.device_id}", json={"iccid": iccid}
+    )
+
+    # Obtener el dispositivo
+    response = authenticated_client.get(f"/api/v1/devices/{test_device_data.device_id}")
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["iccid"] == iccid
+
+
+def test_list_devices_includes_iccid(authenticated_client, test_device_data):
+    """
+    Test que la lista de dispositivos incluye el campo ICCID.
+    """
+    # Agregar ICCID a un dispositivo
+    iccid = "89340123456789012345"
+    authenticated_client.patch(
+        f"/api/v1/devices/{test_device_data.device_id}", json={"iccid": iccid}
+    )
+
+    # Listar dispositivos
+    response = authenticated_client.get("/api/v1/devices/")
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+
+    # Buscar el dispositivo de prueba
+    device = next(d for d in data if d["device_id"] == test_device_data.device_id)
+    assert device["iccid"] == iccid
 
 
 # ============================================
