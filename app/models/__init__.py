@@ -1,7 +1,6 @@
 from app.models.client import Client, ClientStatus
 from app.models.device import Device, DeviceEvent
 from app.models.device_installation import DeviceInstallation
-from app.models.sim_card import SimCard
 from app.models.device_service import (
     DeviceService,
     DeviceServiceStatus,
@@ -12,6 +11,7 @@ from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem, OrderItemType
 from app.models.payment import Payment, PaymentStatus
 from app.models.plan import Plan
+from app.models.sim_card import SimCard
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.trip import Trip, TripAlert, TripEvent, TripPoint

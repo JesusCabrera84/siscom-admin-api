@@ -1,16 +1,27 @@
 """
-Utilidades para generaciรณn de tokens PASETO para compartir ubicaciรณn.
+Utilidades para generación de tokens PASETO.
+
+Soporta dos tipos de tokens:
+1. Tokens de compartir ubicación (scope: public-location-share)
+2. Tokens de servicio para aplicaciones externas (scope: internal-nexus-admin)
 """
 
 import base64
 import json
 from datetime import datetime, timedelta, timezone
+from typing import Literal, Optional
 from uuid import UUID, uuid4
 
 import pyseto
 from pyseto import Key
 
 from app.core.config import settings
+
+# Roles válidos para tokens de servicio
+ServiceRole = Literal["NEXUS_ADMIN"]
+
+# Servicios válidos
+ServiceName = Literal["gac"]
 
 
 class PasetoTokenGenerator:
@@ -85,10 +96,10 @@ class PasetoTokenGenerator:
             token: Token PASETO a decodificar
 
         Returns:
-            dict: Payload del token si es valido, None si es invรกlido o expirado
+            dict: Payload del token si es valido, None si es inválido o expirado
         """
         try:
-            decoded = pyseto.decode(key=self.key, token=token)
+            decoded = pyseto.decode(keys=self.key, token=token)
             payload = json.loads(decoded.payload.decode("utf-8"))
 
             # Validar expiracion
@@ -97,7 +108,118 @@ class PasetoTokenGenerator:
                 return None
 
             # Validar scope
-            if payload.get("scope") != "public-location-share":
+            if payload.get("scope") not in ["public-location-share"]:
+                return None
+
+            return payload
+        except Exception:
+            return None
+
+    def generate_service_token(
+        self,
+        service: str,
+        role: str,
+        expires_in_hours: int = 24,
+        additional_claims: Optional[dict] = None,
+    ) -> tuple[str, datetime]:
+        """
+        Genera un token PASETO para autenticación de servicios externos.
+
+        Args:
+            service: Nombre del servicio (ej: "gac")
+            role: Rol del servicio (ej: "NEXUS_ADMIN")
+            expires_in_hours: Tiempo de expiración en horas (default: 24)
+            additional_claims: Claims adicionales opcionales
+
+        Returns:
+            tuple: (token, fecha_expiracion)
+        """
+        now = datetime.now(timezone.utc)
+        exp = now + timedelta(hours=expires_in_hours)
+
+        payload = {
+            "token_id": str(uuid4()),
+            "service": service,
+            "role": role,
+            "scope": "internal-nexus-admin",
+            "iat": now.isoformat(),
+            "exp": exp.isoformat(),
+        }
+
+        # Agregar claims adicionales si se proporcionan
+        if additional_claims:
+            payload.update(additional_claims)
+
+        # Codificar el payload como JSON bytes
+        payload_bytes = json.dumps(payload).encode("utf-8")
+
+        token = pyseto.encode(
+            key=self.key,
+            payload=payload_bytes,
+        )
+
+        return token.decode("utf-8"), exp
+
+    def decode_service_token(
+        self,
+        token: str,
+        required_service: Optional[str] = None,
+        required_role: Optional[str] = None,
+    ) -> dict | None:
+        """
+        Decodifica y valida un token PASETO de servicio.
+
+        Args:
+            token: Token PASETO a decodificar
+            required_service: Si se proporciona, valida que el service coincida
+            required_role: Si se proporciona, valida que el role coincida
+
+        Returns:
+            dict: Payload del token si es válido, None si es inválido o expirado
+        """
+        try:
+            decoded = pyseto.decode(keys=self.key, token=token)
+            payload = json.loads(decoded.payload.decode("utf-8"))
+
+            # Validar expiración
+            exp = datetime.fromisoformat(payload["exp"])
+            if datetime.now(timezone.utc) > exp:
+                return None
+
+            # Validar scope - aceptar scopes de servicio válidos
+            valid_service_scopes = {"service-auth", "internal-nexus-admin"}
+            if payload.get("scope") not in valid_service_scopes:
+                return None
+
+            # Validar service si se requiere
+            if required_service and payload.get("service") != required_service:
+                return None
+
+            # Validar role si se requiere
+            if required_role and payload.get("role") != required_role:
+                return None
+
+            return payload
+        except Exception:
+            return None
+
+    def decode_any_token(self, token: str) -> dict | None:
+        """
+        Intenta decodificar cualquier token PASETO válido (share o service).
+
+        Args:
+            token: Token PASETO a decodificar
+
+        Returns:
+            dict: Payload del token si es válido, None si es inválido o expirado
+        """
+        try:
+            decoded = pyseto.decode(keys=self.key, token=token)
+            payload = json.loads(decoded.payload.decode("utf-8"))
+
+            # Validar expiración
+            exp = datetime.fromisoformat(payload["exp"])
+            if datetime.now(timezone.utc) > exp:
                 return None
 
             return payload
@@ -140,3 +262,45 @@ def decode_location_share_token(token: str) -> dict | None:
         dict: Payload del token si es válido, None si es inválido o expirado
     """
     return paseto_generator.decode_share_token(token)
+
+
+def generate_service_token(
+    service: str,
+    role: str,
+    expires_in_hours: int = 24,
+    additional_claims: Optional[dict] = None,
+) -> tuple[str, datetime]:
+    """
+    Función helper para generar un token de servicio.
+
+    Args:
+        service: Nombre del servicio (ej: "gac")
+        role: Rol del servicio (ej: "NEXUS_ADMIN")
+        expires_in_hours: Tiempo de expiración en horas (default: 24)
+        additional_claims: Claims adicionales opcionales
+
+    Returns:
+        tuple: (token, fecha_expiracion)
+    """
+    return paseto_generator.generate_service_token(
+        service, role, expires_in_hours, additional_claims
+    )
+
+
+def decode_service_token(
+    token: str,
+    required_service: Optional[str] = None,
+    required_role: Optional[str] = None,
+) -> dict | None:
+    """
+    Función helper para decodificar un token de servicio.
+
+    Args:
+        token: Token PASETO a decodificar
+        required_service: Si se proporciona, valida que el service coincida
+        required_role: Si se proporciona, valida que el role coincida
+
+    Returns:
+        dict: Payload del token si es válido, None si es inválido o expirado
+    """
+    return paseto_generator.decode_service_token(token, required_service, required_role)

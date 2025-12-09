@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
+    AuthResult,
+    get_auth_for_gac_nexus_admin,
     get_current_client_id,
     get_current_user_full,
     get_current_user_id,
@@ -64,10 +66,14 @@ def create_device_event(
 def create_device(
     device_in: DeviceCreate,
     db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
+    auth: AuthResult = Depends(get_auth_for_gac_nexus_admin),
 ):
     """
     Registra un nuevo dispositivo en el inventario.
+
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
 
     Regla: El dispositivo se crea con status='nuevo' y sin cliente asignado.
     Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM.
@@ -102,16 +108,26 @@ def create_device(
         db.add(sim_card)
 
     # Registrar evento de creación
-    event_details = f"Dispositivo {device.brand} {device.model} registrado en inventario"
+    event_details = (
+        f"Dispositivo {device.brand} {device.model} registrado en inventario"
+    )
     if device_in.iccid:
         event_details += f" con SIM ICCID: {device_in.iccid}"
+
+    # Determinar quién realizó la acción según el tipo de autenticación
+    performed_by = None
+    if auth.auth_type == "cognito":
+        performed_by = auth.user_id
+        event_details += " (por usuario Cognito)"
+    else:
+        event_details += f" (por servicio {auth.service} con rol {auth.role})"
 
     create_device_event(
         db=db,
         device_id=device.device_id,
         event_type="creado",
         new_status="nuevo",
-        performed_by=user_id,
+        performed_by=performed_by,
         event_details=event_details,
     )
 
@@ -151,23 +167,20 @@ def list_devices(
     - client_id: Filtrar por cliente
     - brand: Filtrar por marca
     """
-    query = (
-        db.query(
-            Device.device_id,
-            Device.brand,
-            Device.model,
-            Device.firmware_version,
-            Device.client_id,
-            Device.status,
-            Device.last_comm_at,
-            Device.created_at,
-            Device.updated_at,
-            Device.last_assignment_at,
-            Device.notes,
-            SimCard.iccid.label("iccid"),
-        )
-        .outerjoin(SimCard, SimCard.device_id == Device.device_id)
-    )
+    query = db.query(
+        Device.device_id,
+        Device.brand,
+        Device.model,
+        Device.firmware_version,
+        Device.client_id,
+        Device.status,
+        Device.last_comm_at,
+        Device.created_at,
+        Device.updated_at,
+        Device.last_assignment_at,
+        Device.notes,
+        SimCard.iccid.label("iccid"),
+    ).outerjoin(SimCard, SimCard.device_id == Device.device_id)
 
     if status_filter:
         query = query.filter(Device.status == status_filter)
@@ -401,10 +414,15 @@ def update_device(
     device_id: str,
     device_update: DeviceUpdate,
     db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
+    auth: AuthResult = Depends(get_auth_for_gac_nexus_admin),
 ):
     """
     Actualiza información básica del dispositivo.
+
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+
     Si se proporciona un ICCID:
     - Si no existe una sim_card para el dispositivo, se crea.
     - Si ya existe, se actualiza el ICCID.
@@ -419,6 +437,14 @@ def update_device(
 
     update_data = device_update.model_dump(exclude_unset=True)
 
+    # Determinar quién realizó la acción según el tipo de autenticación
+    performed_by = auth.user_id if auth.auth_type == "cognito" else None
+    auth_suffix = (
+        "(por usuario Cognito)"
+        if auth.auth_type == "cognito"
+        else f"(por servicio {auth.service} con rol {auth.role})"
+    )
+
     # Si se actualiza firmware, registrar evento
     if (
         "firmware_version" in update_data
@@ -430,8 +456,8 @@ def update_device(
             db=db,
             device_id=device.device_id,
             event_type="firmware_actualizado",
-            performed_by=user_id,
-            event_details=f"Firmware actualizado de {old_version} a {new_version}",
+            performed_by=performed_by,
+            event_details=f"Firmware actualizado de {old_version} a {new_version} {auth_suffix}",
         )
 
     # Manejar ICCID por separado (no es campo del modelo Device)

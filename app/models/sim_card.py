@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional, Any
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, ForeignKey, Text, text
-from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlmodel import Field, Index, SQLModel, Relationship
+from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -43,32 +43,22 @@ class SimCard(SQLModel, table=True):
     )
 
     carrier: str = Field(
-        default="KORE",
-        sa_column=Column(Text, nullable=False, server_default="KORE")
+        default="KORE", sa_column=Column(Text, nullable=False, server_default="KORE")
     )
 
-    iccid: str = Field(
-        sa_column=Column(Text, nullable=False)
-    )
+    iccid: str = Field(sa_column=Column(Text, nullable=False))
 
-    imsi: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
-    )
+    imsi: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
-    msisdn: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
-    )
+    msisdn: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
     status: str = Field(
         default="active",
-        sa_column=Column(Text, nullable=False, server_default="active")
+        sa_column=Column(Text, nullable=False, server_default="active"),
     )
 
     metadata_: Optional[dict] = Field(
-        default=None,
-        sa_column=Column("metadata", JSONB, nullable=True)
+        default=None, sa_column=Column("metadata", JSONB, nullable=True)
     )
 
     created_at: datetime = Field(
