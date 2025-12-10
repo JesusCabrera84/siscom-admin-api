@@ -1,4 +1,5 @@
 from app.models.client import Client, ClientStatus
+from app.models.command import Command
 from app.models.device import Device, DeviceEvent
 from app.models.device_installation import DeviceInstallation
 from app.models.device_service import (
@@ -25,6 +26,7 @@ from app.models.vehicle_profile import VehicleProfile
 __all__ = [
     "Client",
     "ClientStatus",
+    "Command",
     "User",
     "Unit",
     "UnitProfile",

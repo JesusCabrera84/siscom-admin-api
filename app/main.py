@@ -31,10 +31,21 @@ async def limit_body_size(request: Request, call_next):
 
     return await call_next(request)
 
+# CORS Configuration
+origins = [
+    "http://localhost",
+    "http://localhost:3000",  # Common frontend port
+    "http://localhost:8080",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://10.8.0.1:5160",
+    "http://localhost:5160",
+    "http://127.0.0.1:5160",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

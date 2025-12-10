@@ -1,4 +1,10 @@
 from app.schemas.client import ClientBase, ClientOut
+from app.schemas.command import (
+    CommandCreate,
+    CommandListResponse,
+    CommandOut,
+    CommandResponse,
+)
 from app.schemas.device import (
     DeviceBase,
     DeviceCreate,
@@ -30,6 +36,10 @@ from app.schemas.user import UserBase, UserCreate, UserOut
 __all__ = [
     "ClientBase",
     "ClientOut",
+    "CommandCreate",
+    "CommandResponse",
+    "CommandOut",
+    "CommandListResponse",
     "UserBase",
     "UserCreate",
     "UserOut",
