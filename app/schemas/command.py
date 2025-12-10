@@ -33,7 +33,8 @@ class CommandOut(BaseModel):
     template_id: Optional[UUID] = None
     command: str
     media: str
-    request_user_id: UUID
+    request_user_id: Optional[UUID] = None
+    request_user_email: str
     device_id: str
     requested_at: datetime
     updated_at: datetime

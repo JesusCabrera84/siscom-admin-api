@@ -385,3 +385,41 @@ class RefreshTokenResponse(BaseModel):
                 "expires_in": 3600,
             }
         }
+
+
+class InternalTokenRequest(BaseModel):
+    """Schema para solicitar un token interno PASETO."""
+
+    email: EmailStr = Field(..., description="Email del usuario que solicita el token")
+    service: str = Field(..., description="Nombre del servicio (ej: 'gac')")
+    role: str = Field(..., description="Rol del servicio (ej: 'NEXUS_ADMIN')")
+    expires_in_hours: int = Field(
+        default=24, ge=1, le=720, description="Horas de validez del token (1-720)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "usuario@ejemplo.com",
+                "service": "gac",
+                "role": "NEXUS_ADMIN",
+                "expires_in_hours": 24,
+            }
+        }
+
+
+class InternalTokenResponse(BaseModel):
+    """Schema para la respuesta del token interno PASETO."""
+
+    token: str = Field(..., description="Token PASETO generado")
+    expires_at: datetime = Field(..., description="Fecha de expiración del token")
+    token_type: str = Field(default="Bearer", description="Tipo de token")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "v4.local.xxx...",
+                "expires_at": "2024-01-16T10:30:00Z",
+                "token_type": "Bearer",
+            }
+        }

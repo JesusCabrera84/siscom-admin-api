@@ -1,10 +1,10 @@
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user_id
+from app.api.deps import AuthResult, get_auth_cognito_or_paseto
 from app.db.session import get_db
 from app.models.command import Command
 from app.models.device import Device
@@ -17,22 +17,32 @@ from app.schemas.command import (
 
 router = APIRouter()
 
+# Dependencia para autenticación dual (Cognito o PASETO)
+get_auth_for_commands = get_auth_cognito_or_paseto(
+    required_service="gac",
+    required_role="NEXUS_ADMIN",
+)
+
 
 @router.post("", response_model=CommandResponse, status_code=status.HTTP_201_CREATED)
 def create_command(
     command_in: CommandCreate,
     db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
+    auth: AuthResult = Depends(get_auth_for_commands),
 ):
     """
     Crea un nuevo comando para enviar a un dispositivo.
+
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
 
     **Parámetros:**
     - `command`: El comando a enviar al dispositivo
     - `media`: Medio de comunicación (sms, tcp, etc.)
     - `device_id`: ID del dispositivo destino
     - `template_id`: (Opcional) ID del template de comando
-    - `metadata`: (Opcional) Datos adicionales del comando
+    - `command_metadata`: (Opcional) Datos adicionales del comando
 
     **Retorna:**
     - `command_id`: UUID del comando creado
@@ -46,12 +56,36 @@ def create_command(
             detail="Dispositivo no encontrado",
         )
 
+    # Obtener email según el tipo de autenticación
+    # Para Cognito: obtener email del payload del token
+    # Para PASETO: obtener email del payload
+    request_user_email: str
+    request_user_id = None
+
+    if auth.auth_type == "cognito":
+        # Obtener email del token Cognito
+        request_user_email = auth.payload.get("email")
+        request_user_id = auth.user_id
+        if not request_user_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token Cognito inválido: falta el campo 'email'",
+            )
+    else:  # paseto
+        request_user_email = auth.payload.get("email")
+        if not request_user_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token PASETO inválido: falta el campo 'email'",
+            )
+
     # Crear el comando
     command = Command(
         template_id=command_in.template_id,
         command=command_in.command,
         media=command_in.media,
-        request_user_id=user_id,
+        request_user_id=request_user_id,
+        request_user_email=request_user_email,
         device_id=command_in.device_id,
         command_metadata=command_in.command_metadata,
         status="pending",
@@ -71,7 +105,7 @@ def create_command(
 def get_commands_by_device(
     device_id: str,
     db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
+    auth: AuthResult = Depends(get_auth_for_commands),
     status_filter: Optional[str] = Query(
         None, description="Filtrar por estado (pending, sent, delivered, failed)"
     ),
@@ -80,6 +114,10 @@ def get_commands_by_device(
 ):
     """
     Obtiene todos los comandos enviados a un dispositivo específico.
+
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
 
     **Parámetros:**
     - `device_id`: ID del dispositivo
@@ -127,6 +165,7 @@ def get_commands_by_device(
             command=cmd.command,
             media=cmd.media,
             request_user_id=cmd.request_user_id,
+            request_user_email=cmd.request_user_email,
             device_id=cmd.device_id,
             requested_at=cmd.requested_at,
             updated_at=cmd.updated_at,
@@ -143,10 +182,14 @@ def get_commands_by_device(
 def get_command(
     command_id: UUID,
     db: Session = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
+    auth: AuthResult = Depends(get_auth_for_commands),
 ):
     """
     Obtiene el detalle de un comando específico por su ID.
+
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
 
     **Parámetros:**
     - `command_id`: UUID del comando
@@ -168,6 +211,7 @@ def get_command(
         command=command.command,
         media=command.media,
         request_user_id=command.request_user_id,
+        request_user_email=command.request_user_email,
         device_id=command.device_id,
         requested_at=command.requested_at,
         updated_at=command.updated_at,

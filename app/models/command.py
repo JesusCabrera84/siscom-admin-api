@@ -42,20 +42,22 @@ class Command(SQLModel, table=True):
         )
     )
 
+    # FK a command_templates se maneja a nivel de BD (no hay modelo SQLAlchemy)
     template_id: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(
-            PGUUID(as_uuid=True),
-            ForeignKey("command_templates.template_id", ondelete="SET NULL"),
-            nullable=True,
-        ),
+        sa_column=Column(PGUUID(as_uuid=True), nullable=True),
     )
 
     command: str = Field(sa_column=Column(Text, nullable=False))
     media: str = Field(sa_column=Column(Text, nullable=False))
 
-    request_user_id: UUID = Field(
-        sa_column=Column(PGUUID(as_uuid=True), nullable=False)
+    request_user_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PGUUID(as_uuid=True), nullable=True),
+    )
+
+    request_user_email: str = Field(
+        sa_column=Column(Text, nullable=False)
     )
 
     device_id: str = Field(

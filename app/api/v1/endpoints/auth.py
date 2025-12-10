@@ -22,6 +22,8 @@ from app.schemas.user import (
     ConfirmEmailResponse,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
+    InternalTokenRequest,
+    InternalTokenResponse,
     LogoutResponse,
     RefreshTokenRequest,
     RefreshTokenResponse,
@@ -36,6 +38,7 @@ from app.services.notifications import (
     send_password_reset_email,
     send_verification_email,
 )
+from app.utils.paseto_token import generate_service_token
 from app.utils.security import generate_temporary_password, generate_verification_token
 
 router = APIRouter()
@@ -997,3 +1000,48 @@ def logout_user(
 
     # 3️⃣ Retornar mensaje de éxito
     return LogoutResponse(message="Sesión cerrada exitosamente.")
+
+
+# ------------------------------------------
+# Token interno PASETO para servicios
+# ------------------------------------------
+@router.post(
+    "/internal",
+    response_model=InternalTokenResponse,
+    status_code=status.HTTP_200_OK,
+)
+def generate_internal_token(
+    request: InternalTokenRequest,
+):
+    """
+    Genera un token PASETO para autenticación de servicios internos.
+
+    Este endpoint permite a servicios internos obtener un token PASETO
+    que puede usarse para autenticarse en otros endpoints de la API.
+
+    **Parámetros:**
+    - `email`: Email del usuario que solicita el token (obligatorio)
+    - `service`: Nombre del servicio (ej: "gac")
+    - `role`: Rol del servicio (ej: "NEXUS_ADMIN")
+    - `expires_in_hours`: Horas de validez del token (default: 24, max: 720)
+
+    **Retorna:**
+    - `token`: Token PASETO generado
+    - `expires_at`: Fecha de expiración del token
+    - `token_type`: Tipo de token (Bearer)
+
+    **Nota:** Este endpoint debe estar protegido en producción
+    mediante reglas de firewall o API Gateway.
+    """
+    token, expires_at = generate_service_token(
+        service=request.service,
+        role=request.role,
+        expires_in_hours=request.expires_in_hours,
+        additional_claims={"email": request.email},
+    )
+
+    return InternalTokenResponse(
+        token=token,
+        expires_at=expires_at,
+        token_type="Bearer",
+    )

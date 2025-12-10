@@ -4,6 +4,8 @@
 
 Endpoints para gestionar autenticación de usuarios con AWS Cognito, incluyendo login, renovación de tokens, recuperación de contraseña, cambio de contraseña y verificación de email.
 
+También soporta generación de tokens PASETO para autenticación de servicios internos.
+
 ---
 
 ## Endpoints
@@ -225,7 +227,141 @@ Renueva el access token y el id token usando un refresh token válido.
 
 ---
 
-### 7. Reenviar Verificación de Email
+### 7. Generar Token Interno (PASETO)
+
+**POST** `/api/v1/auth/internal`
+
+Genera un token PASETO para autenticación de servicios internos. Este token permite a servicios externos autenticarse en la API sin necesidad de un usuario de Cognito.
+
+---
+
+## ⛔ ADVERTENCIA CRÍTICA DE SEGURIDAD ⛔
+
+> ### 🚨 NUNCA EXPONER ESTE ENDPOINT PÚBLICAMENTE 🚨
+>
+> Este endpoint genera tokens que contienen el **email del usuario** y se utilizan para:
+> - Identificar quién ejecuta comandos en dispositivos (`request_user_email`)
+> - Autenticar servicios internos sin validación de credenciales
+>
+> ### Riesgos si se expone públicamente:
+> - **Suplantación de identidad**: Cualquiera puede generar tokens con cualquier email
+> - **Acceso no autorizado**: Los tokens permiten ejecutar comandos en dispositivos
+> - **Sin auditoría confiable**: Los logs mostrarán emails falsos
+>
+> ### Medidas obligatorias:
+> 1. **NUNCA** hacer público `gac-admin` ni ninguna aplicación que use este endpoint
+> 2. Proteger con **firewall** que solo permita IPs de servicios autorizados
+> 3. Usar **VPN** o **red privada** para comunicación entre servicios
+> 4. Implementar **API Gateway** con políticas de acceso restrictivas
+> 5. **Auditar** regularmente los accesos a este endpoint
+
+---
+
+#### Request Body
+
+```json
+{
+  "email": "usuario@ejemplo.com",
+  "service": "gac",
+  "role": "NEXUS_ADMIN",
+  "expires_in_hours": 24
+}
+```
+
+#### Campos del Request
+
+| Campo             | Tipo   | Requerido | Descripción                                        |
+| ----------------- | ------ | --------- | -------------------------------------------------- |
+| `email`           | string | Sí        | Email del usuario que solicita el token            |
+| `service`         | string | Sí        | Nombre del servicio (ej: "gac")                    |
+| `role`            | string | Sí        | Rol del servicio (ej: "NEXUS_ADMIN")               |
+| `expires_in_hours`| int    | No        | Horas de validez del token (default: 24, max: 720) |
+
+#### Response 200 OK
+
+```json
+{
+  "token": "v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4...",
+  "expires_at": "2024-01-16T10:30:00Z",
+  "token_type": "Bearer"
+}
+```
+
+#### Contenido del Token (Payload)
+
+El token PASETO generado contiene la siguiente información:
+
+```json
+{
+  "token_id": "550e8400-e29b-41d4-a716-446655440000",
+  "service": "gac",
+  "role": "NEXUS_ADMIN",
+  "scope": "internal-nexus-admin",
+  "email": "usuario@ejemplo.com",
+  "iat": "2024-01-15T10:30:00Z",
+  "exp": "2024-01-16T10:30:00Z"
+}
+```
+
+| Campo      | Descripción                                    |
+| ---------- | ---------------------------------------------- |
+| `token_id` | UUID único del token                           |
+| `service`  | Nombre del servicio                            |
+| `role`     | Rol asignado al servicio                       |
+| `scope`    | Alcance del token (`internal-nexus-admin`)     |
+| `email`    | Email del usuario que solicitó el token        |
+| `iat`      | Fecha de emisión (issued at)                   |
+| `exp`      | Fecha de expiración                            |
+
+#### Ejemplo Completo
+
+**1. Obtener el token:**
+
+```bash
+curl -X POST http://api.example.com/api/v1/auth/internal \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "usuario@ejemplo.com",
+    "service": "gac",
+    "role": "NEXUS_ADMIN",
+    "expires_in_hours": 24
+  }'
+```
+
+**2. Usar el token en endpoints protegidos:**
+
+```bash
+curl -X POST http://api.example.com/api/v1/commands \
+  -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..." \
+  -H "Content-Type: application/json" \
+  -d '{"command": "AT+LOCATION", "media": "sms", "device_id": "123456"}'
+```
+
+#### Endpoints que Aceptan Tokens PASETO
+
+Los siguientes endpoints aceptan autenticación dual (Cognito o PASETO):
+
+| Endpoint                              | Servicio Requerido | Rol Requerido |
+| ------------------------------------- | ------------------ | ------------- |
+| `POST /api/v1/commands`               | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/commands/{command_id}`   | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/commands/device/{id}`    | gac                | NEXUS_ADMIN   |
+| `POST /api/v1/devices`                | gac                | NEXUS_ADMIN   |
+| `PATCH /api/v1/devices/{device_id}`   | gac                | NEXUS_ADMIN   |
+
+#### Notas de Seguridad
+
+- **⚠️ Importante**: Este endpoint debe estar protegido en producción mediante:
+  - Reglas de firewall que limiten el acceso solo a servicios autorizados
+  - API Gateway con políticas de acceso
+  - VPN o red privada
+- El token generado tiene acceso completo según el rol especificado
+- Los tokens PASETO son firmados simétricamente usando la clave `PASETO_SECRET_KEY`
+- No se requiere autenticación para llamar a este endpoint (debe protegerse externamente)
+
+---
+
+### 9. Reenviar Verificación de Email
 
 **POST** `/api/v1/auth/resend-verification`
 
@@ -266,7 +402,7 @@ Reenvía el correo de verificación de email a un usuario no verificado. Este en
 
 ---
 
-### 8. Verificar Email
+### 10. Verificar Email
 
 **POST** `/api/v1/auth/verify-email`
 
@@ -434,6 +570,8 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 
 ## Notas de Seguridad
 
+### Tokens Cognito
+
 - Los tokens de acceso expiran en 1 hora
 - Los tokens de verificación de email expiran en 24 horas
 - Los códigos de recuperación de contraseña expiran en 1 hora
@@ -441,6 +579,27 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 - El refresh token puede usarse para obtener nuevos access tokens sin reautenticar
 - Los refresh tokens tienen una duración mayor (típicamente 30 días)
 - **Contraseñas temporales**: Se reutilizan en reenvíos para usuarios master, nunca se envían por correo, solo se usan internamente para Cognito
-- Los endpoints públicos (no requieren autenticación): login, forgot-password, reset-password, resend-verification, verify-email, refresh
-- Los endpoints protegidos (requieren autenticación): password (cambiar contraseña), logout
+
+### Tokens PASETO (Servicios Internos)
+
+- Los tokens PASETO son para autenticación de servicios internos (server-to-server)
+- Se generan con `POST /api/v1/auth/internal`
+- Expiran según el parámetro `expires_in_hours` (default: 24 horas, máximo: 720 horas)
+- Usan cifrado simétrico (PASETO v4.local) con la clave `PASETO_SECRET_KEY`
+- Requieren `service` y `role` específicos para acceder a endpoints protegidos
+- El endpoint `/internal` debe protegerse externamente (firewall, API Gateway, VPN)
+
+### Clasificación de Endpoints
+
+| Tipo | Endpoints |
+|------|-----------|
+| **Públicos** (sin autenticación) | login, forgot-password, reset-password, resend-verification, verify-email, refresh, internal |
+| **Protegidos** (requieren Cognito) | password (cambiar contraseña), logout |
+| **Duales** (Cognito o PASETO) | commands, devices (crear/actualizar) |
+
+### Mejores Prácticas
+
 - Por seguridad, los endpoints forgot-password y resend-verification siempre retornan el mismo mensaje sin revelar si el email existe
+- El endpoint `/internal` debe protegerse a nivel de infraestructura (no exponer públicamente)
+- Los tokens PASETO deben almacenarse de forma segura en los servicios que los usen
+- Usar tiempos de expiración cortos para tokens PASETO en ambientes de producción

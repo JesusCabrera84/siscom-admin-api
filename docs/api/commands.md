@@ -6,6 +6,18 @@ Endpoints para gestionar comandos enviados a dispositivos GPS/IoT. Permite crear
 
 ---
 
+## ⚠️ ADVERTENCIA DE SEGURIDAD
+
+> **IMPORTANTE:** Este endpoint utiliza el campo `email` del token de autenticación para identificar al usuario que crea el comando (`request_user_email`).
+>
+> **Para mantener la seguridad del sistema:**
+> - **NUNCA** exponer públicamente aplicaciones como `gac-admin` u otros servicios que generen tokens PASETO
+> - El endpoint `POST /api/v1/auth/internal` debe estar protegido por firewall, VPN o API Gateway
+> - Los tokens PASETO contienen el email del usuario, si se compromete un token, se puede suplantar la identidad
+> - Solo servicios internos de confianza deben tener acceso a la generación de tokens
+
+---
+
 ## Modelo de Datos
 
 ### Command
@@ -17,6 +29,7 @@ Endpoints para gestionar comandos enviados a dispositivos GPS/IoT. Permite crear
   "command": "AT+LOCATION",
   "media": "sms",
   "request_user_id": "def45678-e89b-12d3-a456-426614174000",
+  "request_user_email": "usuario@ejemplo.com",
   "device_id": "353451234567890",
   "requested_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-15T10:35:00Z",
@@ -45,18 +58,19 @@ El campo `status` representa el estado actual del comando en su ciclo de vida:
 
 ## Campos del Modelo
 
-| Campo            | Tipo      | Requerido | Descripción                                      |
-| ---------------- | --------- | --------- | ------------------------------------------------ |
-| `command_id`     | UUID      | Auto      | Identificador único del comando (generado)       |
-| `template_id`    | UUID      | No        | Referencia al template de comando usado          |
-| `command`        | TEXT      | Sí        | El comando a enviar al dispositivo               |
-| `media`          | TEXT      | Sí        | Medio de comunicación (sms, tcp, etc.)           |
-| `request_user_id`| UUID      | Auto      | Usuario que creó el comando (del token)          |
-| `device_id`      | TEXT      | Sí        | ID del dispositivo destino                       |
-| `requested_at`   | TIMESTAMP | Auto      | Fecha/hora de creación del comando               |
-| `updated_at`     | TIMESTAMP | Auto      | Fecha/hora de última actualización               |
-| `status`         | TEXT      | Auto      | Estado actual del comando                        |
-| `metadata`       | JSONB     | No        | Datos adicionales (source_id, response_raw, etc.)|
+| Campo               | Tipo      | Requerido | Descripción                                      |
+| ------------------- | --------- | --------- | ------------------------------------------------ |
+| `command_id`        | UUID      | Auto      | Identificador único del comando (generado)       |
+| `template_id`       | UUID      | No        | Referencia al template de comando usado          |
+| `command`           | TEXT      | Sí        | El comando a enviar al dispositivo               |
+| `media`             | TEXT      | Sí        | Medio de comunicación (sms, tcp, etc.)           |
+| `request_user_id`   | UUID      | No        | UUID del usuario (solo con token Cognito)        |
+| `request_user_email`| TEXT      | Auto      | Email del usuario que creó el comando (del token)|
+| `device_id`         | TEXT      | Sí        | ID del dispositivo destino                       |
+| `requested_at`      | TIMESTAMP | Auto      | Fecha/hora de creación del comando               |
+| `updated_at`        | TIMESTAMP | Auto      | Fecha/hora de última actualización               |
+| `status`            | TEXT      | Auto      | Estado actual del comando                        |
+| `metadata`          | JSONB     | No        | Datos adicionales (source_id, response_raw, etc.)|
 
 ---
 
@@ -385,9 +399,11 @@ El campo `metadata` es flexible (JSONB) y puede contener información adicional 
 
 ### Autenticación
 
-- Todos los endpoints requieren token de Cognito válido
-- El `request_user_id` se obtiene automáticamente del token autenticado
-- No es posible crear comandos como otro usuario
+- Todos los endpoints soportan autenticación dual:
+  - **Token Cognito**: Para usuarios autenticados del sistema
+  - **Token PASETO**: Para servicios internos (requiere `service="gac"` y `role="NEXUS_ADMIN"`)
+- El `request_user_id` se obtiene del token Cognito, o del payload PASETO si está disponible
+- Para obtener un token PASETO, usar `POST /api/v1/auth/internal`
 
 ### Auditoría
 
