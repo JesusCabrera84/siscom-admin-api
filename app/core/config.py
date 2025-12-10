@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # PASETO - Token para compartir ubicación
     PASETO_SECRET_KEY: str
 
+    # KORE Wireless - API para envío de comandos SMS
+    KORE_CLIENT_ID: Optional[str] = None
+    KORE_CLIENT_SECRET: Optional[str] = None
+    KORE_API_AUTH: Optional[str] = None  # URL del endpoint de autenticación
+    KORE_API_SMS: Optional[str] = None  # URL del endpoint de SMS
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

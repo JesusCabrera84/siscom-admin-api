@@ -31,6 +31,7 @@ async def limit_body_size(request: Request, call_next):
 
     return await call_next(request)
 
+
 # CORS Configuration
 origins = [
     "http://localhost",

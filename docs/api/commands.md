@@ -80,7 +80,15 @@ El campo `status` representa el estado actual del comando en su ciclo de vida:
 
 **POST** `/api/v1/commands`
 
-Crea un nuevo comando para enviar a un dispositivo. El comando se crea con estado `pending`.
+Crea un nuevo comando para enviar a un dispositivo.
+
+**Comportamiento con KORE Wireless:**
+- Si el dispositivo tiene una SIM con `kore_sim_id` configurado en la vista `unified_sim_profiles`, el comando se enviará automáticamente vía KORE SMS.
+- Si el envío KORE es exitoso, el estado será `sent`.
+- Si no hay SIM KORE configurada o el envío falla, el estado será `pending`.
+- Los detalles del envío KORE se guardan en `metadata.kore_response` o `metadata.kore_error`.
+
+> Ver [Guía de Integración KORE](../guides/kore-integration.md) para más detalles.
 
 #### Headers
 
@@ -119,10 +127,19 @@ Authorization: Bearer <access_token>
 
 #### Response 201 Created
 
+**Sin integración KORE o sin kore_sim_id:**
 ```json
 {
   "command_id": "42bfcefb-4aa3-4866-b12b-7fa34b87f923",
   "status": "pending"
+}
+```
+
+**Con integración KORE exitosa:**
+```json
+{
+  "command_id": "42bfcefb-4aa3-4866-b12b-7fa34b87f923",
+  "status": "sent"
 }
 ```
 
@@ -390,6 +407,22 @@ El campo `metadata` es flexible (JSONB) y puede contener información adicional 
   "error_code": "DEVICE_OFFLINE",
   "error_message": "Device did not respond after 3 attempts",
   "last_attempt_at": "2024-01-15T10:45:00Z"
+}
+
+// Con integración KORE (envío exitoso)
+{
+  "source_id": "web_dashboard",
+  "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+  "kore_response": {
+    "sid": "SMxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": "queued"
+  }
+}
+
+// Con integración KORE (error)
+{
+  "source_id": "web_dashboard",
+  "kore_error": "Error de autenticación KORE: 401 Unauthorized"
 }
 ```
 

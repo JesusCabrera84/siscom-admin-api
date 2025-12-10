@@ -16,6 +16,7 @@ from app.models.sim_card import SimCard
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.trip import Trip, TripAlert, TripEvent, TripPoint
+from app.models.unified_sim_profile import UnifiedSimProfile
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.models.unit_profile import UnitProfile
@@ -56,4 +57,5 @@ __all__ = [
     "TripAlert",
     "TripEvent",
     "SimCard",
+    "UnifiedSimProfile",
 ]

@@ -56,9 +56,7 @@ class Command(SQLModel, table=True):
         sa_column=Column(PGUUID(as_uuid=True), nullable=True),
     )
 
-    request_user_email: str = Field(
-        sa_column=Column(Text, nullable=False)
-    )
+    request_user_email: str = Field(sa_column=Column(Text, nullable=False))
 
     device_id: str = Field(
         sa_column=Column(

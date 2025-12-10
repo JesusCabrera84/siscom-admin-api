@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from uuid import UUID
 
@@ -8,12 +9,16 @@ from app.api.deps import AuthResult, get_auth_cognito_or_paseto
 from app.db.session import get_db
 from app.models.command import Command
 from app.models.device import Device
+from app.models.unified_sim_profile import UnifiedSimProfile
 from app.schemas.command import (
     CommandCreate,
     CommandListResponse,
     CommandOut,
     CommandResponse,
 )
+from app.services.kore import KoreAuthError, KoreSmsError, kore_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -25,7 +30,7 @@ get_auth_for_commands = get_auth_cognito_or_paseto(
 
 
 @router.post("", response_model=CommandResponse, status_code=status.HTTP_201_CREATED)
-def create_command(
+async def create_command(
     command_in: CommandCreate,
     db: Session = Depends(get_db),
     auth: AuthResult = Depends(get_auth_for_commands),
@@ -44,9 +49,13 @@ def create_command(
     - `template_id`: (Opcional) ID del template de comando
     - `command_metadata`: (Opcional) Datos adicionales del comando
 
+    **Comportamiento:**
+    - Si el dispositivo tiene una SIM con kore_sim_id configurado,
+      el comando se enviará automáticamente vía KORE SMS.
+
     **Retorna:**
     - `command_id`: UUID del comando creado
-    - `status`: Estado inicial del comando ('pending')
+    - `status`: Estado del comando ('pending', 'sent', o 'failed')
     """
     # Verificar que el dispositivo existe
     device = db.query(Device).filter(Device.device_id == command_in.device_id).first()
@@ -94,6 +103,76 @@ def create_command(
     db.add(command)
     db.commit()
     db.refresh(command)
+
+    # Intentar enviar el comando vía KORE si está configurado
+    kore_error = None
+
+    if kore_service.is_configured():
+        # Consultar la vista unified_sim_profiles para obtener kore_sim_id
+        sim_profile = (
+            db.query(UnifiedSimProfile)
+            .filter(UnifiedSimProfile.device_id == command_in.device_id)
+            .first()
+        )
+
+        if sim_profile and sim_profile.kore_sim_id:
+            logger.info(
+                f"[COMMANDS] Enviando comando vía KORE para device_id={command_in.device_id}, "
+                f"kore_sim_id={sim_profile.kore_sim_id}"
+            )
+
+            try:
+                # Autenticar con KORE
+                auth_response = await kore_service.authenticate()
+
+                # Enviar el comando SMS
+                sms_response = await kore_service.send_sms_command(
+                    kore_sim_id=sim_profile.kore_sim_id,
+                    payload=command_in.command,
+                    access_token=auth_response.access_token,
+                )
+
+                if sms_response.success:
+                    # Actualizar estado del comando a 'sent'
+                    command.status = "sent"
+                    # Guardar metadata de la respuesta de KORE
+                    if command.command_metadata is None:
+                        command.command_metadata = {}
+                    command.command_metadata["kore_response"] = (
+                        sms_response.response_data
+                    )
+                    command.command_metadata["kore_sim_id"] = sim_profile.kore_sim_id
+                    logger.info(
+                        f"[COMMANDS] Comando enviado exitosamente vía KORE: "
+                        f"command_id={command.command_id}"
+                    )
+                else:
+                    # Error al enviar, mantener como pending o marcar como failed
+                    kore_error = sms_response.message
+                    logger.warning(
+                        f"[COMMANDS] Error KORE al enviar comando: {kore_error}"
+                    )
+
+            except KoreAuthError as e:
+                kore_error = f"Error de autenticación KORE: {str(e)}"
+                logger.error(f"[COMMANDS] {kore_error}")
+
+            except KoreSmsError as e:
+                kore_error = f"Error SMS KORE: {str(e)}"
+                logger.error(f"[COMMANDS] {kore_error}")
+
+            except Exception as e:
+                kore_error = f"Error inesperado KORE: {str(e)}"
+                logger.exception(f"[COMMANDS] {kore_error}")
+
+            # Guardar error en metadata si hubo
+            if kore_error:
+                if command.command_metadata is None:
+                    command.command_metadata = {}
+                command.command_metadata["kore_error"] = kore_error
+
+            db.commit()
+            db.refresh(command)
 
     return CommandResponse(
         command_id=command.command_id,
