@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user_full
+from app.api.deps import AuthResult, get_auth_cognito_or_paseto
 from app.db.session import get_db
 from app.models.trip import Trip, TripAlert, TripEvent, TripPoint
 from app.models.unit import Unit
@@ -25,10 +25,50 @@ from app.schemas.trip import (
 
 router = APIRouter()
 
+# Dependencia para autenticación dual (Cognito o PASETO)
+get_auth_for_trips = get_auth_cognito_or_paseto(
+    required_service="gac",
+    required_role="NEXUS_ADMIN",
+)
+
 
 # ============================================
 # Helper Functions
 # ============================================
+
+
+def get_user_from_auth(db: Session, auth: AuthResult) -> Optional[User]:
+    """
+    Obtiene el objeto User de la base de datos según el tipo de autenticación.
+
+    - Cognito: Busca el usuario por cognito_sub
+    - PASETO: Retorna None (acceso sin usuario de BD)
+
+    Args:
+        db: Sesión de base de datos
+        auth: Resultado de autenticación
+
+    Returns:
+        User si es autenticación Cognito, None si es PASETO
+    """
+    if auth.auth_type == "cognito":
+        cognito_sub = auth.payload.get("sub")
+        if not cognito_sub:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token Cognito inválido: falta el campo 'sub'",
+            )
+
+        user = db.query(User).filter(User.cognito_sub == cognito_sub).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado",
+            )
+        return user
+
+    # PASETO: No hay usuario de BD, se asume acceso total
+    return None
 
 
 def get_accessible_unit_ids(db: Session, user: User) -> List[UUID]:
@@ -275,7 +315,7 @@ def build_trip_detail(
 @router.get("", response_model=TripListResponse)
 def list_trips(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_full),
+    auth: AuthResult = Depends(get_auth_for_trips),
     unit_id: Optional[UUID] = Query(None, description="Filtrar por unidad"),
     device_id: Optional[str] = Query(None, description="Filtrar por dispositivo"),
     start_date: Optional[datetime] = Query(
@@ -308,7 +348,11 @@ def list_trips(
     """
     Lista todos los trips accesibles para el usuario autenticado.
 
-    **Permisos:**
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema (aplican permisos)
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN" (acceso total)
+
+    **Permisos (solo Cognito):**
     - Usuario maestro: puede ver todos los trips de todas las unidades del cliente
     - Usuario regular: solo trips de unidades asignadas en user_units
 
@@ -338,6 +382,9 @@ def list_trips(
 
     **Nota:** Los filtros de fecha son altamente recomendados para optimizar el rendimiento.
     """
+    # Obtener usuario si es Cognito, None si es PASETO
+    current_user = get_user_from_auth(db, auth)
+
     # Procesar parámetro 'day' si está presente
     filter_by_end_time = False
     if day:
@@ -349,22 +396,27 @@ def list_trips(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
-    # Obtener dispositivos accesibles para el usuario
-    accessible_device_ids = get_accessible_device_ids(db, current_user)
-
-    if not accessible_device_ids:
-        # Usuario sin acceso a ninguna unidad
-        return TripListResponse(
-            trips=[], total=0, limit=limit, cursor=None, has_more=False
-        )
 
     # Construir query base
-    query = db.query(Trip).filter(Trip.device_id.in_(accessible_device_ids))
+    query = db.query(Trip)
+
+    # Aplicar filtros de permisos solo si es autenticación Cognito
+    if current_user:
+        # Cognito: aplicar restricciones de permisos
+        accessible_device_ids = get_accessible_device_ids(db, current_user)
+
+        if not accessible_device_ids:
+            # Usuario sin acceso a ninguna unidad
+            return TripListResponse(
+                trips=[], total=0, limit=limit, cursor=None, has_more=False
+            )
+
+        query = query.filter(Trip.device_id.in_(accessible_device_ids))
 
     # Aplicar filtros
     if unit_id:
-        # Verificar acceso a la unidad
-        if not check_unit_access(db, unit_id, current_user):
+        # Verificar acceso a la unidad solo si es Cognito
+        if current_user and not check_unit_access(db, unit_id, current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes acceso a esta unidad",
@@ -387,8 +439,8 @@ def list_trips(
         query = query.filter(Trip.device_id.in_(unit_device_ids))
 
     if device_id:
-        # Verificar acceso al dispositivo
-        if not check_device_access(db, device_id, current_user):
+        # Verificar acceso al dispositivo solo si es Cognito
+        if current_user and not check_device_access(db, device_id, current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No tienes acceso a este dispositivo",
@@ -459,7 +511,7 @@ def list_trips(
 def get_trip(
     trip_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_full),
+    auth: AuthResult = Depends(get_auth_for_trips),
     include_alerts: bool = Query(True, description="Incluir alertas del trip"),
     include_points: bool = Query(False, description="Incluir puntos GPS del trip"),
     include_events: bool = Query(False, description="Incluir eventos del trip"),
@@ -467,7 +519,11 @@ def get_trip(
     """
     Obtiene el detalle completo de un trip específico.
 
-    **Permisos:**
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema (aplican permisos)
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN" (acceso total)
+
+    **Permisos (solo Cognito):**
     - Usuario maestro: puede ver cualquier trip de su cliente
     - Usuario regular: solo trips de dispositivos de sus unidades asignadas
 
@@ -482,6 +538,9 @@ def get_trip(
       - Información de la unidad asignada al dispositivo
       - Alertas, puntos y eventos (según los parámetros de expansión)
     """
+    # Obtener usuario si es Cognito, None si es PASETO
+    current_user = get_user_from_auth(db, auth)
+
     # Buscar el trip
     trip = db.query(Trip).filter(Trip.trip_id == trip_id).first()
 
@@ -491,8 +550,8 @@ def get_trip(
             detail="Trip no encontrado",
         )
 
-    # Verificar acceso al dispositivo
-    if not check_device_access(db, trip.device_id, current_user):
+    # Verificar acceso al dispositivo solo si es Cognito
+    if current_user and not check_device_access(db, trip.device_id, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes acceso a este trip",
