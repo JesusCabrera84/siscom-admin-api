@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.models.client import Client
 from app.models.device import Device, DeviceEvent
 from app.models.sim_card import SimCard
+from app.models.sim_kore_profile import SimKoreProfile
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.models.unit_profile import UnitProfile
@@ -25,6 +26,7 @@ from app.schemas.device import (
     DeviceStatusUpdate,
     DeviceUpdate,
     DeviceWithProfileOut,
+    SimKoreProfileOut,
 )
 
 router = APIRouter()
@@ -57,6 +59,51 @@ def create_device_event(
     return event
 
 
+def build_device_out(db: Session, device: Device) -> DeviceOut:
+    """
+    Construye un DeviceOut completo con información de SIM y profile.
+    """
+    sim_card = db.query(SimCard).filter(SimCard.device_id == device.device_id).first()
+
+    iccid = None
+    carrier = None
+    sim_profile = None
+
+    if sim_card:
+        iccid = sim_card.iccid
+        carrier = sim_card.carrier
+
+        # Buscar perfil KORE si el carrier es KORE
+        if sim_card.carrier == "KORE":
+            kore_profile = (
+                db.query(SimKoreProfile)
+                .filter(SimKoreProfile.sim_id == sim_card.sim_id)
+                .first()
+            )
+            if kore_profile:
+                sim_profile = SimKoreProfileOut(
+                    kore_sim_id=kore_profile.kore_sim_id,
+                    kore_account_id=kore_profile.kore_account_id,
+                )
+
+    return DeviceOut(
+        device_id=device.device_id,
+        brand=device.brand,
+        model=device.model,
+        firmware_version=device.firmware_version,
+        client_id=device.client_id,
+        status=device.status,
+        last_comm_at=device.last_comm_at,
+        created_at=device.created_at,
+        updated_at=device.updated_at,
+        last_assignment_at=device.last_assignment_at,
+        notes=device.notes,
+        iccid=iccid,
+        carrier=carrier,
+        sim_profile=sim_profile,
+    )
+
+
 # ============================================
 # Device Endpoints
 # ============================================
@@ -76,7 +123,10 @@ def create_device(
     - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
 
     Regla: El dispositivo se crea con status='nuevo' y sin cliente asignado.
-    Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM.
+    Opcionalmente puede incluir:
+    - ICCID para asociar una tarjeta SIM
+    - carrier: proveedor de SIM (KORE, other)
+    - sim_profile: datos específicos del carrier (kore_sim_id, kore_account_id para KORE)
     """
     # Verificar que el device_id no exista
     existing = db.query(Device).filter(Device.device_id == device_in.device_id).first()
@@ -104,8 +154,19 @@ def create_device(
         sim_card = SimCard(
             device_id=device.device_id,
             iccid=device_in.iccid,
+            carrier=device_in.carrier or "KORE",
         )
         db.add(sim_card)
+        db.flush()  # Para obtener sim_id antes de crear el profile
+
+        # Si se proporciona sim_profile y el carrier es KORE, crear SimKoreProfile
+        if device_in.sim_profile and device_in.carrier == "KORE":
+            kore_profile = SimKoreProfile(
+                sim_id=sim_card.sim_id,
+                kore_sim_id=device_in.sim_profile.kore_sim_id,
+                kore_account_id=device_in.sim_profile.kore_account_id,
+            )
+            db.add(kore_profile)
 
     # Registrar evento de creación
     event_details = (
@@ -113,6 +174,8 @@ def create_device(
     )
     if device_in.iccid:
         event_details += f" con SIM ICCID: {device_in.iccid}"
+        if device_in.sim_profile:
+            event_details += f" (KORE SIM ID: {device_in.sim_profile.kore_sim_id})"
 
     # Determinar quién realizó la acción según el tipo de autenticación
     performed_by = None
@@ -134,21 +197,8 @@ def create_device(
     db.commit()
     db.refresh(device)
 
-    # Construir respuesta con ICCID
-    return DeviceOut(
-        device_id=device.device_id,
-        brand=device.brand,
-        model=device.model,
-        firmware_version=device.firmware_version,
-        client_id=device.client_id,
-        status=device.status,
-        last_comm_at=device.last_comm_at,
-        created_at=device.created_at,
-        updated_at=device.updated_at,
-        last_assignment_at=device.last_assignment_at,
-        notes=device.notes,
-        iccid=device_in.iccid,
-    )
+    # Construir respuesta completa
+    return build_device_out(db, device)
 
 
 @router.get("", response_model=List[DeviceOut])
@@ -390,23 +440,8 @@ def get_device(
             detail="Dispositivo no encontrado",
         )
 
-    # Obtener ICCID si tiene SIM asignada
-    sim_card = db.query(SimCard).filter(SimCard.device_id == device_id).first()
-
-    return DeviceOut(
-        device_id=device.device_id,
-        brand=device.brand,
-        model=device.model,
-        firmware_version=device.firmware_version,
-        client_id=device.client_id,
-        status=device.status,
-        last_comm_at=device.last_comm_at,
-        created_at=device.created_at,
-        updated_at=device.updated_at,
-        last_assignment_at=device.last_assignment_at,
-        notes=device.notes,
-        iccid=sim_card.iccid if sim_card else None,
-    )
+    # Construir respuesta completa
+    return build_device_out(db, device)
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
@@ -426,6 +461,13 @@ def update_device(
     Si se proporciona un ICCID:
     - Si no existe una sim_card para el dispositivo, se crea.
     - Si ya existe, se actualiza el ICCID.
+
+    Si se proporciona carrier:
+    - Se actualiza el carrier de la sim_card existente.
+
+    Si se proporciona sim_profile (para carrier=KORE):
+    - Si no existe un sim_kore_profile, se crea.
+    - Si ya existe, se actualiza.
     """
     device = db.query(Device).filter(Device.device_id == device_id).first()
 
@@ -460,24 +502,71 @@ def update_device(
             event_details=f"Firmware actualizado de {old_version} a {new_version} {auth_suffix}",
         )
 
-    # Manejar ICCID por separado (no es campo del modelo Device)
+    # Extraer campos de SIM (no son campos del modelo Device)
     iccid = update_data.pop("iccid", None)
-    if iccid is not None:
-        # Buscar sim_card existente
-        sim_card = db.query(SimCard).filter(SimCard.device_id == device_id).first()
+    carrier = update_data.pop("carrier", None)
+    sim_profile_data = update_data.pop("sim_profile", None)
 
+    # Manejar SIM card
+    sim_card = db.query(SimCard).filter(SimCard.device_id == device_id).first()
+
+    if iccid is not None or carrier is not None or sim_profile_data is not None:
         if sim_card:
-            # Actualizar ICCID existente
-            sim_card.iccid = iccid
+            # Actualizar sim_card existente
+            if iccid is not None:
+                sim_card.iccid = iccid
+            if carrier is not None:
+                sim_card.carrier = carrier
             sim_card.updated_at = datetime.utcnow()
         else:
-            # Crear nuevo registro de sim_card
-            sim_card = SimCard(
-                device_id=device_id,
-                iccid=iccid,
-            )
-            db.add(sim_card)
+            # Crear nueva sim_card solo si tenemos iccid
+            if iccid is not None:
+                sim_card = SimCard(
+                    device_id=device_id,
+                    iccid=iccid,
+                    carrier=carrier or "KORE",
+                )
+                db.add(sim_card)
+                db.flush()  # Para obtener sim_id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Se requiere iccid para crear una nueva sim_card",
+                )
 
+    # Manejar sim_profile (KORE)
+    if sim_profile_data is not None and sim_card:
+        current_carrier = carrier if carrier else sim_card.carrier
+
+        if current_carrier != "KORE":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="sim_profile solo es válido cuando carrier='KORE'",
+            )
+
+        # Buscar kore_profile existente
+        kore_profile = (
+            db.query(SimKoreProfile)
+            .filter(SimKoreProfile.sim_id == sim_card.sim_id)
+            .first()
+        )
+
+        if kore_profile:
+            # Actualizar existente
+            kore_profile.kore_sim_id = sim_profile_data["kore_sim_id"]
+            if "kore_account_id" in sim_profile_data:
+                kore_profile.kore_account_id = sim_profile_data["kore_account_id"]
+            kore_profile.updated_at = datetime.utcnow()
+        else:
+            # Crear nuevo
+            kore_profile = SimKoreProfile(
+                sim_id=sim_card.sim_id,
+                kore_sim_id=sim_profile_data["kore_sim_id"],
+                kore_account_id=sim_profile_data.get("kore_account_id"),
+            )
+            db.add(kore_profile)
+
+    # Actualizar campos del dispositivo
     for key, value in update_data.items():
         setattr(device, key, value)
 
@@ -486,23 +575,8 @@ def update_device(
     db.commit()
     db.refresh(device)
 
-    # Obtener ICCID actual para la respuesta
-    current_sim = db.query(SimCard).filter(SimCard.device_id == device_id).first()
-
-    return DeviceOut(
-        device_id=device.device_id,
-        brand=device.brand,
-        model=device.model,
-        firmware_version=device.firmware_version,
-        client_id=device.client_id,
-        status=device.status,
-        last_comm_at=device.last_comm_at,
-        created_at=device.created_at,
-        updated_at=device.updated_at,
-        last_assignment_at=device.last_assignment_at,
-        notes=device.notes,
-        iccid=current_sim.iccid if current_sim else None,
-    )
+    # Construir respuesta completa
+    return build_device_out(db, device)
 
 
 @router.patch("/{device_id}/status", response_model=DeviceOut)

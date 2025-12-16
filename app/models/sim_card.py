@@ -9,6 +9,7 @@ from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.sim_kore_profile import SimKoreProfile
 
 
 class SimCard(SQLModel, table=True):
@@ -67,5 +68,12 @@ class SimCard(SQLModel, table=True):
         )
     )
 
+    updated_at: datetime = Field(
+        sa_column=Column(
+            TIMESTAMP(timezone=True), server_default=text("now()"), nullable=False
+        )
+    )
+
     # Relationships
     device: Optional["Device"] = Relationship(back_populates="sim_card")
+    kore_profile: Optional["SimKoreProfile"] = Relationship(back_populates="sim_card")

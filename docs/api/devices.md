@@ -23,7 +23,12 @@ Endpoints para gestionar el ciclo de vida completo de dispositivos GPS/IoT con s
   "updated_at": "2024-01-15T10:30:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
   "notes": "Dispositivo en óptimas condiciones",
-  "iccid": "89340123456789012345"
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
 }
 ```
 
@@ -33,13 +38,30 @@ Cada dispositivo puede tener una tarjeta SIM asociada. La relación es 1:1 (un d
 
 ```json
 {
-  "id": "abc12345-e89b-12d3-a456-426614174000",
+  "sim_id": "abc12345-e89b-12d3-a456-426614174000",
   "device_id": "123456789012345",
+  "carrier": "KORE",
   "iccid": "89340123456789012345",
   "created_at": "2024-01-15T08:00:00Z",
   "updated_at": "2024-01-15T08:00:00Z"
 }
 ```
+
+### SimKoreProfile
+
+Perfil específico para SIMs de KORE Wireless. Contiene el `kore_sim_id` necesario para enviar comandos SMS via API de KORE.
+
+```json
+{
+  "sim_id": "abc12345-e89b-12d3-a456-426614174000",
+  "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+  "kore_account_id": "CO1757099...",
+  "created_at": "2024-01-15T08:00:00Z",
+  "updated_at": "2024-01-15T08:00:00Z"
+}
+```
+
+> **Nota:** `sim_id` es tanto PK como FK a `sim_cards` (relación 1:1).
 
 ### DeviceEvent
 
@@ -89,14 +111,45 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 | Baja definitiva             | `status='inactivo'`                                          | No puede reasignarse                |
 | Eliminación                 | ❌ **Prohibida**                                             | Trigger impide `DELETE`             |
 
-### Gestión de SIM Cards (ICCID)
+### Gestión de SIM Cards (ICCID, Carrier y Profile)
 
-| Acción              | Descripción                                                  |
-| ------------------- | ------------------------------------------------------------ |
-| Crear con ICCID     | Si se proporciona `iccid` al crear, se crea registro en `sim_cards` |
-| Actualizar ICCID    | Si se proporciona `iccid` al actualizar, se crea o actualiza `sim_cards` |
-| Consultar ICCID     | Todos los endpoints de consulta incluyen el `iccid` si existe |
-| Constraint UNIQUE   | Un dispositivo solo puede tener una SIM activa               |
+| Acción                   | Descripción                                                  |
+| ------------------------ | ------------------------------------------------------------ |
+| Crear con ICCID          | Si se proporciona `iccid` al crear, se crea registro en `sim_cards` |
+| Actualizar ICCID         | Si se proporciona `iccid` al actualizar, se crea o actualiza `sim_cards` |
+| Especificar Carrier      | Se puede indicar `carrier` ("KORE" o "other"). Default: "KORE" |
+| Crear Perfil KORE        | Si `carrier="KORE"` y se envía `sim_profile`, se crea `sim_kore_profiles` |
+| Actualizar Perfil KORE   | Si se envía `sim_profile` al actualizar, se crea o actualiza el perfil |
+| Consultar SIM            | Todos los endpoints incluyen `iccid`, `carrier` y `sim_profile` si existen |
+| Constraint UNIQUE        | Un dispositivo solo puede tener una SIM activa               |
+
+#### Carrier Types
+
+| Carrier | Descripción                                      | Perfil Requerido |
+| ------- | ------------------------------------------------ | ---------------- |
+| `KORE`  | KORE Wireless (SuperSIM) - Permite envío de SMS  | `sim_profile`    |
+| `other` | Otros proveedores                                | No aplica        |
+
+#### SimProfile para KORE
+
+Cuando `carrier="KORE"`, se puede (y se recomienda) proporcionar `sim_profile`:
+
+```json
+{
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
+}
+```
+
+| Campo            | Tipo   | Requerido | Descripción                                    |
+| ---------------- | ------ | --------- | ---------------------------------------------- |
+| `kore_sim_id`    | string | Sí        | ID de la SIM en KORE (para envío de comandos)  |
+| `kore_account_id`| string | No        | ID de la cuenta en KORE                        |
+
+> **Importante:** El `kore_sim_id` es necesario para enviar comandos SMS a través de la API de KORE.
+> Ver [Guía de Integración KORE](../guides/kore-integration.md) para más detalles.
 
 ### Consideraciones Importantes
 
@@ -117,7 +170,7 @@ El campo `status` representa el estado actual del dispositivo en su ciclo de vid
 **POST** `/api/v1/devices/`
 
 Registra un nuevo dispositivo en el inventario con estado `nuevo` y sin cliente asignado.
-Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM.
+Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM y su perfil KORE.
 
 #### Headers
 
@@ -125,7 +178,7 @@ Opcionalmente puede incluir un ICCID para asociar una tarjeta SIM.
 Authorization: Bearer <admin_token>
 ```
 
-#### Request Body
+#### Request Body (Básico)
 
 ```json
 {
@@ -138,6 +191,24 @@ Authorization: Bearer <admin_token>
 }
 ```
 
+#### Request Body (Con perfil KORE)
+
+```json
+{
+  "device_id": "123456789012345",
+  "brand": "Queclink",
+  "model": "GV300",
+  "firmware_version": "1.2.3",
+  "notes": "Lote 2024-01",
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
+}
+```
+
 #### Validaciones
 
 - `device_id`: Único, 10-50 caracteres (IMEI, serial, etc)
@@ -146,6 +217,10 @@ Authorization: Bearer <admin_token>
 - `firmware_version`: Opcional
 - `notes`: Opcional
 - `iccid`: Opcional, 18-22 caracteres (identificador de SIM)
+- `carrier`: Opcional, "KORE" (default) o "other"
+- `sim_profile`: Opcional, solo válido si `carrier="KORE"`
+  - `kore_sim_id`: Requerido si se envía `sim_profile`
+  - `kore_account_id`: Opcional
 
 #### Response 201 Created
 
@@ -162,11 +237,16 @@ Authorization: Bearer <admin_token>
   "updated_at": "2024-01-15T08:00:00Z",
   "last_assignment_at": null,
   "notes": "Lote 2024-01",
-  "iccid": "89340123456789012345"
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
 }
 ```
 
-**Evento generado**: `creado` con `new_status='nuevo'`. Si incluye ICCID, el detalle del evento lo menciona.
+**Evento generado**: `creado` con `new_status='nuevo'`. Si incluye ICCID y perfil KORE, el detalle del evento lo menciona.
 
 ---
 
@@ -333,7 +413,7 @@ Authorization: Bearer <client_token>
 **GET** `/api/v1/devices/{device_id}`
 
 Obtiene el detalle completo de un dispositivo.
-Incluye el ICCID de la tarjeta SIM si tiene una asignada.
+Incluye información de la tarjeta SIM y perfil KORE si están configurados.
 
 #### Headers
 
@@ -360,9 +440,40 @@ Authorization: Bearer <access_token>
   "updated_at": "2024-01-15T10:30:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
   "notes": "Dispositivo en óptimas condiciones",
-  "iccid": "89340123456789012345"
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
 }
 ```
+
+#### Campos de Respuesta
+
+| Campo         | Tipo   | Descripción                                      |
+| ------------- | ------ | ------------------------------------------------ |
+| `device_id`   | string | Identificador único del dispositivo              |
+| `brand`       | string | Marca del dispositivo                            |
+| `model`       | string | Modelo del dispositivo                           |
+| `firmware_version` | string | Versión de firmware (opcional)              |
+| `client_id`   | UUID   | ID del cliente asignado (null si no tiene)       |
+| `status`      | string | Estado actual del dispositivo                    |
+| `last_comm_at`| datetime | Última comunicación (opcional)                 |
+| `created_at`  | datetime | Fecha de creación                              |
+| `updated_at`  | datetime | Fecha de última actualización                  |
+| `last_assignment_at` | datetime | Fecha de última asignación a unidad     |
+| `notes`       | string | Notas administrativas (opcional)                 |
+| `iccid`       | string | ICCID de la SIM (null si no tiene)               |
+| `carrier`     | string | Proveedor de SIM: "KORE" o "other" (null si no tiene SIM) |
+| `sim_profile` | object | Perfil KORE (null si carrier != "KORE" o no configurado) |
+
+#### Objeto `sim_profile` (para KORE)
+
+| Campo            | Tipo   | Descripción                                    |
+| ---------------- | ------ | ---------------------------------------------- |
+| `kore_sim_id`    | string | ID de la SIM en KORE (para envío de comandos)  |
+| `kore_account_id`| string | ID de la cuenta en KORE (opcional)             |
 
 #### Errores
 
@@ -374,11 +485,13 @@ Authorization: Bearer <access_token>
 
 **PATCH** `/api/v1/devices/{device_id}`
 
-Actualiza información básica del dispositivo (marca, modelo, firmware, notas, ICCID).
+Actualiza información básica del dispositivo (marca, modelo, firmware, notas, ICCID, carrier, perfil SIM).
 
-Si se proporciona un ICCID:
-- Si el dispositivo no tiene SIM asignada, se crea un nuevo registro en `sim_cards`
-- Si ya tiene SIM asignada, se actualiza el ICCID existente
+**Comportamiento SIM:**
+- Si se proporciona `iccid` y no existe SIM, se crea una nueva
+- Si se proporciona `iccid` y ya existe SIM, se actualiza
+- Si se proporciona `carrier`, se actualiza el carrier de la SIM
+- Si se proporciona `sim_profile` (para KORE), se crea o actualiza el perfil
 
 #### Headers
 
@@ -390,7 +503,7 @@ Authorization: Bearer <access_token>
 
 - `device_id`: Identificador único del dispositivo
 
-#### Request Body
+#### Request Body (Básico)
 
 ```json
 {
@@ -402,6 +515,31 @@ Authorization: Bearer <access_token>
 }
 ```
 
+#### Request Body (Actualizar/Agregar perfil KORE)
+
+```json
+{
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
+}
+```
+
+#### Request Body (Crear SIM con perfil KORE)
+
+```json
+{
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
+}
+```
+
 Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
 
 #### Validaciones
@@ -410,7 +548,11 @@ Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
 - `model`: Opcional, máximo 100 caracteres
 - `firmware_version`: Opcional
 - `notes`: Opcional
-- `iccid`: Opcional, 18-22 caracteres
+- `iccid`: Opcional, 18-22 caracteres (requerido si no existe SIM y se envía carrier/sim_profile)
+- `carrier`: Opcional, "KORE" o "other"
+- `sim_profile`: Opcional, solo válido si carrier="KORE"
+  - `kore_sim_id`: Requerido si se envía sim_profile
+  - `kore_account_id`: Opcional
 
 #### Response 200 OK
 
@@ -427,7 +569,12 @@ Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
   "updated_at": "2024-01-16T11:00:00Z",
   "last_assignment_at": "2024-01-15T09:00:00Z",
   "notes": "Actualizado a nueva versión",
-  "iccid": "89340123456789012345"
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
 }
 ```
 
@@ -709,17 +856,19 @@ El ICCID (Integrated Circuit Card Identifier) es un número único de 18-22 díg
 
 ### Operaciones
 
-| Operación                    | Endpoint                        | Descripción                                      |
-| ---------------------------- | ------------------------------- | ------------------------------------------------ |
-| Crear dispositivo con SIM    | `POST /devices/`                | Incluir `iccid` en el body                       |
-| Agregar SIM a dispositivo    | `PATCH /devices/{id}`           | Incluir `iccid` en el body                       |
-| Cambiar SIM de dispositivo   | `PATCH /devices/{id}`           | Enviar nuevo `iccid` en el body                  |
-| Consultar SIM de dispositivo | `GET /devices/{id}`             | El campo `iccid` se incluye en la respuesta      |
-| Listar dispositivos con SIM  | `GET /devices/`                 | Cada dispositivo incluye su `iccid` si tiene SIM |
+| Operación                      | Endpoint                        | Descripción                                      |
+| ------------------------------ | ------------------------------- | ------------------------------------------------ |
+| Crear dispositivo con SIM      | `POST /devices/`                | Incluir `iccid` en el body                       |
+| Crear con SIM y perfil KORE    | `POST /devices/`                | Incluir `iccid`, `carrier`, `sim_profile`        |
+| Agregar SIM a dispositivo      | `PATCH /devices/{id}`           | Incluir `iccid` en el body                       |
+| Agregar/actualizar perfil KORE | `PATCH /devices/{id}`           | Incluir `sim_profile` en el body                 |
+| Cambiar SIM de dispositivo     | `PATCH /devices/{id}`           | Enviar nuevo `iccid` en el body                  |
+| Consultar SIM de dispositivo   | `GET /devices/{id}`             | Incluye `iccid`, `carrier`, `sim_profile`        |
+| Listar dispositivos con SIM    | `GET /devices/`                 | Cada dispositivo incluye datos de SIM si tiene   |
 
 ### Ejemplos
 
-#### Crear dispositivo con SIM
+#### Crear dispositivo con SIM básica
 
 ```bash
 POST /api/v1/devices/
@@ -731,12 +880,55 @@ POST /api/v1/devices/
 }
 ```
 
+#### Crear dispositivo con SIM KORE (completo)
+
+```bash
+POST /api/v1/devices/
+{
+  "device_id": "353451234567890",
+  "brand": "Queclink",
+  "model": "GV300",
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
+}
+```
+
 #### Agregar SIM a dispositivo existente
 
 ```bash
 PATCH /api/v1/devices/353451234567890
 {
   "iccid": "89340123456789012345"
+}
+```
+
+#### Agregar/actualizar perfil KORE a SIM existente
+
+```bash
+PATCH /api/v1/devices/353451234567890
+{
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
+}
+```
+
+#### Crear SIM con perfil KORE en dispositivo sin SIM
+
+```bash
+PATCH /api/v1/devices/353451234567890
+{
+  "iccid": "89340123456789012345",
+  "carrier": "KORE",
+  "sim_profile": {
+    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+    "kore_account_id": "CO1757099..."
+  }
 }
 ```
 

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ============================================
 # Device Schemas
@@ -11,6 +11,36 @@ from pydantic import BaseModel, Field
 DeviceStatus = Literal[
     "nuevo", "preparado", "enviado", "entregado", "asignado", "devuelto", "inactivo"
 ]
+
+CarrierType = Literal["KORE", "other"]
+
+
+# ============================================
+# SIM Profile Schemas
+# ============================================
+
+
+class SimKoreProfileInput(BaseModel):
+    """Datos específicos para SIM KORE"""
+
+    kore_sim_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID de SIM en KORE (ej: HS0ad6bc269850dfe13bc8bddfcf8399f4)",
+    )
+    kore_account_id: Optional[str] = Field(
+        None, description="ID de cuenta KORE (opcional)"
+    )
+
+
+class SimKoreProfileOut(BaseModel):
+    """Salida de perfil KORE"""
+
+    kore_sim_id: str
+    kore_account_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
 class DeviceBase(BaseModel):
@@ -49,6 +79,21 @@ class DeviceCreate(BaseModel):
         max_length=22,
         description="ICCID de la tarjeta SIM (opcional)",
     )
+    carrier: Optional[CarrierType] = Field(
+        "KORE",
+        description="Proveedor de SIM (KORE, other). Default: KORE",
+    )
+    sim_profile: Optional[SimKoreProfileInput] = Field(
+        None,
+        description="Perfil específico de la SIM. Requerido si carrier=KORE y se quiere enviar comandos SMS",
+    )
+
+    @model_validator(mode="after")
+    def validate_sim_profile(self):
+        """Valida que sim_profile sea consistente con carrier"""
+        if self.sim_profile and self.carrier != "KORE":
+            raise ValueError("sim_profile solo es válido cuando carrier='KORE'")
+        return self
 
 
 class DeviceUpdate(BaseModel):
@@ -63,6 +108,14 @@ class DeviceUpdate(BaseModel):
         min_length=18,
         max_length=22,
         description="ICCID de la tarjeta SIM",
+    )
+    carrier: Optional[CarrierType] = Field(
+        None,
+        description="Proveedor de SIM (KORE, other)",
+    )
+    sim_profile: Optional[SimKoreProfileInput] = Field(
+        None,
+        description="Perfil específico de la SIM (para KORE)",
     )
 
 
@@ -94,6 +147,10 @@ class DeviceOut(BaseModel):
     last_assignment_at: Optional[datetime] = None
     notes: Optional[str] = None
     iccid: Optional[str] = Field(None, description="ICCID de la tarjeta SIM asignada")
+    carrier: Optional[str] = Field(None, description="Proveedor de SIM")
+    sim_profile: Optional[SimKoreProfileOut] = Field(
+        None, description="Perfil de SIM (KORE)"
+    )
 
     class Config:
         from_attributes = True
@@ -111,6 +168,11 @@ class DeviceOut(BaseModel):
                 "last_assignment_at": "2025-11-03T08:00:00Z",
                 "notes": "Instalado en unidad #45",
                 "iccid": "89340123456789012345",
+                "carrier": "KORE",
+                "sim_profile": {
+                    "kore_sim_id": "HS0ad6bc269850dfe13bc8bddfcf8399f4",
+                    "kore_account_id": "CO1757099...",
+                },
             }
         }
 

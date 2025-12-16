@@ -13,6 +13,7 @@ from app.models.order_item import OrderItem, OrderItemType
 from app.models.payment import Payment, PaymentStatus
 from app.models.plan import Plan
 from app.models.sim_card import SimCard
+from app.models.sim_kore_profile import SimKoreProfile
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.trip import Trip, TripAlert, TripEvent, TripPoint
@@ -57,5 +58,6 @@ __all__ = [
     "TripAlert",
     "TripEvent",
     "SimCard",
+    "SimKoreProfile",
     "UnifiedSimProfile",
 ]
