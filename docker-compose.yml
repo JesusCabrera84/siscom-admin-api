@@ -48,6 +48,11 @@ services:
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
       # PASETO - Token para compartir ubicación
       PASETO_SECRET_KEY: ${PASETO_SECRET_KEY}
+      # KORE Wireless - API para envío de comandos SMS
+      KORE_CLIENT_ID: ${KORE_CLIENT_ID}
+      KORE_CLIENT_SECRET: ${KORE_CLIENT_SECRET}
+      KORE_API_AUTH: ${KORE_API_AUTH}
+      KORE_API_SMS: ${KORE_API_SMS}
     ports:
       - "8100:8100"
     volumes:
