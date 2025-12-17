@@ -37,7 +37,25 @@ Crea un nuevo cliente con un usuario maestro asociado. Este es el endpoint de re
   "id": "456e4567-e89b-12d3-a456-426614174000",
   "name": "Transportes XYZ",
   "status": "PENDING",
-  "created_at": "2024-01-15T10:30:00Z"
+  "active_subscription_id": null,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+
+#### Errores Posibles
+
+| Código | Detalle |
+|--------|---------|
+| 400 | `"Ya existe un usuario con este correo electrónico."` |
+| 400 | `"Ya existe un cliente con este nombre."` |
+| 422 | Error de validación (contraseña débil, email inválido, etc.) |
+
+#### Ejemplo de Error 400
+
+```json
+{
+  "detail": "Ya existe un usuario con este correo electrónico."
 }
 ```
 
@@ -79,9 +97,20 @@ Authorization: Bearer <access_token>
   "id": "456e4567-e89b-12d3-a456-426614174000",
   "name": "Transportes XYZ",
   "status": "ACTIVE",
-  "created_at": "2024-01-15T10:30:00Z"
+  "active_subscription_id": "789e4567-e89b-12d3-a456-426614174001",
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-20T15:45:00Z"
 }
 ```
+
+> **Nota:** El campo `active_subscription_id` será `null` si el cliente no tiene una suscripción activa.
+
+#### Errores Posibles
+
+| Código | Detalle |
+|--------|---------|
+| 401 | Token no proporcionado o inválido |
+| 404 | `"Cliente no encontrado"` |
 
 ---
 
@@ -105,6 +134,12 @@ Authorization: Bearer <access_token>
 - Cliente suspendido (no usado actualmente)
 - No puede acceder al sistema
 - Datos preservados
+
+### DELETED
+
+- Cliente eliminado lógicamente
+- No puede acceder al sistema
+- Datos marcados como eliminados
 
 ---
 
@@ -199,9 +234,10 @@ Un cliente tiene:
 
 - **Usuarios** (`users`): Uno o más usuarios, al menos uno maestro
 - **Dispositivos** (`devices`): Dispositivos GPS del cliente
+- **Unidades** (`units`): Unidades/vehículos del cliente
+- **Suscripciones** (`subscriptions`): Planes de servicio contratados
 - **Órdenes** (`orders`): Historial de compras
 - **Pagos** (`payments`): Historial de pagos
-- **Servicios** (`device_services`): Servicios activos/históricos
 
 ---
 

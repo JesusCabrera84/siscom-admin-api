@@ -341,13 +341,18 @@ curl -X POST http://api.example.com/api/v1/commands \
 
 Los siguientes endpoints aceptan autenticación dual (Cognito o PASETO):
 
-| Endpoint                              | Servicio Requerido | Rol Requerido |
-| ------------------------------------- | ------------------ | ------------- |
-| `POST /api/v1/commands`               | gac                | NEXUS_ADMIN   |
-| `GET /api/v1/commands/{command_id}`   | gac                | NEXUS_ADMIN   |
-| `GET /api/v1/commands/device/{id}`    | gac                | NEXUS_ADMIN   |
-| `POST /api/v1/devices`                | gac                | NEXUS_ADMIN   |
-| `PATCH /api/v1/devices/{device_id}`   | gac                | NEXUS_ADMIN   |
+| Endpoint                                        | Servicio Requerido | Rol Requerido |
+| ----------------------------------------------- | ------------------ | ------------- |
+| `POST /api/v1/commands`                         | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/commands/{command_id}`             | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/commands/device/{id}`              | gac                | NEXUS_ADMIN   |
+| `POST /api/v1/devices`                          | gac                | NEXUS_ADMIN   |
+| `PATCH /api/v1/devices/{device_id}`             | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/clients`                  | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/clients/stats`            | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/clients/{client_id}`      | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/clients/{client_id}/users`| gac                | NEXUS_ADMIN   |
+| `PATCH /api/v1/internal/clients/{client_id}/status` | gac            | NEXUS_ADMIN   |
 
 #### Notas de Seguridad
 

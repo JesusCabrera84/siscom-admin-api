@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     user_units,
     users,
 )
+from app.api.v1.endpoints.internal import clients as internal_clients
 
 api_router = APIRouter()
 
@@ -39,3 +40,8 @@ api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
 api_router.include_router(trips.router, prefix="/trips", tags=["trips"])
+
+# Internal API endpoints (PASETO authentication)
+api_router.include_router(
+    internal_clients.router, prefix="/internal/clients", tags=["internal-clients"]
+)
