@@ -289,12 +289,150 @@ Authorization: Bearer <access_token>
 
 ---
 
+### 4. Sincronizar Comando con KORE
+
+**POST** `/api/v1/commands/{command_id}/sync`
+
+Sincroniza el estado de un comando SMS con KORE Wireless, consultando el estado actual del mensaje en la plataforma.
+
+**Comportamiento:**
+- Solo soporta comandos con `media="KORE_SMS_API"`
+- Extrae la URL del SMS desde `metadata.kore_response.url`
+- Se autentica automáticamente con KORE si no hay sesión activa
+- Actualiza el `metadata` del comando con la respuesta de sincronización
+- Si el token de KORE expira durante la consulta, re-autentica automáticamente
+
+#### Headers
+
+```
+Authorization: Bearer <access_token>
+```
+
+#### Path Parameters
+
+| Parámetro    | Tipo | Descripción                      |
+| ------------ | ---- | -------------------------------- |
+| `command_id` | UUID | ID único del comando a sincronizar |
+
+#### Response 200 OK
+
+```json
+{
+  "command_id": "42bfcefb-4aa3-4866-b12b-7fa34b87f923",
+  "template_id": "abc12345-e89b-12d3-a456-426614174000",
+  "command": "AT^PRG;0848028047;10;81#001F803F",
+  "media": "KORE_SMS_API",
+  "request_user_id": "def45678-e89b-12d3-a456-426614174000",
+  "request_user_email": "usuario@ejemplo.com",
+  "device_id": "353451234567890",
+  "requested_at": "2025-12-16T04:29:00Z",
+  "updated_at": "2025-12-16T04:30:15Z",
+  "status": "sent",
+  "command_metadata": {
+    "kore_sim_id": "FAKE_SIM_ID",
+    "kore_response": {
+      "sid": "FAKE_SID",
+      "url": "https://supersim.api.korewireless.com/v1/SmsCommands/FAKE_SID",
+      "status": "queued"
+    },
+    "sync_response": {
+      "account_sid": "SOME",
+      "sid": "FAKE_SID",
+      "payload": "AT^PRG;0848028047;10;81#001F803F",
+      "sim_sid": "FAKE_SIM_ID",
+      "direction": "to_sim",
+      "status": "delivered",
+      "date_created": "2025-12-16T04:29:21Z",
+      "date_updated": "2025-12-16T04:30:11Z",
+      "url": "https://supersim.api.korewireless.com/v1/SmsCommands/FAKE_SID"
+    }
+  }
+}
+```
+
+#### Campos de la Respuesta
+
+| Campo              | Tipo   | Descripción                                              |
+| ------------------ | ------ | -------------------------------------------------------- |
+| `command_id`       | UUID   | ID único del comando                                     |
+| `template_id`      | UUID   | Referencia al template de comando (opcional)             |
+| `command`          | string | El comando enviado al dispositivo                        |
+| `media`            | string | Medio de comunicación (KORE_SMS_API)                     |
+| `request_user_id`  | UUID   | UUID del usuario que creó el comando                     |
+| `request_user_email`| string| Email del usuario que creó el comando                    |
+| `device_id`        | string | ID del dispositivo destino                               |
+| `requested_at`     | string | Fecha/hora de creación del comando                       |
+| `updated_at`       | string | Fecha/hora de última actualización                       |
+| `status`           | string | Estado actual del comando                                |
+| `command_metadata` | object | Metadata del comando (incluye sync_response guardado)    |
+| `sync_response`    | object | Respuesta de la consulta de sincronización a KORE        |
+
+#### Errores
+
+| Código | Descripción                                                     |
+| ------ | --------------------------------------------------------------- |
+| 400    | Metadata faltante, kore_response faltante, o sid/url faltantes  |
+| 401    | No autorizado (token inválido)                                  |
+| 404    | Comando no encontrado                                           |
+| 501    | Media no soportado (diferente a KORE_SMS_API)                   |
+
+#### Ejemplo de Uso
+
+```bash
+# Sincronizar estado de un comando con KORE
+POST /api/v1/commands/42bfcefb-4aa3-4866-b12b-7fa34b87f923/sync
+Authorization: Bearer <token>
+```
+
+#### Estructura de Metadata después de Sync
+
+```json
+{
+  "kore_sim_id": "FAKE_SIM_ID",
+  "kore_response": {
+    "sid": "FAKE_SID",
+    "url": "https://supersim.api.korewireless.com/v1/SmsCommands/FAKE_SID",
+    "status": "queued"
+  },
+  "sync_response": {
+    "account_sid": "SOME",
+    "sid": "FAKE_SID",
+    "payload": "AT^PRG;0848028047;10;81#001F803F",
+    "sim_sid": "FAKE_SIM_ID",
+    "direction": "to_sim",
+    "status": "delivered",
+    "date_created": "2025-12-16T04:29:21Z",
+    "date_updated": "2025-12-16T04:30:11Z",
+    "url": "https://supersim.api.korewireless.com/v1/SmsCommands/FAKE_SID"
+  }
+}
+```
+
+#### Campos del sync_response de KORE
+
+| Campo         | Tipo   | Descripción                                              |
+| ------------- | ------ | -------------------------------------------------------- |
+| `account_sid` | string | ID de la cuenta en KORE                                  |
+| `sid`         | string | ID único del comando SMS en KORE                         |
+| `payload`     | string | Contenido del comando enviado                            |
+| `sim_sid`     | string | ID de la SIM en KORE                                     |
+| `direction`   | string | Dirección del mensaje (`to_sim` = hacia el dispositivo)  |
+| `status`      | string | Estado del SMS (`queued`, `sent`, `delivered`, `failed`) |
+| `date_created`| string | Fecha/hora de creación del SMS en KORE                   |
+| `date_updated`| string | Fecha/hora de última actualización del estado            |
+| `url`         | string | URL del recurso en la API de KORE                        |
+
+> **Nota:** Si ocurre un error durante la sincronización, se guardará en `metadata.sync_error` y también se incluirá en la respuesta.
+
+---
+
 ## Flujo de Uso Típico
 
 ```
 1. CREAR COMANDO
    POST /api/v1/commands
    → status='pending', command_id=<uuid>
+   → Si tiene kore_sim_id: status='sent', metadata.kore_response con sid y url
 
 2. SISTEMA EXTERNO PROCESA
    (El servicio de mensajería actualiza el estado)
@@ -302,11 +440,17 @@ Authorization: Bearer <access_token>
    → status='delivered' cuando se confirma
    → status='failed' si falla
 
-3. CONSULTAR ESTADO
+3. SINCRONIZAR CON KORE (opcional, solo para KORE_SMS_API)
+   POST /api/v1/commands/{command_id}/sync
+   → Consulta estado actual en KORE
+   → Actualiza metadata.sync_response
+   → Retorna sync_response con el estado actual
+
+4. CONSULTAR ESTADO
    GET /api/v1/commands/{command_id}
    → Ver estado actual y metadata
 
-4. HISTORIAL POR DISPOSITIVO
+5. HISTORIAL POR DISPOSITIVO
    GET /api/v1/commands/device/{device_id}
    → Ver todos los comandos del dispositivo
 ```
@@ -468,6 +612,9 @@ GET /api/v1/commands/device/353451234567890?limit=100
 
 # Estado de un comando específico
 GET /api/v1/commands/42bfcefb-4aa3-4866-b12b-7fa34b87f923
+
+# Sincronizar estado de comando KORE SMS
+POST /api/v1/commands/42bfcefb-4aa3-4866-b12b-7fa34b87f923/sync
 ```
 
 ---

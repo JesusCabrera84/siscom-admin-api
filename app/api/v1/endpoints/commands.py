@@ -1,7 +1,8 @@
 import logging
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,7 @@ from app.schemas.command import (
     CommandListResponse,
     CommandOut,
     CommandResponse,
+    CommandSyncOut,
 )
 from app.services.kore import KoreAuthError, KoreSmsError, kore_service
 
@@ -296,4 +298,169 @@ def get_command(
         updated_at=command.updated_at,
         status=command.status,
         command_metadata=command.command_metadata,
+    )
+
+
+@router.post("/{command_id}/sync", response_model=CommandSyncOut)
+async def sync_command(
+    command_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthResult = Depends(get_auth_for_commands),
+):
+    """
+    Sincroniza el estado de un comando con KORE.
+
+    **Autenticación:**
+    - Token de Cognito: Usuario autenticado del sistema
+    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+
+    **Parámetros:**
+    - `command_id`: UUID del comando a sincronizar
+
+    **Comportamiento:**
+    - Solo soporta comandos con media="KORE_SMS_API"
+    - Consulta el estado del SMS en KORE usando la URL almacenada en metadata
+    - Actualiza el metadata del comando con la respuesta de KORE
+
+    **Retorna:**
+    - Información completa del comando + sync_response con la respuesta de KORE
+    """
+    # 1. Consultar el comando en la BD
+    command = db.query(Command).filter(Command.command_id == command_id).first()
+
+    if not command:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comando no encontrado",
+        )
+
+    # 3. Verificar que el media sea "KORE_SMS_API"
+    if command.media != "KORE_SMS_API":
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"Sincronización no implementada para media '{command.media}'. "
+            f"Solo se soporta 'KORE_SMS_API'",
+        )
+
+    # 2.1 Obtener el metadata
+    metadata = command.command_metadata
+    if not metadata:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El comando no tiene metadata",
+        )
+
+    # 2.2 y 2.3 Extraer sid y url de kore_response
+    kore_response = metadata.get("kore_response")
+    if not kore_response:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El comando no tiene kore_response en metadata",
+        )
+
+    sid = kore_response.get("sid")
+    url = kore_response.get("url")
+
+    if not sid or not url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El kore_response no contiene 'sid' o 'url'",
+        )
+
+    logger.info(
+        f"[COMMANDS SYNC] Sincronizando comando {command_id}, sid={sid}, url={url}"
+    )
+
+    # 2.3 Loguearse en KORE (solo si no hay sesión activa)
+    sync_response: Optional[dict[str, Any]] = None
+    sync_error: Optional[str] = None
+
+    try:
+        # Verificar si hay token cacheado, si no, autenticar
+        if not kore_service._cached_token:
+            logger.info("[COMMANDS SYNC] No hay token cacheado, autenticando con KORE")
+            await kore_service.authenticate()
+
+        access_token = kore_service._cached_token
+
+        # 2.4 Ejecutar la solicitud GET a la URL de KORE
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers)
+
+            # Si el token expiró (401), re-autenticar e intentar de nuevo
+            if response.status_code == 401:
+                logger.info("[COMMANDS SYNC] Token expirado, re-autenticando con KORE")
+                await kore_service.authenticate()
+                access_token = kore_service._cached_token
+                headers["Authorization"] = f"Bearer {access_token}"
+                response = await client.get(url, headers=headers)
+
+            try:
+                sync_response = response.json()
+            except Exception:
+                sync_response = {"raw_response": response.text}
+
+            if response.status_code not in (200, 201, 202):
+                logger.warning(
+                    f"[COMMANDS SYNC] Respuesta no exitosa de KORE: "
+                    f"status={response.status_code}, body={response.text}"
+                )
+
+            logger.info(
+                f"[COMMANDS SYNC] Respuesta de KORE: status={response.status_code}"
+            )
+
+    except KoreAuthError as e:
+        sync_error = f"Error de autenticación KORE: {str(e)}"
+        logger.error(f"[COMMANDS SYNC] {sync_error}")
+
+    except httpx.RequestError as e:
+        sync_error = f"Error de conexión con KORE: {str(e)}"
+        logger.error(f"[COMMANDS SYNC] {sync_error}")
+
+    except Exception as e:
+        sync_error = f"Error inesperado: {str(e)}"
+        logger.exception(f"[COMMANDS SYNC] {sync_error}")
+
+    # 2.5 Actualizar el registro en la BD con el response
+    # Agregar salto de línea y el nuevo response sin perder el anterior
+    if sync_response or sync_error:
+        if command.command_metadata is None:
+            command.command_metadata = {}
+
+        # Crear una copia del metadata para modificarlo
+        updated_metadata = dict(command.command_metadata)
+
+        # Agregar la respuesta de sync
+        if sync_response:
+            updated_metadata["sync_response"] = sync_response
+        if sync_error:
+            updated_metadata["sync_error"] = sync_error
+
+        command.command_metadata = updated_metadata
+        db.commit()
+        db.refresh(command)
+
+    # Si hubo error, incluirlo en la respuesta pero no fallar
+    if sync_error and not sync_response:
+        sync_response = {"error": sync_error}
+
+    # 2.6 Retornar la información del comando con sync_response
+    return CommandSyncOut(
+        command_id=command.command_id,
+        template_id=command.template_id,
+        command=command.command,
+        media=command.media,
+        request_user_id=command.request_user_id,
+        request_user_email=command.request_user_email,
+        device_id=command.device_id,
+        requested_at=command.requested_at,
+        updated_at=command.updated_at,
+        status=command.status,
+        command_metadata=command.command_metadata,
+        sync_response=sync_response,
     )

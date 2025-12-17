@@ -50,3 +50,25 @@ class CommandListResponse(BaseModel):
 
     commands: list[CommandOut]
     total: int
+
+
+class CommandSyncOut(BaseModel):
+    """Schema de respuesta para sincronización de comando con KORE."""
+
+    command_id: UUID
+    template_id: Optional[UUID] = None
+    command: str
+    media: str
+    request_user_id: Optional[UUID] = None
+    request_user_email: str
+    device_id: str
+    requested_at: datetime
+    updated_at: datetime
+    status: str
+    command_metadata: Optional[dict[str, Any]] = None
+    sync_response: Optional[dict[str, Any]] = Field(
+        default=None, description="Respuesta de la consulta de sincronización a KORE"
+    )
+
+    class Config:
+        from_attributes = True
