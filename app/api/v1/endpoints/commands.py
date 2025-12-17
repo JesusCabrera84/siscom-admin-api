@@ -438,6 +438,15 @@ async def sync_command(
         # Agregar la respuesta de sync
         if sync_response:
             updated_metadata["sync_response"] = sync_response
+
+            # Actualizar el status del comando si viene en el response de KORE
+            kore_status = sync_response.get("status")
+            if kore_status:
+                command.status = kore_status
+                logger.info(
+                    f"[COMMANDS SYNC] Status del comando actualizado a: {kore_status}"
+                )
+
         if sync_error:
             updated_metadata["sync_error"] = sync_error
 

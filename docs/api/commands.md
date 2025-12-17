@@ -300,6 +300,7 @@ Sincroniza el estado de un comando SMS con KORE Wireless, consultando el estado 
 - Extrae la URL del SMS desde `metadata.kore_response.url`
 - Se autentica automáticamente con KORE si no hay sesión activa
 - Actualiza el `metadata` del comando con la respuesta de sincronización
+- **Actualiza el `status` del comando** con el valor de `status` del response de KORE (ej: `queued`, `sent`, `delivered`, `failed`)
 - Si el token de KORE expira durante la consulta, re-autentica automáticamente
 
 #### Headers
@@ -327,7 +328,7 @@ Authorization: Bearer <access_token>
   "device_id": "353451234567890",
   "requested_at": "2025-12-16T04:29:00Z",
   "updated_at": "2025-12-16T04:30:15Z",
-  "status": "sent",
+  "status": "delivered",
   "command_metadata": {
     "kore_sim_id": "FAKE_SIM_ID",
     "kore_response": {
@@ -444,6 +445,7 @@ Authorization: Bearer <token>
    POST /api/v1/commands/{command_id}/sync
    → Consulta estado actual en KORE
    → Actualiza metadata.sync_response
+   → Actualiza command.status con el status de KORE
    → Retorna sync_response con el estado actual
 
 4. CONSULTAR ESTADO
