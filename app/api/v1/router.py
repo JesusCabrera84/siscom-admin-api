@@ -1,7 +1,17 @@
+"""
+Router principal de la API v1.
+
+Organiza todos los endpoints del sistema:
+- API Pública (Cognito): /auth, /clients, /users, /subscriptions, /capabilities, etc.
+- API Interna (PASETO): /internal/*
+"""
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     auth,
+    billing,
+    capabilities,
     clients,
     commands,
     contact,
@@ -11,6 +21,7 @@ from app.api.v1.endpoints import (
     payments,
     plans,
     services,
+    subscriptions,
     trips,
     unit_devices,
     units,
@@ -21,27 +32,66 @@ from app.api.v1.endpoints.internal import clients as internal_clients
 
 api_router = APIRouter()
 
+# ============================================
+# API Pública (Autenticación: Cognito)
+# ============================================
+
+# Autenticación
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_router.include_router(clients.router, prefix="/clients", tags=["clients"])
-api_router.include_router(commands.router, prefix="/commands", tags=["commands"])
-api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
+
+# Organizaciones (conceptualmente = clients)
+api_router.include_router(clients.router, prefix="/clients", tags=["organizations"])
+
+# Usuarios
 api_router.include_router(users.router, prefix="/users", tags=["users"])
-api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
+
+# Suscripciones (múltiples por organización)
 api_router.include_router(
-    device_events.router, prefix="/device-events", tags=["device-events"]
+    subscriptions.router, prefix="/subscriptions", tags=["subscriptions"]
 )
+
+# Capabilities (límites y features)
+api_router.include_router(
+    capabilities.router, prefix="/capabilities", tags=["capabilities"]
+)
+
+# Planes
+api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
+
+# Dispositivos y Unidades
+api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(units.router, prefix="/units", tags=["units"])
 api_router.include_router(
     unit_devices.router, prefix="/unit-devices", tags=["unit-devices"]
 )
 api_router.include_router(user_units.router, prefix="/user-units", tags=["user-units"])
+api_router.include_router(
+    device_events.router, prefix="/device-events", tags=["device-events"]
+)
+
+# Servicios (legacy, considerar usar subscriptions)
 api_router.include_router(services.router, prefix="/services", tags=["services"])
-api_router.include_router(plans.router, prefix="/plans", tags=["plans"])
+
+# Billing y Pagos (read-only)
+api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
+
+# Viajes
 api_router.include_router(trips.router, prefix="/trips", tags=["trips"])
 
-# Internal API endpoints (PASETO authentication)
+# Comandos
+api_router.include_router(commands.router, prefix="/commands", tags=["commands"])
+
+# Contacto
+api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
+
+# ============================================
+# API Interna (Autenticación: PASETO)
+# ============================================
+
 api_router.include_router(
-    internal_clients.router, prefix="/internal/clients", tags=["internal-clients"]
+    internal_clients.router,
+    prefix="/internal/clients",
+    tags=["internal-organizations"]
 )

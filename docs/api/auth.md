@@ -2,9 +2,25 @@
 
 ## Descripción
 
-Endpoints para gestionar autenticación de usuarios con AWS Cognito, incluyendo login, renovación de tokens, recuperación de contraseña, cambio de contraseña y verificación de email.
+Endpoints para gestionar autenticación en SISCOM Admin API. El sistema soporta **autenticación dual**:
 
-También soporta generación de tokens PASETO para autenticación de servicios internos.
+| Tipo | Tecnología | Caso de Uso |
+|------|------------|-------------|
+| **Usuarios** | AWS Cognito (JWT) | Aplicaciones cliente, usuarios finales |
+| **Servicios** | PASETO | API interna, panel administrativo (gac-web) |
+
+> **Referencia**: Ver [Modelo Organizacional](../guides/organizational-model.md) para entender roles y permisos.
+
+### Sistema de Roles
+
+Los usuarios tienen roles dentro de su organización que determinan sus permisos:
+
+| Rol | Descripción |
+|-----|-------------|
+| `owner` | Propietario - permisos totales |
+| `admin` | Administrador - gestión de usuarios y config |
+| `billing` | Facturación - pagos y suscripciones |
+| `member` | Miembro - acceso operativo |
 
 ---
 
@@ -598,9 +614,20 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 
 | Tipo | Endpoints |
 |------|-----------|
-| **Públicos** (sin autenticación) | login, forgot-password, reset-password, resend-verification, verify-email, refresh, internal |
+| **Públicos** (sin autenticación) | login, forgot-password, reset-password, resend-verification, verify-email, refresh, internal, accept-invitation |
 | **Protegidos** (requieren Cognito) | password (cambiar contraseña), logout |
-| **Duales** (Cognito o PASETO) | commands, devices (crear/actualizar) |
+| **Duales** (Cognito o PASETO) | commands, devices (crear/actualizar), internal/clients |
+
+### Permisos por Rol en Endpoints Protegidos
+
+| Endpoint | owner | admin | billing | member |
+|----------|:-----:|:-----:|:-------:|:------:|
+| `GET /users/` | ✅ | ✅ | ❌ | ❌ |
+| `POST /users/invite` | ✅ | ✅ | ❌ | ❌ |
+| `GET /payments/` | ✅ | ❌ | ✅ | ❌ |
+| `GET /subscriptions/` | ✅ | ✅ | ✅ | ❌ |
+| `GET /devices/` (todos) | ✅ | ✅ | ❌ | ❌ |
+| `GET /units/` (asignadas) | ✅ | ✅ | ❌ | ✅ |
 
 ### Mejores Prácticas
 
@@ -608,3 +635,64 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 - El endpoint `/internal` debe protegerse a nivel de infraestructura (no exponer públicamente)
 - Los tokens PASETO deben almacenarse de forma segura en los servicios que los usen
 - Usar tiempos de expiración cortos para tokens PASETO en ambientes de producción
+- Validar el rol del usuario antes de permitir operaciones sensibles
+- Los usuarios `member` solo deben ver recursos que les han sido asignados explícitamente
+
+---
+
+## Información del Token y Organización
+
+### Contenido del Token Cognito
+
+El token JWT de Cognito contiene:
+
+```json
+{
+  "sub": "cognito-sub-uuid",
+  "email": "usuario@ejemplo.com",
+  "email_verified": true,
+  "custom:client_id": "organization-uuid"
+}
+```
+
+### Resolución de Permisos
+
+```
+Token JWT
+    ↓
+Extraer cognito_sub
+    ↓
+Buscar User por cognito_sub
+    ↓
+Obtener organization_id (client_id)
+    ↓
+Obtener rol de organization_users
+    ↓
+Validar permiso según rol
+    ↓
+Filtrar datos por organization_id
+```
+
+### Información Disponible en /users/me
+
+```json
+{
+  "id": "user-uuid",
+  "email": "usuario@ejemplo.com",
+  "full_name": "Nombre Usuario",
+  "role": "admin",
+  "is_master": true,
+  "organization_id": "org-uuid",
+  "permissions": {
+    "can_invite_users": true,
+    "can_manage_billing": false,
+    "can_view_all_devices": true,
+    "can_manage_organization": true
+  }
+}
+```
+
+---
+
+**Última actualización**: Diciembre 2025  
+**Referencia**: [Modelo Organizacional](../guides/organizational-model.md)

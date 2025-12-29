@@ -1,6 +1,26 @@
 # Documentación SISCOM Admin API
 
-Bienvenido a la documentación completa de la API administrativa de SISCOM.
+Bienvenido a la documentación completa de la API administrativa de SISCOM - una plataforma **SaaS B2B multi-tenant** para gestión de flotas GPS/IoT.
+
+---
+
+## 🏗️ Arquitectura y Modelo de Negocio
+
+### Conceptos Fundamentales
+
+> **Importante**: En este sistema, **"cliente" = "organización"** a nivel de negocio. La tabla `clients` representa organizaciones/empresas que contratan nuestros servicios.
+
+| Concepto | Descripción |
+|----------|-------------|
+| **Organización** | Entidad de negocio principal (tabla `clients`) |
+| **Suscripciones** | Contratos de servicio - una organización puede tener **múltiples** |
+| **Capabilities** | Fuente de verdad para límites y features |
+| **Roles** | Permisos de usuarios dentro de la organización |
+
+### Documentación de Arquitectura
+
+- **[Modelo Organizacional](guides/organizational-model.md)** - 📌 **LECTURA OBLIGATORIA** - Modelo conceptual completo
+- **[Arquitectura del Sistema](guides/architecture.md)** - Diseño técnico y estructura del proyecto
 
 ---
 
@@ -10,75 +30,293 @@ Comienza aquí si eres nuevo en el proyecto:
 
 - **[Guía Rápida](guides/quickstart.md)** - Configuración inicial y primeros pasos
 - **[Configuración de Cognito](guides/cognito-setup.md)** - Setup de AWS Cognito para autenticación
-- **[Arquitectura del Sistema](guides/architecture.md)** - Diseño y estructura del proyecto
+- **[Configuración de Emails](guides/email-configuration.md)** - Setup de AWS SES para notificaciones
 
 ---
 
 ## 🔌 Documentación de Endpoints
 
-### Autenticación y Usuarios
+### Autenticación y Gestión de Identidad
 
-- **[Autenticación](api/auth.md)** - Login, recuperación de contraseña, verificación de email
-- **[Clientes](api/clients.md)** - Registro y gestión de organizaciones
-- **[Usuarios](api/users.md)** - Invitaciones y gestión de usuarios
+| Documento | Descripción |
+|-----------|-------------|
+| **[Autenticación](api/auth.md)** | Login, tokens (Cognito y PASETO), verificación de email |
+| **[Organizaciones](api/clients.md)** | Registro y gestión de organizaciones (antes "clientes") |
+| **[Usuarios](api/users.md)** | Invitaciones, roles y gestión de usuarios |
 
-### Gestión de Dispositivos
+### API Interna (Administrativa)
 
-- **[Dispositivos](api/devices.md)** - Registro y consulta de dispositivos GPS
-- **[Servicios](api/services.md)** - Activación y gestión de suscripciones de rastreo
-- **[Planes](api/plans.md)** - Catálogo de planes disponibles
+| Documento | Descripción |
+|-----------|-------------|
+| **[API Interna](api/internal-clients.md)** | Endpoints administrativos con PASETO (orquestador) |
 
-### Gestión de Unidades
+### Gestión de Dispositivos y Flotas
 
-- **[Unidades](api/units.md)** - Administración de unidades (vehículos, activos, etc.)
-- **[Perfiles de Unidades](api/unit-profiles.md)** - Administración de perfiles de unidades y vehículos
+| Documento | Descripción |
+|-----------|-------------|
+| **[Dispositivos](api/devices.md)** | Registro y consulta de dispositivos GPS |
+| **[Unidades](api/units.md)** | Administración de vehículos y activos |
+| **[Perfiles de Unidades](api/unit-profiles.md)** | Perfiles de configuración de unidades |
+| **[Asignación Unidad-Dispositivo](api/unit-devices.md)** | Instalación de GPS en unidades |
+| **[Asignación Usuario-Unidad](api/user-units.md)** | Permisos de usuarios sobre unidades |
+| **[Comandos](api/commands.md)** | Envío de comandos a dispositivos |
+| **[Viajes](api/trips.md)** | Gestión de viajes y rutas |
 
-### Comercial
+### Suscripciones y Comercial
 
-- **[Órdenes](api/orders.md)** - Compra de dispositivos GPS
-- **[Pagos](api/payments.md)** - Historial y gestión de pagos
+| Documento | Descripción |
+|-----------|-------------|
+| **[Suscripciones](api/subscriptions.md)** | 📌 Gestión de suscripciones múltiples |
+| **[Capabilities](api/capabilities.md)** | 📌 Límites y features de la organización |
+| **[Planes](api/plans.md)** | Catálogo de planes disponibles (informativo) |
+| **[Billing](api/billing.md)** | 📌 Resumen de facturación e invoices |
+| **[Servicios](api/services.md)** | Activación de servicios (legacy) |
+| **[Órdenes](api/orders.md)** | Compra de dispositivos GPS |
+| **[Pagos](api/payments.md)** | Historial de pagos (raw) |
+
+### Otros
+
+| Documento | Descripción |
+|-----------|-------------|
+| **[Contacto](api/contact.md)** | Formulario de contacto público |
 
 ---
 
-## 🏗️ Arquitectura
+## 📋 Listado Completo de Endpoints
 
-### Flujo de Negocio
+### Autenticación (`/api/v1/auth`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/login` | Login de usuario | 🌐 Público |
+| `POST` | `/verify-email` | Verificar email con token | 🌐 Público |
+| `POST` | `/resend-verification` | Reenviar email de verificación | 🌐 Público |
+| `PATCH` | `/change-password` | Cambiar contraseña | 🔐 Cognito |
+| `POST` | `/forgot-password` | Solicitar recuperación de contraseña | 🌐 Público |
+| `POST` | `/reset-password` | Restablecer contraseña con token | 🌐 Público |
+| `POST` | `/internal` | Obtener token PASETO interno | 🔑 Interno |
+| `POST` | `/logout` | Cerrar sesión | 🔐 Cognito |
+| `POST` | `/refresh` | Renovar tokens de acceso | 🌐 Público |
+
+### Organizaciones (`/api/v1/clients`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/` | Registrar nueva organización | 🌐 Público |
+| `GET` | `/` | Obtener información de mi organización | 🔐 Cognito |
+
+### Usuarios (`/api/v1/users`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar usuarios de la organización | 🔐 Cognito |
+| `GET` | `/me` | Obtener mi información de usuario | 🔐 Cognito |
+| `POST` | `/invite` | Invitar nuevo usuario | 🔐 Cognito (Master) |
+| `POST` | `/accept-invitation` | Aceptar invitación | 🌐 Público |
+| `POST` | `/resend-invitation` | Reenviar invitación | 🔐 Cognito (Master) |
+
+### Suscripciones (`/api/v1/subscriptions`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar todas las suscripciones | 🔐 Cognito |
+| `GET` | `/active` | Listar suscripciones activas | 🔐 Cognito |
+| `GET` | `/{subscription_id}` | Obtener detalle de suscripción | 🔐 Cognito |
+| `POST` | `/{subscription_id}/cancel` | Cancelar suscripción | 🔐 Cognito (Billing) |
+| `PATCH` | `/{subscription_id}/auto-renew` | Configurar auto-renovación | 🔐 Cognito (Billing) |
+
+### Capabilities (`/api/v1/capabilities`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Resumen de capabilities de la organización | 🔐 Cognito |
+| `GET` | `/{capability_code}` | Obtener capability específica | 🔐 Cognito |
+| `POST` | `/validate-limit` | Validar si se puede agregar un elemento | 🔐 Cognito |
+| `GET` | `/check/{capability_code}` | Verificar si feature está habilitada | 🔐 Cognito |
+
+### Planes (`/api/v1/plans`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar planes disponibles | 🌐 Público |
+| `GET` | `/{plan_identifier}` | Obtener plan por ID o código | 🌐 Público |
+
+### Billing (`/api/v1/billing`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/summary` | Resumen de facturación | 🔐 Cognito |
+| `GET` | `/payments` | Historial de pagos | 🔐 Cognito |
+| `GET` | `/invoices` | Lista de invoices (provisional) | 🔐 Cognito |
+
+### Dispositivos (`/api/v1/devices`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/` | Registrar nuevo dispositivo | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/` | Listar dispositivos del inventario | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/my-devices` | Dispositivos asignados al usuario | 🔐 Cognito |
+| `GET` | `/unassigned` | Dispositivos sin asignar | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/{device_id}` | Obtener dispositivo por ID | 🔐 Cognito / 🔑 PASETO |
+| `PATCH` | `/{device_id}` | Actualizar dispositivo | 🔐 Cognito / 🔑 PASETO |
+| `PATCH` | `/{device_id}/status` | Cambiar estado del dispositivo | 🔐 Cognito / 🔑 PASETO |
+| `POST` | `/{device_id}/notes` | Agregar nota al dispositivo | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/{device_id}/trips` | Viajes del dispositivo | 🔐 Cognito / 🔑 PASETO |
+
+### Eventos de Dispositivos (`/api/v1/device-events`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/{device_id}` | Historial de eventos del dispositivo | 🔐 Cognito |
+
+### Unidades (`/api/v1/units`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar unidades visibles | 🔐 Cognito |
+| `POST` | `/` | Crear nueva unidad | 🔐 Cognito |
+| `GET` | `/{unit_id}` | Detalle de unidad | 🔐 Cognito |
+| `PATCH` | `/{unit_id}` | Actualizar unidad | 🔐 Cognito |
+| `DELETE` | `/{unit_id}` | Eliminar unidad (soft delete) | 🔐 Cognito |
+| `GET` | `/{unit_id}/device` | Dispositivo asignado a la unidad | 🔐 Cognito |
+| `POST` | `/{unit_id}/device` | Asignar dispositivo a unidad | 🔐 Cognito |
+| `GET` | `/{unit_id}/profile` | Perfil de la unidad | 🔐 Cognito |
+| `PATCH` | `/{unit_id}/profile` | Actualizar perfil de unidad | 🔐 Cognito |
+| `POST` | `/{unit_id}/profile/vehicle` | Crear perfil de vehículo | 🔐 Cognito |
+| `PATCH` | `/{unit_id}/profile/vehicle` | Actualizar perfil de vehículo | 🔐 Cognito |
+| `GET` | `/{unit_id}/users` | Usuarios con acceso a la unidad | 🔐 Cognito (Master) |
+| `POST` | `/{unit_id}/users` | Asignar usuario a unidad | 🔐 Cognito (Master) |
+| `DELETE` | `/{unit_id}/users/{user_id}` | Revocar acceso de usuario | 🔐 Cognito (Master) |
+| `GET` | `/{unit_id}/trips` | Viajes de la unidad | 🔐 Cognito |
+| `POST` | `/{unit_id}/share-location` | Generar link para compartir ubicación | 🔐 Cognito |
+
+### Asignación Unidad-Dispositivo (`/api/v1/unit-devices`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar asignaciones unidad-dispositivo | 🔐 Cognito |
+| `POST` | `/` | Crear asignación unidad-dispositivo | 🔐 Cognito |
+
+### Asignación Usuario-Unidad (`/api/v1/user-units`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar asignaciones usuario-unidad | 🔐 Cognito (Master) |
+| `POST` | `/` | Asignar usuario a unidad | 🔐 Cognito (Master) |
+| `DELETE` | `/{assignment_id}` | Revocar asignación | 🔐 Cognito (Master) |
+
+### Comandos (`/api/v1/commands`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/` | Enviar comando a dispositivo | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/` | Listar comandos enviados | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/{command_id}` | Detalle de comando | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/{command_id}/sync` | Sincronizar estado de comando | 🔐 Cognito / 🔑 PASETO |
+
+### Viajes (`/api/v1/trips`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar viajes | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/{trip_id}` | Detalle de viaje con puntos | 🔐 Cognito / 🔑 PASETO |
+
+### Servicios (`/api/v1/services`) - Legacy
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/activate` | Activar servicio para dispositivo | 🔐 Cognito |
+| `POST` | `/confirm-payment` | Confirmar pago de servicio | 🔐 Cognito |
+| `GET` | `/active` | Listar servicios activos | 🔐 Cognito |
+| `PATCH` | `/{service_id}/cancel` | Cancelar servicio | 🔐 Cognito |
+
+### Órdenes (`/api/v1/orders`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/` | Crear orden de compra | 🔐 Cognito |
+| `GET` | `/` | Listar órdenes | 🔐 Cognito |
+| `GET` | `/{order_id}` | Detalle de orden | 🔐 Cognito |
+
+### Pagos (`/api/v1/payments`) - Raw
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar pagos (raw) | 🔐 Cognito |
+
+### Contacto (`/api/v1/contact`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/send-message` | Enviar mensaje de contacto | 🌐 Público |
+
+### API Interna (`/api/v1/internal/clients`) - 🔑 PASETO Only
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar todas las organizaciones | 🔑 PASETO |
+| `GET` | `/stats` | Estadísticas de organizaciones | 🔑 PASETO |
+| `GET` | `/{client_id}` | Obtener organización por ID | 🔑 PASETO |
+| `GET` | `/{client_id}/users` | Usuarios de una organización | 🔑 PASETO |
+| `PATCH` | `/{client_id}/status` | Cambiar estado de organización | 🔑 PASETO |
+
+### Leyenda de Autenticación
+
+| Símbolo | Significado |
+|---------|-------------|
+| 🌐 Público | No requiere autenticación |
+| 🔐 Cognito | Token JWT de AWS Cognito |
+| 🔐 Cognito (Master) | Token Cognito + usuario maestro |
+| 🔐 Cognito (Billing) | Token Cognito + rol billing u owner |
+| 🔑 PASETO | Token PASETO interno (service=gac, role=NEXUS_ADMIN) |
+| 🔐 Cognito / 🔑 PASETO | Acepta cualquiera de los dos |
+
+---
+
+## 🏢 Modelo Multi-tenant
+
+### Aislamiento de Datos por Organización
+
+Cada organización tiene datos completamente aislados:
 
 ```
-1. Registro de Cliente
-   ↓
-2. Verificación de Email
-   ↓
-3. Login y Obtención de Token
-   ↓
-4. Compra de Dispositivos (Orden + Pago)
-   ↓
-5. Instalación de Dispositivos en Vehículos
-   ↓
-6. Activación de Servicio (Suscripción)
-   ↓
-7. Rastreo Activo GPS
+Token JWT → cognito_sub extraído
+          ↓
+  Usuario buscado por cognito_sub
+          ↓
+  organization_id (client_id) extraído del usuario
+          ↓
+  Todas las consultas filtradas por organization_id
 ```
 
-### Multi-tenant
+### Jerarquía de Datos
 
-- Cada cliente tiene datos completamente aislados
-- El `client_id` se extrae automáticamente del token JWT
-- Imposible acceder a datos de otros clientes
+```
+Organization (clients)
+├── Users (usuarios de la organización)
+│   └── Organization_Users (roles: owner, admin, billing, member)
+├── Devices (dispositivos GPS)
+│   └── DeviceServices (suscripciones por dispositivo)
+├── Units (vehículos/activos)
+├── Subscriptions (suscripciones de la organización)
+├── Orders (órdenes de compra)
+└── Payments (historial de pagos)
+```
 
 ---
 
 ## 🔐 Autenticación
 
-Todos los endpoints (excepto públicos) requieren token de AWS Cognito:
+### Tokens de Usuario (AWS Cognito)
+
+Para usuarios finales que acceden a través de aplicaciones cliente:
 
 ```bash
-Authorization: Bearer <access_token>
+Authorization: Bearer <access_token_cognito>
 ```
 
-### Obtener Token
-
 ```bash
+# Obtener Token
 POST /api/v1/auth/login
 {
   "email": "usuario@ejemplo.com",
@@ -86,12 +324,25 @@ POST /api/v1/auth/login
 }
 ```
 
-### Usar Token
+### Tokens de Servicio (PASETO)
+
+Para operaciones administrativas internas:
 
 ```bash
-GET /api/v1/devices/
-Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer <token_paseto>
 ```
+
+```bash
+# Obtener Token PASETO
+POST /api/v1/auth/internal
+{
+  "email": "admin@gac-web.internal",
+  "service": "gac",
+  "role": "NEXUS_ADMIN"
+}
+```
+
+> ⚠️ **Seguridad**: El endpoint `/auth/internal` NO debe exponerse públicamente.
 
 ---
 
@@ -99,171 +350,120 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 
 Estos endpoints **NO** requieren autenticación:
 
-- `GET /` - Health check
-- `GET /api/v1/plans/` - Listar planes
-- `POST /api/v1/clients/` - Crear cliente (registro)
-- `POST /api/v1/auth/verify-email?token=...` - Verificar email (unificado)
-- `POST /api/v1/auth/resend-verification` - Reenviar verificación (unificado)
-- `POST /api/v1/auth/login` - Login
-- `POST /api/v1/auth/forgot-password` - Recuperar contraseña
-- `POST /api/v1/auth/reset-password` - Restablecer contraseña
-- `POST /api/v1/auth/refresh` - Renovar tokens
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /` | Health check |
+| `GET /api/v1/plans/` | Listar planes disponibles |
+| `POST /api/v1/clients/` | Registrar nueva organización |
+| `POST /api/v1/auth/verify-email?token=...` | Verificar email |
+| `POST /api/v1/auth/resend-verification` | Reenviar verificación |
+| `POST /api/v1/auth/login` | Login |
+| `POST /api/v1/auth/forgot-password` | Recuperar contraseña |
+| `POST /api/v1/auth/reset-password` | Restablecer contraseña |
+| `POST /api/v1/auth/refresh` | Renovar tokens |
+| `POST /api/v1/users/accept-invitation` | Aceptar invitación |
+| `POST /api/v1/contact/` | Formulario de contacto |
 
 ---
 
-## 🚀 Casos de Uso Comunes
+## 🚀 Flujos de Negocio Principales
 
-### 1. Registrar Nueva Empresa
+### 1. Registrar Nueva Organización
 
-```bash
-# 1. Crear cliente
-POST /api/v1/clients/
-{
-  "name": "Transportes ABC",
-  "email": "admin@abc.com",
-  "password": "Password123!"
-}
-
-# 2. Verificar email (usar token del email)
-POST /api/v1/auth/verify-email?token=abc123...
-
-# 3. Si no recibe el email, puede solicitar reenvío
-POST /api/v1/auth/resend-verification
-{
-  "email": "admin@abc.com"
-}
-
-# 4. Login (después de verificar el email)
-POST /api/v1/auth/login
-{
-  "email": "admin@abc.com",
-  "password": "Password123!"
-}
+```
+1. Registro de Organización
+   POST /api/v1/clients/
+   ↓
+2. Verificación de Email
+   POST /api/v1/auth/verify-email?token=...
+   ↓
+3. Login
+   POST /api/v1/auth/login
+   ↓
+4. Organización activa y operativa
 ```
 
-**Nota importante:** El sistema reutiliza la misma contraseña en todos los reenvíos de verificación, garantizando que la contraseña que eligió al registrarse siempre funcione.
+### 2. Ciclo de Vida de Suscripciones
 
-### 2. Comprar y Activar Dispositivo
-
-```bash
-# 1. Ver planes disponibles
-GET /api/v1/plans/
-
-# 2. Crear orden de dispositivos
-POST /api/v1/orders/
-{
-  "items": [...]
-}
-
-# 3. Registrar dispositivo
-POST /api/v1/devices/
-{
-  "serial_number": "GPS-001",
-  "model": "TK103",
-  "device_id": "353451234567890"
-}
-
-# 4. Activar servicio
-POST /api/v1/services/activate
-{
-  "device_id": "...",
-  "plan_id": "...",
-  "subscription_type": "MONTHLY"
-}
+```
+1. Ver planes disponibles
+   GET /api/v1/plans/
+   ↓
+2. Activar servicio (crea suscripción)
+   POST /api/v1/services/activate
+   ↓
+3. Consultar suscripciones activas
+   GET /api/v1/subscriptions/active
+   ↓
+4. Consultar capabilities efectivas
+   GET /api/v1/capabilities/
+   ↓
+5. Renovar o cancelar
+   POST /api/v1/subscriptions/{id}/cancel
 ```
 
-### 3. Invitar Usuario a la Organización
+### 3. Gestión de Usuarios y Roles
 
-```bash
-# 1. Enviar invitación (solo usuario maestro)
-POST /api/v1/users/invite
-{
-  "email": "usuario@abc.com",
-  "full_name": "Juan Pérez"
-}
-
-# 2. Usuario acepta invitación (usa token del email)
-POST /api/v1/users/accept-invitation
-{
-  "token": "...",
-  "password": "Password123!"
-}
-
-# 3. Usuario hace login
-POST /api/v1/auth/login
-{
-  "email": "usuario@abc.com",
-  "password": "Password123!"
-}
+```
+1. Usuario owner invita
+   POST /api/v1/users/invite
+   ↓
+2. Invitado acepta
+   POST /api/v1/users/accept-invitation
+   ↓
+3. Admin asigna rol específico (si aplica)
+   ↓
+4. Usuario opera según su rol
 ```
 
 ---
 
 ## 🗂️ Modelos de Datos Principales
 
-### Client (Cliente/Organización)
+### Organization (tabla `clients`)
 
 ```python
 id: UUID
-name: str
-status: PENDING | ACTIVE | SUSPENDED
+name: str                      # Nombre de la organización
+status: PENDING | ACTIVE | SUSPENDED | DELETED
+# active_subscription_id: UUID  # DEPRECADO - no usar como fuente de verdad
 created_at: datetime
+updated_at: datetime
 ```
 
-### User (Usuario)
+### Subscription (tabla `subscriptions`)
 
 ```python
 id: UUID
-client_id: UUID
+client_id: UUID               # Referencia a organization
+plan_id: UUID
+status: ACTIVE | TRIAL | EXPIRED | CANCELLED
+started_at: datetime
+expires_at: datetime
+cancelled_at: datetime | None
+auto_renew: bool
+```
+
+### User (tabla `users`)
+
+```python
+id: UUID
+client_id: UUID               # Referencia a organization
 email: str
 full_name: str
-is_master: bool
+is_master: bool               # Legacy - complementar con roles
 email_verified: bool
 cognito_sub: str
-created_at: datetime
 ```
 
-### Device (Dispositivo GPS)
+### Roles Organizacionales
 
-```python
-id: UUID
-client_id: UUID
-serial_number: str
-model: str
-device_id: str
-active: bool
-installed_in_unit_id: UUID | None
-created_at: datetime
-```
-
-### DeviceService (Servicio de Dispositivo)
-
-```python
-id: UUID
-client_id: UUID
-device_id: UUID
-plan_id: UUID
-subscription_type: MONTHLY | YEARLY
-status: PENDING | ACTIVE | EXPIRED | CANCELLED
-activated_at: datetime
-expires_at: datetime
-auto_renew: bool
-payment_id: UUID
-```
-
-### Payment (Pago)
-
-```python
-id: UUID
-client_id: UUID
-amount: Decimal
-status: PENDING | SUCCESS | FAILED | REFUNDED
-payment_method: str
-device_service_id: UUID | None
-order_id: UUID | None
-created_at: datetime
-paid_at: datetime | None
-```
+| Rol | Descripción |
+|-----|-------------|
+| `owner` | Propietario de la organización - permisos totales |
+| `admin` | Administrador - gestión de usuarios y configuración |
+| `billing` | Facturación - gestión de pagos y suscripciones |
+| `member` | Miembro - acceso operativo según asignaciones |
 
 ---
 
@@ -284,10 +484,16 @@ AWS_REGION=us-east-1
 COGNITO_USERPOOL_ID=us-east-1_XXXXXXXXX
 COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
 COGNITO_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-COGNITO_REGION=us-east-1
 
-# API
-PROJECT_NAME=SISCOM Admin API
+# PASETO (API Interna)
+PASETO_SECRET_KEY=your-secret-key-min-32-chars
+
+# AWS SES (Emails)
+SES_FROM_EMAIL=noreply@tudominio.com
+SES_REGION=us-east-1
+
+# Frontend
+FRONTEND_URL=https://app.tudominio.com
 ```
 
 ---
@@ -302,6 +508,7 @@ Los scripts de testing están en `scripts/testing/`:
 - `test_user_creation.sh` - Prueba creación de usuarios
 - `test_password_recovery.sh` - Prueba recuperación de contraseña
 - `test_invitation_resend.sh` - Prueba reenvío de invitaciones
+- `test_contact_security.sh` - Prueba seguridad de contacto
 
 ---
 
@@ -341,42 +548,42 @@ alembic upgrade head
 
 ---
 
-## 📞 Soporte
-
-- **Email**: soporte@siscom.com
-- **Documentación**: http://localhost:8000/docs
-- **Repositorio**: [GitHub](https://github.com/...)
-
----
-
 ## 📝 Notas Importantes
 
 ### Seguridad
 
-- Los tokens de acceso expiran en 1 hora
+- Los tokens de acceso (Cognito) expiran en 1 hora
+- Los tokens PASETO tienen expiración configurable (default: 24h)
 - Usar HTTPS en producción
-- No compartir credenciales de Cognito
-- Validar todos los inputs del usuario
+- No compartir credenciales de Cognito ni PASETO_SECRET_KEY
 
-### Límites y Restricciones
+### Límites y Capabilities
 
+- Los límites se resuelven: `org_override ?? plan_capability ?? default`
 - Un dispositivo solo puede tener UN servicio ACTIVE simultáneamente
 - Los seriales e IMEIs deben ser únicos en todo el sistema
-- Los emails deben ser únicos por cliente
+- Los emails deben ser únicos por organización
 
 ### Mejores Prácticas
 
 - Siempre manejar errores 401 (token expirado)
 - Implementar refresh token para renovar acceso
-- Validar permisos de usuario (is_master) en frontend
-- Mostrar mensajes de error claros al usuario
+- Validar permisos de usuario según rol en frontend
+- Consultar capabilities antes de operaciones con límites
 
 ---
 
 ## 🔄 Actualizaciones
 
-Ver [CHANGELOG](../CHANGELOG.md) para cambios recientes en la API.
+### Versión 2.0.0 (Diciembre 2025)
+
+- ✅ Modelo organizacional documentado
+- ✅ Sistema de capabilities definido
+- ✅ Roles organizacionales establecidos
+- ✅ API interna como orquestador administrativo
+- ✅ Suscripciones múltiples por organización
 
 ---
 
-**Última actualización**: Noviembre 2025
+**Última actualización**: Diciembre 2025  
+**Versión de documentación**: 2.0.0

@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     AuthResult,
     get_auth_for_gac_nexus_admin,
-    get_current_client_id,
+    get_current_organization_id,
     get_current_user_full,
     get_current_user_id,
 )
 from app.db.session import get_db
-from app.models.client import Client
+from app.models.organization import Organization
 from app.models.device import Device, DeviceEvent
 from app.models.sim_card import SimCard
 from app.models.sim_kore_profile import SimKoreProfile
@@ -144,7 +144,7 @@ def create_device(
         firmware_version=device_in.firmware_version,
         notes=device_in.notes,
         status="nuevo",
-        client_id=None,  # Sin cliente asignado
+        organization_id=None,  # Sin organización asignada
     )
     db.add(device)
 
@@ -222,7 +222,7 @@ def list_devices(
         Device.brand,
         Device.model,
         Device.firmware_version,
-        Device.client_id,
+        Device.organization_id,
         Device.status,
         Device.last_comm_at,
         Device.created_at,
@@ -250,7 +250,7 @@ def list_devices(
             brand=row.brand,
             model=row.model,
             firmware_version=row.firmware_version,
-            client_id=row.client_id,
+            client_id=row.organization_id,
             status=row.status,
             last_comm_at=row.last_comm_at,
             created_at=row.created_at,
@@ -267,7 +267,7 @@ def list_devices(
 
 @router.get("/my-devices", response_model=List[DeviceWithProfileOut])
 def list_my_devices(
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
     status_filter: Optional[str] = None,
 ):
@@ -289,7 +289,7 @@ def list_my_devices(
             Device.brand,
             Device.model,
             Device.firmware_version,
-            Device.client_id,
+            Device.organization_id,
             Device.status,
             Device.last_comm_at,
             Device.created_at,
@@ -318,7 +318,7 @@ def list_my_devices(
         )
         .outerjoin(Unit, Unit.id == UnitDevice.unit_id)
         .outerjoin(UnitProfile, UnitProfile.unit_id == Unit.id)
-        .filter(Device.client_id == client_id)
+        .filter(Device.organization_id == organization_id)
     )
 
     if status_filter:
@@ -334,7 +334,7 @@ def list_my_devices(
             brand=row.brand,
             model=row.model,
             firmware_version=row.firmware_version,
-            client_id=row.client_id,
+            client_id=row.organization_id,
             status=row.status,
             last_comm_at=row.last_comm_at,
             created_at=row.created_at,
@@ -359,7 +359,7 @@ def list_my_devices(
 
 @router.get("/unassigned", response_model=List[DeviceOut])
 def list_unassigned_devices(
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -383,7 +383,7 @@ def list_unassigned_devices(
             Device.brand,
             Device.model,
             Device.firmware_version,
-            Device.client_id,
+            Device.organization_id,
             Device.status,
             Device.last_comm_at,
             Device.created_at,
@@ -394,7 +394,7 @@ def list_unassigned_devices(
         )
         .outerjoin(SimCard, SimCard.device_id == Device.device_id)
         .filter(
-            Device.client_id == client_id,
+            Device.organization_id == organization_id,
             Device.status.in_(["preparado", "enviado", "entregado", "devuelto"]),
             ~Device.device_id.in_(active_assignments_subquery),
         )
@@ -408,7 +408,7 @@ def list_unassigned_devices(
             brand=row.brand,
             model=row.model,
             firmware_version=row.firmware_version,
-            client_id=row.client_id,
+            client_id=row.organization_id,
             status=row.status,
             last_comm_at=row.last_comm_at,
             created_at=row.created_at,
@@ -613,25 +613,26 @@ def update_device_status(
     # ============================================
 
     if new_status == "preparado":
-        # Requiere client_id
-        if not status_update.client_id:
+        # Requiere organization_id (o client_id por compatibilidad)
+        org_id = status_update.client_id  # Acepta client_id por compatibilidad
+        if not org_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Se requiere client_id para preparar el dispositivo",
+                detail="Se requiere client_id (organization_id) para preparar el dispositivo",
             )
 
-        # Verificar que el cliente existe
-        client = db.query(Client).filter(Client.id == status_update.client_id).first()
-        if not client:
+        # Verificar que la organización existe
+        organization = db.query(Organization).filter(Organization.id == org_id).first()
+        if not organization:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente no encontrado",
+                detail="Organización no encontrada",
             )
 
-        device.client_id = status_update.client_id
+        device.organization_id = org_id
         device.status = "preparado"
 
-        event_details = f"Dispositivo preparado para cliente {client.name}"
+        event_details = f"Dispositivo preparado para cliente {organization.name}"
 
     elif new_status == "enviado":
         # Debe estar en estado 'preparado' antes de ser enviado
@@ -645,11 +646,11 @@ def update_device_status(
         event_details = "Dispositivo enviado al cliente"
 
     elif new_status == "entregado":
-        # Debe tener client_id
-        if not device.client_id:
+        # Debe tener organization_id
+        if not device.organization_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El dispositivo debe tener un cliente asignado",
+                detail="El dispositivo debe tener una organización asignada",
             )
 
         device.status = "entregado"
@@ -671,10 +672,10 @@ def update_device_status(
                 detail="Unidad no encontrada",
             )
 
-        if device.client_id and unit.client_id != device.client_id:
+        if device.organization_id and unit.organization_id != device.organization_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La unidad no pertenece al cliente del dispositivo",
+                detail="La unidad no pertenece a la organización del dispositivo",
             )
 
         # Verificar si ya existe una asignación activa para este device
@@ -722,8 +723,8 @@ def update_device_status(
             active_assignment.unassigned_at = datetime.utcnow()
             db.add(active_assignment)
 
-        # Quitar cliente
-        device.client_id = None
+        # Quitar organización
+        device.organization_id = None
         device.status = "devuelto"
 
         event_details = "Dispositivo devuelto al inventario"
@@ -854,11 +855,11 @@ def get_device_trips(
     from app.models.trip import Trip
     from app.schemas.trip import TripListResponse
 
-    # Verificar que el dispositivo existe y pertenece al cliente
+    # Verificar que el dispositivo existe y pertenece a la organización
     device = (
         db.query(Device)
         .filter(
-            Device.device_id == device_id, Device.client_id == current_user.client_id
+            Device.device_id == device_id, Device.organization_id == current_user.organization_id
         )
         .first()
     )
@@ -866,7 +867,7 @@ def get_device_trips(
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dispositivo no encontrado o no pertenece a tu cliente",
+            detail="Dispositivo no encontrado o no pertenece a tu organización",
         )
 
     # Verificar acceso al dispositivo

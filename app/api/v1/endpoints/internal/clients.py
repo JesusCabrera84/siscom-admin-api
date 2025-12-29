@@ -1,10 +1,12 @@
 """
-Endpoints internos para gestión de clientes.
+Endpoints internos para gestión de clientes/organizaciones.
 
 Estos endpoints están protegidos por tokens PASETO y están diseñados
 para ser usados por aplicaciones administrativas internas como gac-web.
 
 Requiere: Token PASETO con service="gac" y role="NEXUS_ADMIN"
+
+NOTA: "Client" es un alias de "Organization" mantenido por compatibilidad.
 """
 
 from typing import Optional
@@ -15,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import AuthResult, get_auth_cognito_or_paseto
 from app.db.session import get_db
-from app.models.client import Client, ClientStatus
+from app.models.organization import Organization, OrganizationStatus
 from app.models.user import User
 from app.schemas.client import ClientOut
 
@@ -32,7 +34,7 @@ get_auth_for_internal_clients = get_auth_cognito_or_paseto(
 def list_all_clients(
     db: Session = Depends(get_db),
     auth: AuthResult = Depends(get_auth_for_internal_clients),
-    status_filter: Optional[ClientStatus] = Query(
+    status_filter: Optional[OrganizationStatus] = Query(
         None, alias="status", description="Filtrar por estado del cliente"
     ),
     search: Optional[str] = Query(
@@ -42,7 +44,7 @@ def list_all_clients(
     offset: int = Query(0, ge=0, description="Offset para paginación"),
 ):
     """
-    Lista todos los clientes del sistema.
+    Lista todos los clientes/organizaciones del sistema.
 
     Solo accesible para administradores internos con token PASETO válido.
 
@@ -52,22 +54,22 @@ def list_all_clients(
     - limit: Máximo de resultados (default: 50, max: 200)
     - offset: Para paginación
     """
-    query = db.query(Client)
+    query = db.query(Organization)
 
     # Aplicar filtros
     if status_filter:
-        query = query.filter(Client.status == status_filter)
+        query = query.filter(Organization.status == status_filter)
 
     if search:
-        query = query.filter(Client.name.ilike(f"%{search}%"))
+        query = query.filter(Organization.name.ilike(f"%{search}%"))
 
     # Ordenar por fecha de creación descendente
-    query = query.order_by(Client.created_at.desc())
+    query = query.order_by(Organization.created_at.desc())
 
     # Aplicar paginación
-    clients = query.offset(offset).limit(limit).all()
+    organizations = query.offset(offset).limit(limit).all()
 
-    return clients
+    return organizations
 
 
 @router.get("/stats")
@@ -76,15 +78,15 @@ def get_clients_stats(
     auth: AuthResult = Depends(get_auth_for_internal_clients),
 ):
     """
-    Obtiene estadísticas generales de los clientes.
+    Obtiene estadísticas generales de los clientes/organizaciones.
 
     Retorna conteo por estado y total de clientes.
     """
-    total = db.query(Client).count()
-    pending = db.query(Client).filter(Client.status == ClientStatus.PENDING).count()
-    active = db.query(Client).filter(Client.status == ClientStatus.ACTIVE).count()
-    suspended = db.query(Client).filter(Client.status == ClientStatus.SUSPENDED).count()
-    deleted = db.query(Client).filter(Client.status == ClientStatus.DELETED).count()
+    total = db.query(Organization).count()
+    pending = db.query(Organization).filter(Organization.status == OrganizationStatus.PENDING).count()
+    active = db.query(Organization).filter(Organization.status == OrganizationStatus.ACTIVE).count()
+    suspended = db.query(Organization).filter(Organization.status == OrganizationStatus.SUSPENDED).count()
+    deleted = db.query(Organization).filter(Organization.status == OrganizationStatus.DELETED).count()
 
     return {
         "total": total,
@@ -104,19 +106,19 @@ def get_client_by_id(
     auth: AuthResult = Depends(get_auth_for_internal_clients),
 ):
     """
-    Obtiene un cliente específico por su ID.
+    Obtiene un cliente/organización específico por su ID.
 
     Solo accesible para administradores internos con token PASETO válido.
     """
-    client = db.query(Client).filter(Client.id == client_id).first()
+    organization = db.query(Organization).filter(Organization.id == client_id).first()
 
-    if not client:
+    if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cliente no encontrado",
         )
 
-    return client
+    return organization
 
 
 @router.get("/{client_id}/users")
@@ -126,19 +128,19 @@ def get_client_users(
     auth: AuthResult = Depends(get_auth_for_internal_clients),
 ):
     """
-    Lista todos los usuarios de un cliente específico.
+    Lista todos los usuarios de un cliente/organización específico.
 
     Útil para administración y soporte.
     """
-    # Verificar que el cliente existe
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
+    # Verificar que la organización existe
+    organization = db.query(Organization).filter(Organization.id == client_id).first()
+    if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cliente no encontrado",
         )
 
-    users = db.query(User).filter(User.client_id == client_id).all()
+    users = db.query(User).filter(User.organization_id == client_id).all()
 
     return [
         {
@@ -157,12 +159,12 @@ def get_client_users(
 @router.patch("/{client_id}/status")
 def update_client_status(
     client_id: UUID,
-    new_status: ClientStatus,
+    new_status: OrganizationStatus,
     db: Session = Depends(get_db),
     auth: AuthResult = Depends(get_auth_for_internal_clients),
 ):
     """
-    Actualiza el estado de un cliente.
+    Actualiza el estado de un cliente/organización.
 
     Permite suspender, activar o marcar como eliminado un cliente.
 
@@ -172,24 +174,24 @@ def update_client_status(
     - SUSPENDED: Cliente suspendido
     - DELETED: Cliente eliminado lógicamente
     """
-    client = db.query(Client).filter(Client.id == client_id).first()
+    organization = db.query(Organization).filter(Organization.id == client_id).first()
 
-    if not client:
+    if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cliente no encontrado",
         )
 
-    old_status = client.status
-    client.status = new_status
+    old_status = organization.status
+    organization.status = new_status
     db.commit()
-    db.refresh(client)
+    db.refresh(organization)
 
     return {
         "message": f"Estado actualizado de {old_status} a {new_status}",
         "client": {
-            "id": str(client.id),
-            "name": client.name,
-            "status": client.status,
+            "id": str(organization.id),
+            "name": organization.name,
+            "status": organization.status,
         },
     }

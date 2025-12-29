@@ -2,16 +2,28 @@
 
 ## 🎯 Descripción General
 
-**SISCOM Admin API** es una API REST multi-tenant para la gestión integral de sistemas de rastreo GPS/IoT. Permite a múltiples clientes administrar dispositivos de rastreo, vehículos/unidades, usuarios, planes de servicio y facturación de manera completamente aislada.
+**SISCOM Admin API** es una plataforma **SaaS B2B multi-tenant** para la gestión integral de sistemas de rastreo GPS/IoT. Permite a múltiples organizaciones administrar dispositivos de rastreo, vehículos/unidades, usuarios con roles específicos, planes de servicio con capabilities, y facturación de manera completamente aislada.
+
+> **Referencia de Arquitectura**: Ver [Modelo Organizacional](docs/guides/organizational-model.md) para entender la semántica completa de negocio.
+
+### Conceptos Fundamentales
+
+| Concepto | Descripción |
+|----------|-------------|
+| **Organización** | Entidad de negocio principal (tabla `clients`) |
+| **Suscripciones** | Contratos de servicio - una organización puede tener **múltiples** |
+| **Capabilities** | Límites y features que gobiernan el acceso |
+| **Roles** | Permisos de usuarios: owner, admin, billing, member |
 
 ### Características Principales
 
-- 🏢 **Multi-tenant**: Cada cliente tiene sus datos completamente aislados
-- 🔐 **Autenticación AWS Cognito**: Sistema robusto de autenticación con JWT
+- 🏢 **Multi-tenant**: Cada organización tiene sus datos completamente aislados
+- 🔐 **Autenticación Dual**: AWS Cognito (usuarios) + PASETO (servicios internos)
 - 📱 **Gestión de Dispositivos GPS**: Inventario y seguimiento completo de dispositivos
 - 🚗 **Gestión de Unidades/Vehículos**: Organización de flotas con permisos granulares
-- 👥 **Sistema de Usuarios**: Usuarios maestros y usuarios con permisos específicos
-- 💳 **Facturación Completa**: Órdenes, pagos y suscripciones mensuales/anuales
+- 👥 **Sistema de Roles**: owner, admin, billing, member con permisos específicos
+- 💳 **Suscripciones Múltiples**: Una organización puede tener varias suscripciones
+- 🎛️ **Capabilities**: Sistema de límites y features configurable por plan y organización
 - 📧 **Notificaciones por Email**: Sistema integrado con AWS SES
 - 📊 **Auditoría**: Registro completo de eventos en dispositivos
 
@@ -96,17 +108,19 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 ### 📋 Índice de Endpoints
 
 1. [**Autenticación** (`/auth`)](#1-autenticación-auth) - Login, logout, recuperación de contraseña
-2. [**Clientes** (`/clients`)](#2-clientes-clients) - Registro y gestión de clientes
+2. [**Organizaciones** (`/clients`)](#2-organizaciones-clients) - Registro y gestión de organizaciones
 3. [**Usuarios** (`/users`)](#3-usuarios-users) - Invitaciones y gestión de usuarios
-4. [**Dispositivos** (`/devices`)](#4-dispositivos-devices) - Inventario y gestión de GPS
-5. [**Eventos de Dispositivos** (`/device-events`)](#5-eventos-de-dispositivos-device-events) - Historial de eventos
-6. [**Unidades/Vehículos** (`/units`)](#6-unidades-units) - Gestión de flotas
-7. [**Asignación Unidad-Dispositivo** (`/unit-devices`)](#7-asignación-unidad-dispositivo-unit-devices) - Instalaciones
-8. [**Asignación Usuario-Unidad** (`/user-units`)](#8-asignación-usuario-unidad-user-units) - Permisos por unidad
-9. [**Servicios** (`/services`)](#9-servicios-services) - Activación de servicios de rastreo
-10. [**Planes** (`/plans`)](#10-planes-plans) - Catálogo de planes disponibles
-11. [**Órdenes** (`/orders`)](#11-órdenes-orders) - Pedidos de hardware
-12. [**Pagos** (`/payments`)](#12-pagos-payments) - Gestión de pagos
+4. [**Suscripciones** (`/subscriptions`)](#4-suscripciones-subscriptions) - Gestión de suscripciones múltiples
+5. [**Capabilities** (`/capabilities`)](#5-capabilities-capabilities) - Límites y features de la organización
+6. [**Dispositivos** (`/devices`)](#6-dispositivos-devices) - Inventario y gestión de GPS
+7. [**Eventos de Dispositivos** (`/device-events`)](#7-eventos-de-dispositivos-device-events) - Historial de eventos
+8. [**Unidades/Vehículos** (`/units`)](#8-unidades-units) - Gestión de flotas
+9. [**Asignación Unidad-Dispositivo** (`/unit-devices`)](#9-asignación-unidad-dispositivo-unit-devices) - Instalaciones
+10. [**Asignación Usuario-Unidad** (`/user-units`)](#10-asignación-usuario-unidad-user-units) - Permisos por unidad
+11. [**Servicios** (`/services`)](#11-servicios-services) - Activación de servicios (legacy)
+12. [**Planes** (`/plans`)](#12-planes-plans) - Catálogo de planes disponibles
+13. [**Órdenes** (`/orders`)](#13-órdenes-orders) - Pedidos de hardware
+14. [**Pagos** (`/payments`)](#14-pagos-payments) - Gestión de pagos
 
 ---
 
@@ -290,15 +304,17 @@ Permite al usuario cambiar su contraseña proporcionando la actual.
 
 ---
 
-## 2. Clientes (`/clients`)
+## 2. Organizaciones (`/clients`)
+
+> **Nota Conceptual**: En el código, la tabla se llama `clients`, pero conceptualmente representa una **Organización**. Una organización puede tener múltiples suscripciones y capabilities específicas. Ver [docs/api/clients.md](docs/api/clients.md) para detalles completos.
 
 ### 🔓 Público
 
 #### `POST /api/v1/clients/`
 
-**Registrar nuevo cliente**
+**Registrar nueva organización**
 
-Crea un nuevo cliente con su usuario maestro. Envía email de verificación.
+Crea una nueva organización con su usuario propietario (owner). Envía email de verificación.
 
 **Request:**
 
@@ -323,15 +339,15 @@ Crea un nuevo cliente con su usuario maestro. Envía email de verificación.
 
 **Email enviado:** Link a `{FRONTEND_URL}/verify-email?token={token}`
 
-**Nota:** El cliente y usuario quedan en estado `PENDING` hasta verificar el email.
+**Nota:** La organización y el usuario owner quedan en estado `PENDING` hasta verificar el email.
 
 ---
 
 #### `POST /api/v1/clients/verify-email`
 
-**Verificar email del cliente**
+**Verificar email de la organización**
 
-Verifica el email y activa el cliente y usuario maestro.
+Verifica el email y activa la organización y usuario propietario.
 
 **Query Parameters:**
 
@@ -353,7 +369,7 @@ Verifica el email y activa el cliente y usuario maestro.
 
 #### `GET /api/v1/clients/`
 
-**Obtener información del cliente autenticado**
+**Obtener información de la organización autenticada**
 
 **Headers:** `Authorization: Bearer {access_token}`
 
@@ -369,17 +385,22 @@ Verifica el email y activa el cliente y usuario maestro.
 }
 ```
 
+> **Nota de Evolución**: Este endpoint debería expandirse para incluir `subscriptions` (activas e históricas) y `effective_capabilities`. Ver [docs/api/clients.md](docs/api/clients.md) para la estructura esperada.
+
 ---
 
 ## 3. Usuarios (`/users`)
+
+> **Sistema de Roles**: Los usuarios tienen roles específicos dentro de la organización: `owner`, `admin`, `billing`, `member`. Ver [docs/api/users.md](docs/api/users.md) para detalles.
 
 ### 🔒 Todos requieren autenticación
 
 #### `GET /api/v1/users/`
 
-**Listar todos los usuarios del cliente**
+**Listar todos los usuarios de la organización**
 
 **Headers:** `Authorization: Bearer {access_token}`
+**Permisos:** `owner`, `admin`
 
 **Response:** `200 OK`
 
@@ -389,6 +410,7 @@ Verifica el email y activa el cliente y usuario maestro.
     "id": "uuid",
     "email": "admin@miempresa.com",
     "full_name": "Administrador Principal",
+    "role": "owner",
     "is_master": true,
     "email_verified": true,
     "last_login_at": "2024-11-08T10:00:00Z",
@@ -396,12 +418,22 @@ Verifica el email y activa el cliente y usuario maestro.
   },
   {
     "id": "uuid",
-    "email": "usuario@miempresa.com",
-    "full_name": "Usuario Regular",
+    "email": "contador@miempresa.com",
+    "full_name": "Usuario Facturación",
+    "role": "billing",
     "is_master": false,
     "email_verified": true,
     "last_login_at": "2024-11-08T11:00:00Z",
     "created_at": "2024-11-08T09:30:00Z"
+  },
+  {
+    "id": "uuid",
+    "email": "operador@miempresa.com",
+    "full_name": "Usuario Operador",
+    "role": "member",
+    "is_master": false,
+    "email_verified": true,
+    "created_at": "2024-11-08T10:00:00Z"
   }
 ]
 ```
@@ -433,26 +465,36 @@ Verifica el email y activa el cliente y usuario maestro.
 
 #### `POST /api/v1/users/invite`
 
-**Invitar nuevo usuario** (Solo usuarios maestros)
+**Invitar nuevo usuario** (Solo owner/admin)
 
-Envía una invitación por email para que un nuevo usuario se registre.
+Envía una invitación por email para que un nuevo usuario se registre con un rol específico.
 
 **Headers:** `Authorization: Bearer {access_token}`
+**Permisos:** `owner`, `admin`
 
 **Request:**
 
 ```json
 {
   "email": "nuevousuario@miempresa.com",
-  "full_name": "Nuevo Usuario"
+  "full_name": "Nuevo Usuario",
+  "role": "member"
 }
 ```
+
+**Roles disponibles para asignar:**
+- `admin` - Gestión de usuarios y configuración
+- `billing` - Gestión de pagos y facturación
+- `member` - Acceso operativo según asignaciones
+
+> **Nota**: El rol `owner` no se puede asignar por invitación, solo por transferencia.
 
 **Response:** `201 Created`
 
 ```json
 {
   "detail": "Invitación enviada a nuevousuario@miempresa.com",
+  "role": "member",
   "expires_at": "2024-11-11T10:00:00Z"
 }
 ```
@@ -461,7 +503,7 @@ Envía una invitación por email para que un nuevo usuario se registre.
 
 **Errores:**
 
-- `403 Forbidden`: Si el usuario no es maestro
+- `403 Forbidden`: Si el usuario no tiene permisos de invitación
 - `400 Bad Request`: Si el email ya está registrado o tiene invitación pendiente
 
 ---
@@ -525,7 +567,273 @@ Reenvía una invitación a un email que no ha aceptado.
 
 ---
 
-## 4. Dispositivos (`/devices`)
+## 4. Suscripciones (`/subscriptions`)
+
+Gestión de suscripciones de la organización. Una organización puede tener **múltiples** suscripciones.
+
+> **Concepto Clave**: Las suscripciones activas se CALCULAN dinámicamente, no se almacenan como un campo fijo.
+
+### 🔒 Todos requieren autenticación
+
+#### `GET /api/v1/subscriptions/`
+
+**Listar todas las suscripciones**
+
+Lista las suscripciones de la organización, incluyendo activas e históricas.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Query Parameters:**
+
+- `include_history` (bool, default=true): Incluir suscripciones canceladas/expiradas
+- `limit` (int, default=20): Límite de resultados
+
+**Response:** `200 OK`
+
+```json
+{
+  "subscriptions": [
+    {
+      "id": "uuid",
+      "client_id": "uuid",
+      "plan_id": "uuid",
+      "plan_name": "Plan Profesional",
+      "plan_code": "pro",
+      "status": "ACTIVE",
+      "billing_cycle": "MONTHLY",
+      "started_at": "2024-01-01T00:00:00Z",
+      "expires_at": "2025-01-01T00:00:00Z",
+      "auto_renew": true,
+      "days_remaining": 180,
+      "is_active": true
+    }
+  ],
+  "active_count": 1,
+  "total_count": 3
+}
+```
+
+---
+
+#### `GET /api/v1/subscriptions/active`
+
+**Listar suscripciones activas**
+
+Lista solo las suscripciones activas (status ACTIVE o TRIAL y no expiradas).
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Response:** `200 OK`
+
+```json
+[
+  {
+    "id": "uuid",
+    "plan_name": "Plan Profesional",
+    "status": "ACTIVE",
+    "expires_at": "2025-01-01T00:00:00Z",
+    "days_remaining": 180,
+    "is_active": true
+  }
+]
+```
+
+---
+
+#### `GET /api/v1/subscriptions/{subscription_id}`
+
+**Obtener detalles de una suscripción**
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "uuid",
+  "client_id": "uuid",
+  "plan_id": "uuid",
+  "plan_name": "Plan Profesional",
+  "status": "ACTIVE",
+  "billing_cycle": "MONTHLY",
+  "started_at": "2024-01-01T00:00:00Z",
+  "expires_at": "2025-01-01T00:00:00Z",
+  "current_period_start": "2024-06-01T00:00:00Z",
+  "current_period_end": "2024-07-01T00:00:00Z",
+  "auto_renew": true,
+  "external_id": "sub_stripe_123",
+  "days_remaining": 180,
+  "is_active": true
+}
+```
+
+---
+
+#### `POST /api/v1/subscriptions/{subscription_id}/cancel`
+
+**Cancelar suscripción**
+
+**Headers:** `Authorization: Bearer {access_token}`
+**Permisos:** `owner`, `billing`
+
+**Request:**
+
+```json
+{
+  "reason": "Ya no necesito el servicio",
+  "cancel_immediately": false
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "uuid",
+  "status": "CANCELLED",
+  "cancelled_at": "2024-06-15T10:00:00Z",
+  "auto_renew": false
+}
+```
+
+---
+
+#### `PATCH /api/v1/subscriptions/{subscription_id}/auto-renew`
+
+**Activar/desactivar renovación automática**
+
+**Headers:** `Authorization: Bearer {access_token}`
+**Permisos:** `owner`, `billing`
+
+**Query Parameters:**
+
+- `auto_renew` (bool): Nuevo valor
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "uuid",
+  "auto_renew": false
+}
+```
+
+---
+
+## 5. Capabilities (`/capabilities`)
+
+Sistema de límites y features de la organización. Las capabilities determinan qué puede hacer una organización.
+
+> **Regla de Resolución**: `organization_override ?? plan_capability ?? default`
+
+### 🔒 Todos requieren autenticación
+
+#### `GET /api/v1/capabilities/`
+
+**Obtener resumen de capabilities**
+
+Retorna todas las capabilities efectivas de la organización, agrupadas en límites y features.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Response:** `200 OK`
+
+```json
+{
+  "limits": {
+    "max_devices": 50,
+    "max_geofences": 100,
+    "max_users": 10,
+    "history_days": 90
+  },
+  "features": {
+    "ai_features": true,
+    "analytics_tools": true,
+    "api_access": true,
+    "real_time_tracking": true
+  }
+}
+```
+
+---
+
+#### `GET /api/v1/capabilities/{capability_code}`
+
+**Obtener una capability específica**
+
+Retorna el valor y fuente de una capability específica.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Response:** `200 OK`
+
+```json
+{
+  "code": "max_devices",
+  "value": 100,
+  "source": "organization",
+  "plan_id": null,
+  "expires_at": "2024-12-31T23:59:59Z"
+}
+```
+
+**Valores de `source`:**
+- `organization`: Override específico de la organización
+- `plan`: Valor del plan activo
+- `default`: Valor por defecto del sistema
+
+---
+
+#### `POST /api/v1/capabilities/validate-limit`
+
+**Validar si se puede agregar un elemento**
+
+Verifica si se puede agregar un elemento más sin exceder el límite.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Request:**
+
+```json
+{
+  "capability_code": "max_devices",
+  "current_count": 8
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "can_add": true,
+  "current_count": 8,
+  "limit": 10,
+  "remaining": 2
+}
+```
+
+---
+
+#### `GET /api/v1/capabilities/check/{capability_code}`
+
+**Verificar si una feature está habilitada**
+
+Verifica rápidamente si una capability booleana está habilitada.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Response:** `200 OK`
+
+```json
+{
+  "capability": "ai_features",
+  "enabled": true
+}
+```
+
+---
+
+## 6. Dispositivos (`/devices`)
 
 Gestión del inventario de dispositivos GPS.
 
@@ -722,7 +1030,7 @@ Marca el dispositivo como dado de baja.
 
 ---
 
-## 5. Eventos de Dispositivos (`/device-events`)
+## 7. Eventos de Dispositivos (`/device-events`)
 
 Historial de auditoría de todos los cambios en dispositivos.
 
@@ -780,7 +1088,7 @@ Historial de auditoría de todos los cambios en dispositivos.
 
 ---
 
-## 6. Unidades (`/units`)
+## 8. Unidades (`/units`)
 
 Gestión de vehículos, maquinaria o cualquier unidad rastreable.
 
@@ -959,7 +1267,7 @@ Marca la unidad como eliminada. Solo usuarios maestros o con rol "admin" en la u
 
 ---
 
-## 7. Asignación Unidad-Dispositivo (`/unit-devices`)
+## 9. Asignación Unidad-Dispositivo (`/unit-devices`)
 
 Gestión de instalaciones de dispositivos en unidades.
 
@@ -1066,7 +1374,7 @@ Marca un dispositivo como desinstalado de una unidad.
 
 ---
 
-## 8. Asignación Usuario-Unidad (`/user-units`)
+## 10. Asignación Usuario-Unidad (`/user-units`)
 
 Sistema de permisos granulares por unidad.
 
@@ -1158,7 +1466,7 @@ Revoca los permisos de un usuario sobre una unidad.
 
 ---
 
-## 9. Servicios (`/services`)
+## 11. Servicios (`/services`) - Legacy
 
 Activación y gestión de servicios de rastreo.
 
@@ -1303,17 +1611,19 @@ Cancela un servicio activo.
 
 ---
 
-## 10. Planes (`/plans`)
+## 12. Planes (`/plans`)
 
-Catálogo de planes de servicio disponibles.
+Catálogo de planes de servicio disponibles con sus capabilities (límites y features).
+
+> **Concepto Clave**: Las **capabilities** son la fuente de verdad para determinar qué puede hacer una organización. Ver [docs/api/plans.md](docs/api/plans.md) para detalles completos.
 
 ### 🔓 Público (no requiere autenticación)
 
 #### `GET /api/v1/plans/`
 
-**Listar planes disponibles**
+**Listar planes disponibles con capabilities**
 
-Obtiene el catálogo completo de planes.
+Obtiene el catálogo completo de planes y sus capabilities.
 
 **Response:** `200 OK`
 
@@ -1323,38 +1633,73 @@ Obtiene el catálogo completo de planes.
     "id": "uuid",
     "name": "Plan Básico",
     "description": "Rastreo en tiempo real con ubicación precisa",
-    "features": [
+    "price_monthly": "199.00",
+    "price_yearly": "1990.00",
+    "capabilities": {
+      "max_devices": 10,
+      "max_geofences": 5,
+      "max_users": 3,
+      "history_days": 30,
+      "ai_features": false,
+      "analytics_tools": false,
+      "real_time_alerts": true
+    },
+    "features_description": [
       "Rastreo en tiempo real",
       "Historial de 30 días",
+      "5 geocercas",
       "Alertas básicas"
     ],
-    "price_monthly": "199.00",
-    "price_annual": "1990.00",
-    "currency": "MXN",
-    "is_active": true
+    "active": true
   },
   {
     "id": "uuid",
-    "name": "Plan Profesional",
-    "description": "Todas las características del Plan Básico más reportes avanzados",
-    "features": [
+    "name": "Plan Enterprise",
+    "description": "Solución completa para flotas grandes con IA",
+    "price_monthly": "599.00",
+    "price_yearly": "5990.00",
+    "capabilities": {
+      "max_devices": 200,
+      "max_geofences": 100,
+      "max_users": 50,
+      "history_days": 365,
+      "ai_features": true,
+      "analytics_tools": true,
+      "custom_reports": true,
+      "api_access": true,
+      "priority_support": true,
+      "real_time_alerts": true
+    },
+    "features_description": [
       "Rastreo en tiempo real",
-      "Historial ilimitado",
-      "Alertas avanzadas",
-      "Reportes personalizados",
-      "Geocercas ilimitadas"
+      "Historial de 365 días",
+      "100 geocercas",
+      "IA y Analytics avanzado",
+      "API de integración",
+      "Soporte prioritario"
     ],
-    "price_monthly": "299.00",
-    "price_annual": "2990.00",
-    "currency": "MXN",
-    "is_active": true
+    "active": true
   }
 ]
 ```
 
+### Sistema de Capabilities
+
+Las capabilities efectivas de una organización se resuelven así:
+
+```
+organization_capability_override  (si existe)
+         ??
+plan_capability                   (del plan activo)
+         ??
+default_capability
+```
+
+Ver [docs/api/plans.md](docs/api/plans.md) para la lista completa de capabilities y su uso.
+
 ---
 
-## 11. Órdenes (`/orders`)
+## 13. Órdenes (`/orders`)
 
 Gestión de pedidos de hardware.
 
@@ -1493,7 +1838,7 @@ Incluye todos los items del pedido.
 
 ---
 
-## 12. Pagos (`/payments`)
+## 14. Pagos (`/payments`)
 
 Gestión de pagos del cliente.
 
@@ -1563,20 +1908,28 @@ Gestión de pagos del cliente.
 
 ## 🔄 Flujos de Negocio Principales
 
-### Flujo 1: Onboarding de Nuevo Cliente
+### Flujo 1: Onboarding de Nueva Organización
 
-```mermaid
-1. POST /clients/              → Registrar cliente
-2. Email enviado               → Cliente verifica email
-3. POST /clients/verify-email  → Activar cuenta
-4. POST /auth/login            → Iniciar sesión
-5. Cliente ahora puede usar la API
+```
+1. POST /clients/              → Registrar organización
+   ↓
+2. Sistema crea Organization (PENDING) + User (owner)
+   ↓
+3. Email enviado               → Usuario verifica email
+   ↓
+4. POST /auth/verify-email     → Activar cuenta
+   ↓
+5. Organization.status = ACTIVE
+   ↓
+6. POST /auth/login            → Iniciar sesión
+   ↓
+7. Organización puede operar según capabilities del plan
 ```
 
 **Ejemplo práctico:**
 
 ```bash
-# 1. Registrar cliente
+# 1. Registrar organización
 curl -X POST http://localhost:8100/api/v1/clients/ \
   -H "Content-Type: application/json" \
   -d '{
@@ -1585,7 +1938,7 @@ curl -X POST http://localhost:8100/api/v1/clients/ \
     "password": "Password123!"
   }'
 
-# 2. Cliente recibe email y hace clic en link
+# 2. Usuario recibe email y hace clic en link
 # 3. Frontend llama a verify-email con el token
 
 # 4. Login
@@ -1661,34 +2014,51 @@ curl -X POST http://localhost:8100/api/v1/services/activate \
 
 ---
 
-### Flujo 3: Invitar Usuario y Asignar Permisos
+### Flujo 3: Invitar Usuario con Rol Específico
 
-```mermaid
-1. POST /users/invite           → Usuario maestro invita
+```
+1. POST /users/invite           → Owner/Admin invita con rol
+   ↓
 2. Email enviado                → Nuevo usuario recibe invitación
+   ↓
 3. POST /users/accept-invitation → Usuario acepta y crea cuenta
-4. POST /user-units/assign      → Maestro asigna permisos sobre unidades
-5. Usuario puede ver sus unidades asignadas
+   ↓
+4. Usuario tiene rol asignado (admin/billing/member)
+   ↓
+5. (Si es member) POST /user-units/assign → Asignar unidades específicas
+   ↓
+6. Usuario opera según su rol y asignaciones
 ```
 
 **Ejemplo práctico:**
 
 ```bash
-# 1. Invitar usuario (como maestro)
+# 1. Invitar usuario con rol billing (como owner/admin)
 curl -X POST http://localhost:8100/api/v1/users/invite \
-  -H "Authorization: Bearer {token_maestro}" \
+  -H "Authorization: Bearer {token_owner}" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "conductor@miempresa.com",
-    "full_name": "Juan Pérez"
+    "email": "contador@miempresa.com",
+    "full_name": "Ana Martínez",
+    "role": "billing"
   }'
 
 # 2. Usuario recibe email y hace clic en link
 # 3. Frontend llama a accept-invitation
 
-# 4. Asignar permisos sobre unidad
+# 4. Invitar operador con rol member
+curl -X POST http://localhost:8100/api/v1/users/invite \
+  -H "Authorization: Bearer {token_owner}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "conductor@miempresa.com",
+    "full_name": "Juan Pérez",
+    "role": "member"
+  }'
+
+# 5. Asignar unidades específicas al member
 curl -X POST http://localhost:8100/api/v1/user-units/assign \
-  -H "Authorization: Bearer {token_maestro}" \
+  -H "Authorization: Bearer {token_owner}" \
   -H "Content-Type: application/json" \
   -d '{
     "unit_id": "{unit_uuid}",
@@ -1696,10 +2066,16 @@ curl -X POST http://localhost:8100/api/v1/user-units/assign \
     "role": "viewer"
   }'
 
-# 5. Usuario puede listar sus unidades
+# 6. Usuario member solo ve unidades asignadas
 curl -X GET http://localhost:8100/api/v1/units/ \
-  -H "Authorization: Bearer {token_usuario}"
+  -H "Authorization: Bearer {token_member}"
 ```
+
+**Roles disponibles:**
+- `owner` - Propietario (solo transferible)
+- `admin` - Gestión de usuarios y configuración  
+- `billing` - Gestión de pagos y suscripciones
+- `member` - Acceso operativo según asignaciones
 
 ---
 
@@ -1868,9 +2244,11 @@ https://github.com/tu-usuario/siscom-admin-api
 
 1. **Guardar tokens de manera segura**: Usar localStorage o sessionStorage
 2. **Manejar expiración de tokens**: Implementar refresh automático
-3. **Validar permisos en UI**: Ocultar opciones según `is_master` y roles
-4. **Mostrar feedback claro**: Mensajes de error user-friendly
-5. **Implementar loading states**: Durante llamadas a la API
+3. **Validar permisos en UI**: Ocultar opciones según rol del usuario (owner/admin/billing/member)
+4. **Mostrar capabilities**: Indicar límites actuales vs uso actual
+5. **Advertir límites**: Notificar cuando se acercan a límites de capabilities
+6. **Mostrar feedback claro**: Mensajes de error user-friendly
+7. **Implementar loading states**: Durante llamadas a la API
 
 ### Para Integraciones
 

@@ -1,36 +1,79 @@
-# API Interna de Clientes
+# API Interna - Orquestador Administrativo
 
 ## Descripción
 
-Endpoints internos para gestión administrativa de clientes. Estos endpoints están diseñados para ser usados por aplicaciones administrativas internas como **gac-web**.
+La API interna proporciona endpoints administrativos para gestión global del sistema. Funciona como un **orquestador administrativo** que permite operaciones cross-organization que no están disponibles para usuarios regulares.
+
+> **Rol**: Panel de administración interno para operaciones que trascienden el contexto de una sola organización.
 
 **Base URL**: `/api/v1/internal/clients`
+
+---
+
+## Propósito del Orquestador
+
+La API interna está diseñada para:
+
+| Función | Descripción |
+|---------|-------------|
+| **Administración Global** | Gestionar todas las organizaciones del sistema |
+| **Operaciones Cross-Org** | Ejecutar acciones que afectan múltiples organizaciones |
+| **Panel Administrativo** | Soporte para aplicaciones como **gac-web** |
+| **Inspección** | Revisar estado de suscripciones y capabilities |
+| **Control de Estado** | Suspender/reactivar organizaciones |
+
+### Lo que PUEDE hacer
+
+- ✅ Listar TODAS las organizaciones
+- ✅ Cambiar estado de organizaciones (ACTIVE / SUSPENDED)
+- ✅ Inspeccionar suscripciones de cualquier organización
+- ✅ Ver capabilities efectivas de organizaciones
+- ✅ Obtener estadísticas globales del sistema
+- ✅ Ejecutar comandos en dispositivos de cualquier organización
+
+### Lo que NO PUEDE hacer
+
+- ❌ Exponerse públicamente
+- ❌ Usarse desde aplicaciones cliente (móvil/web pública)
+- ❌ Acceder sin token PASETO válido
 
 ---
 
 ## Autenticación
 
 Estos endpoints requieren un **token PASETO** con:
-- `service`: `"gac"`
-- `role`: `"NEXUS_ADMIN"`
+
+| Campo | Valor Requerido |
+|-------|-----------------|
+| `service` | `"gac"` |
+| `role` | `"NEXUS_ADMIN"` |
 
 ---
 
 ## ⚠️ Advertencia de Seguridad
 
-> Estos endpoints proporcionan acceso administrativo completo a los datos de clientes.
-> Asegúrese de:
-> - Proteger el endpoint `/api/v1/auth/internal` que genera los tokens
-> - Almacenar los tokens PASETO de forma segura
-> - Usar tiempos de expiración apropiados
+> ### 🚨 NUNCA EXPONER ESTA API PÚBLICAMENTE 🚨
+>
+> Esta API proporciona acceso administrativo completo al sistema.
+>
+> **Riesgos si se expone públicamente:**
+> - Suplantación de identidad
+> - Acceso no autorizado a datos de todas las organizaciones
+> - Modificación de estados de organizaciones
+> - Sin auditoría confiable
+>
+> **Medidas obligatorias:**
+> 1. Proteger el endpoint `/api/v1/auth/internal` con firewall
+> 2. Solo permitir acceso desde IPs de servicios autorizados
+> 3. Usar VPN o red privada para comunicación
+> 4. Implementar API Gateway con políticas restrictivas
+> 5. Auditar regularmente los accesos
 
 ---
 
 ## Flujo de Autenticación para gac-web
 
 ### Paso 1: Obtener Token PASETO
-
-Antes de usar estos endpoints, la aplicación gac-web debe obtener un token PASETO:
 
 ```bash
 curl -X POST https://api.example.com/api/v1/auth/internal \
@@ -65,7 +108,7 @@ curl -X GET https://api.example.com/api/v1/internal/clients \
 ```
 ┌─────────────┐     1. POST /auth/internal      ┌─────────────┐
 │   gac-web   │ ──────────────────────────────► │   API       │
-│             │                                  │             │
+│ (Admin App) │                                  │             │
 │             │ ◄────────────────────────────── │             │
 └─────────────┘     Token PASETO                └─────────────┘
       │
@@ -75,18 +118,18 @@ curl -X GET https://api.example.com/api/v1/internal/clients \
 │   gac-web   │ ──────────────────────────────► │   API       │
 │             │     Authorization: Bearer ...    │             │
 │             │ ◄────────────────────────────── │             │
-└─────────────┘     Lista de clientes           └─────────────┘
+└─────────────┘     Lista de organizaciones     └─────────────┘
 ```
 
 ---
 
 ## Endpoints
 
-### 1. Listar Todos los Clientes
+### 1. Listar Todas las Organizaciones
 
 **GET** `/api/v1/internal/clients`
 
-Lista todos los clientes del sistema con opciones de filtrado y paginación.
+Lista todas las organizaciones del sistema con opciones de filtrado y paginación.
 
 #### Headers
 
@@ -96,21 +139,21 @@ Authorization: Bearer <token_paseto>
 
 #### Query Parameters
 
-| Parámetro | Tipo   | Requerido | Descripción                                    |
-|-----------|--------|-----------|------------------------------------------------|
-| `status`  | string | No        | Filtrar por estado (PENDING, ACTIVE, SUSPENDED, DELETED) |
-| `search`  | string | No        | Buscar por nombre (parcial, case-insensitive)  |
-| `limit`   | int    | No        | Máximo de resultados (default: 50, max: 200)   |
-| `offset`  | int    | No        | Offset para paginación (default: 0)            |
+| Parámetro | Tipo   | Requerido | Descripción |
+|-----------|--------|-----------|-------------|
+| `status`  | string | No | Filtrar por estado (PENDING, ACTIVE, SUSPENDED, DELETED) |
+| `search`  | string | No | Buscar por nombre (parcial, case-insensitive) |
+| `limit`   | int    | No | Máximo de resultados (default: 50, max: 200) |
+| `offset`  | int    | No | Offset para paginación (default: 0) |
 
 #### Ejemplo de Request
 
 ```bash
-# Listar todos los clientes activos
+# Listar todas las organizaciones activas
 curl -X GET "https://api.example.com/api/v1/internal/clients?status=ACTIVE&limit=20" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 
-# Buscar clientes por nombre
+# Buscar organizaciones por nombre
 curl -X GET "https://api.example.com/api/v1/internal/clients?search=transportes" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 ```
@@ -123,40 +166,39 @@ curl -X GET "https://api.example.com/api/v1/internal/clients?search=transportes"
     "id": "456e4567-e89b-12d3-a456-426614174000",
     "name": "Transportes XYZ",
     "status": "ACTIVE",
-    "active_subscription_id": "789e4567-e89b-12d3-a456-426614174001",
     "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-20T15:45:00Z"
+    "updated_at": "2024-01-20T15:45:00Z",
+    "subscriptions_count": 2,
+    "users_count": 5,
+    "devices_count": 45
   },
   {
     "id": "567e4567-e89b-12d3-a456-426614174001",
     "name": "Logística ABC",
     "status": "ACTIVE",
-    "active_subscription_id": null,
     "created_at": "2024-01-10T08:00:00Z",
-    "updated_at": "2024-01-10T08:00:00Z"
+    "updated_at": "2024-01-10T08:00:00Z",
+    "subscriptions_count": 1,
+    "users_count": 3,
+    "devices_count": 12
   }
 ]
 ```
 
+> **Nota**: El campo `active_subscription_id` NO se incluye en la respuesta porque es deprecado. En su lugar, se incluye `subscriptions_count` para indicar suscripciones activas.
+
 ---
 
-### 2. Obtener Estadísticas de Clientes
+### 2. Obtener Estadísticas de Organizaciones
 
 **GET** `/api/v1/internal/clients/stats`
 
-Obtiene estadísticas generales de los clientes del sistema.
+Obtiene estadísticas generales del sistema.
 
 #### Headers
 
 ```
 Authorization: Bearer <token_paseto>
-```
-
-#### Ejemplo de Request
-
-```bash
-curl -X GET "https://api.example.com/api/v1/internal/clients/stats" \
-  -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 ```
 
 #### Response 200 OK
@@ -169,17 +211,29 @@ curl -X GET "https://api.example.com/api/v1/internal/clients/stats" \
     "active": 125,
     "suspended": 8,
     "deleted": 5
+  },
+  "subscriptions": {
+    "total_active": 180,
+    "by_plan": {
+      "Plan Básico": 45,
+      "Plan Pro": 80,
+      "Plan Enterprise": 55
+    }
+  },
+  "devices": {
+    "total": 2500,
+    "active": 2100
   }
 }
 ```
 
 ---
 
-### 3. Obtener Cliente por ID
+### 3. Obtener Organización por ID
 
 **GET** `/api/v1/internal/clients/{client_id}`
 
-Obtiene la información detallada de un cliente específico.
+Obtiene información detallada de una organización específica, incluyendo sus suscripciones y capabilities.
 
 #### Headers
 
@@ -189,27 +243,69 @@ Authorization: Bearer <token_paseto>
 
 #### Path Parameters
 
-| Parámetro   | Tipo | Descripción        |
-|-------------|------|--------------------|
-| `client_id` | UUID | ID del cliente     |
-
-#### Ejemplo de Request
-
-```bash
-curl -X GET "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d3-a456-426614174000" \
-  -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
-```
+| Parámetro   | Tipo | Descripción |
+|-------------|------|-------------|
+| `client_id` | UUID | ID de la organización |
 
 #### Response 200 OK
 
 ```json
 {
-  "id": "456e4567-e89b-12d3-a456-426614174000",
-  "name": "Transportes XYZ",
-  "status": "ACTIVE",
-  "active_subscription_id": "789e4567-e89b-12d3-a456-426614174001",
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-20T15:45:00Z"
+  "organization": {
+    "id": "456e4567-e89b-12d3-a456-426614174000",
+    "name": "Transportes XYZ",
+    "status": "ACTIVE",
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-20T15:45:00Z"
+  },
+  "subscriptions": {
+    "active": [
+      {
+        "id": "sub-uuid-1",
+        "plan": {
+          "id": "plan-uuid",
+          "name": "Plan Enterprise"
+        },
+        "status": "ACTIVE",
+        "started_at": "2024-01-01T00:00:00Z",
+        "expires_at": "2025-01-01T00:00:00Z",
+        "auto_renew": true
+      }
+    ],
+    "history": [
+      {
+        "id": "sub-uuid-old",
+        "plan": {
+          "id": "plan-uuid-old",
+          "name": "Plan Básico"
+        },
+        "status": "EXPIRED",
+        "started_at": "2023-01-01T00:00:00Z",
+        "expires_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "effective_capabilities": {
+    "max_devices": 100,
+    "max_geofences": 50,
+    "max_users": 25,
+    "history_days": 365,
+    "ai_features": true,
+    "analytics_tools": true
+  },
+  "capability_overrides": [
+    {
+      "capability": "max_geofences",
+      "value": 100,
+      "reason": "Upgrade especial por volumen",
+      "applied_at": "2024-06-01T00:00:00Z"
+    }
+  ],
+  "stats": {
+    "users_count": 5,
+    "devices_count": 45,
+    "units_count": 40
+  }
 }
 ```
 
@@ -223,29 +319,16 @@ curl -X GET "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d3-
 
 ---
 
-### 4. Listar Usuarios de un Cliente
+### 4. Listar Usuarios de una Organización
 
 **GET** `/api/v1/internal/clients/{client_id}/users`
 
-Lista todos los usuarios asociados a un cliente específico.
+Lista todos los usuarios de una organización con sus roles.
 
 #### Headers
 
 ```
 Authorization: Bearer <token_paseto>
-```
-
-#### Path Parameters
-
-| Parámetro   | Tipo | Descripción        |
-|-------------|------|--------------------|
-| `client_id` | UUID | ID del cliente     |
-
-#### Ejemplo de Request
-
-```bash
-curl -X GET "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d3-a456-426614174000/users" \
-  -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 ```
 
 #### Response 200 OK
@@ -256,38 +339,44 @@ curl -X GET "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d3-
     "id": "123e4567-e89b-12d3-a456-426614174000",
     "email": "admin@transportesxyz.com",
     "full_name": "Juan Pérez",
+    "role": "owner",
     "is_master": true,
     "email_verified": true,
     "has_cognito": true,
+    "last_login_at": "2024-01-20T10:00:00Z",
     "created_at": "2024-01-15T10:30:00Z"
   },
   {
     "id": "234e4567-e89b-12d3-a456-426614174001",
     "email": "operador@transportesxyz.com",
     "full_name": "María García",
+    "role": "admin",
+    "is_master": true,
+    "email_verified": true,
+    "has_cognito": true,
+    "last_login_at": "2024-01-19T15:30:00Z",
+    "created_at": "2024-01-20T14:00:00Z"
+  },
+  {
+    "id": "345e4567-e89b-12d3-a456-426614174002",
+    "email": "contador@transportesxyz.com",
+    "full_name": "Carlos López",
+    "role": "billing",
     "is_master": false,
     "email_verified": true,
     "has_cognito": true,
-    "created_at": "2024-01-20T14:00:00Z"
+    "created_at": "2024-02-01T09:00:00Z"
   }
 ]
 ```
 
-#### Response 404 Not Found
-
-```json
-{
-  "detail": "Cliente no encontrado"
-}
-```
-
 ---
 
-### 5. Actualizar Estado de Cliente
+### 5. Actualizar Estado de Organización
 
 **PATCH** `/api/v1/internal/clients/{client_id}/status`
 
-Actualiza el estado de un cliente. Útil para suspender, activar o eliminar clientes.
+Actualiza el estado de una organización. Útil para suspender, activar o eliminar organizaciones.
 
 #### Headers
 
@@ -295,36 +384,30 @@ Actualiza el estado de un cliente. Útil para suspender, activar o eliminar clie
 Authorization: Bearer <token_paseto>
 ```
 
-#### Path Parameters
-
-| Parámetro   | Tipo | Descripción        |
-|-------------|------|--------------------|
-| `client_id` | UUID | ID del cliente     |
-
 #### Query Parameters
 
-| Parámetro    | Tipo   | Requerido | Descripción                                      |
-|--------------|--------|-----------|--------------------------------------------------|
-| `new_status` | string | Sí        | Nuevo estado (PENDING, ACTIVE, SUSPENDED, DELETED) |
+| Parámetro    | Tipo   | Requerido | Descripción |
+|--------------|--------|-----------|-------------|
+| `new_status` | string | Sí | Nuevo estado (PENDING, ACTIVE, SUSPENDED, DELETED) |
 
-#### Estados Disponibles
+#### Estados y Transiciones
 
-| Estado    | Descripción                                    |
-|-----------|------------------------------------------------|
-| PENDING   | Cliente pendiente de verificación de email     |
-| ACTIVE    | Cliente activo con acceso completo al sistema  |
-| SUSPENDED | Cliente suspendido sin acceso al sistema       |
-| DELETED   | Cliente eliminado lógicamente                  |
+| Estado Actual | Estados Permitidos |
+|---------------|-------------------|
+| PENDING | ACTIVE, DELETED |
+| ACTIVE | SUSPENDED, DELETED |
+| SUSPENDED | ACTIVE, DELETED |
+| DELETED | (ninguno - estado final) |
 
 #### Ejemplo de Request
 
 ```bash
-# Suspender un cliente
-curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d3-a456-426614174000/status?new_status=SUSPENDED" \
+# Suspender una organización
+curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-.../status?new_status=SUSPENDED" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 
-# Reactivar un cliente
-curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d3-a456-426614174000/status?new_status=ACTIVE" \
+# Reactivar una organización
+curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-.../status?new_status=ACTIVE" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 ```
 
@@ -333,20 +416,145 @@ curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-e89b-12d
 ```json
 {
   "message": "Estado actualizado de ACTIVE a SUSPENDED",
-  "client": {
+  "organization": {
     "id": "456e4567-e89b-12d3-a456-426614174000",
     "name": "Transportes XYZ",
-    "status": "SUSPENDED"
+    "status": "SUSPENDED",
+    "previous_status": "ACTIVE",
+    "updated_at": "2024-01-20T16:00:00Z"
+  },
+  "affected": {
+    "users_blocked": 5,
+    "devices_suspended": 45
   }
 }
 ```
 
-#### Response 404 Not Found
+---
+
+### 6. Listar Suscripciones de una Organización
+
+**GET** `/api/v1/internal/clients/{client_id}/subscriptions`
+
+> **Estado**: Endpoint esperado para implementación
+
+Lista todas las suscripciones de una organización (activas e históricas).
+
+#### Response Esperado
 
 ```json
 {
-  "detail": "Cliente no encontrado"
+  "organization_id": "456e4567-e89b-12d3-a456-426614174000",
+  "subscriptions": [
+    {
+      "id": "sub-uuid-1",
+      "plan": {
+        "id": "plan-uuid",
+        "name": "Plan Enterprise",
+        "capabilities": {
+          "max_devices": 100,
+          "max_geofences": 50
+        }
+      },
+      "status": "ACTIVE",
+      "started_at": "2024-01-01T00:00:00Z",
+      "expires_at": "2025-01-01T00:00:00Z",
+      "auto_renew": true,
+      "payment_status": "CURRENT"
+    }
+  ],
+  "total_active": 1,
+  "total_expired": 2
 }
+```
+
+---
+
+### 7. Gestionar Capability Overrides
+
+**POST** `/api/v1/internal/clients/{client_id}/capability-overrides`
+
+> **Estado**: Endpoint esperado para implementación
+
+Aplica un override de capability a una organización.
+
+#### Request Body
+
+```json
+{
+  "capability": "max_geofences",
+  "value": 100,
+  "reason": "Upgrade especial por contrato enterprise"
+}
+```
+
+#### Response Esperado
+
+```json
+{
+  "message": "Override aplicado exitosamente",
+  "override": {
+    "capability": "max_geofences",
+    "previous_effective": 50,
+    "new_effective": 100,
+    "source": "organization_override",
+    "applied_at": "2024-01-20T16:00:00Z"
+  }
+}
+```
+
+**DELETE** `/api/v1/internal/clients/{client_id}/capability-overrides/{capability}`
+
+Elimina un override y vuelve al valor del plan.
+
+---
+
+## Casos de Uso del Orquestador
+
+### 1. Suspender Organización por Falta de Pago
+
+```bash
+# 1. Verificar estado actual
+GET /api/v1/internal/clients/{org_id}
+
+# 2. Suspender organización
+PATCH /api/v1/internal/clients/{org_id}/status?new_status=SUSPENDED
+
+# 3. (Opcional) Notificar por email externo
+```
+
+### 2. Inspeccionar Capabilities de una Organización
+
+```bash
+# Obtener detalle completo
+GET /api/v1/internal/clients/{org_id}
+
+# Respuesta incluye effective_capabilities y capability_overrides
+```
+
+### 3. Aplicar Upgrade Especial a Organización
+
+```bash
+# 1. Verificar capabilities actuales
+GET /api/v1/internal/clients/{org_id}
+
+# 2. Aplicar override
+POST /api/v1/internal/clients/{org_id}/capability-overrides
+{
+  "capability": "max_devices",
+  "value": 200,
+  "reason": "Contrato enterprise 2024"
+}
+```
+
+### 4. Auditar Usuarios de una Organización
+
+```bash
+# Listar usuarios con roles
+GET /api/v1/internal/clients/{org_id}/users
+
+# Verificar quién tiene rol de billing
+# Verificar último login de usuarios
 ```
 
 ---
@@ -359,7 +567,7 @@ Token PASETO inválido, expirado o con permisos insuficientes.
 
 ```json
 {
-  "detail": "Token inválido. Se requiere un token de Cognito válido o un token PASETO de servicio válido."
+  "detail": "Token inválido. Se requiere un token PASETO de servicio válido."
 }
 ```
 
@@ -370,13 +578,52 @@ Token PASETO inválido, expirado o con permisos insuficientes.
 
 ### 404 Not Found
 
-El cliente solicitado no existe.
+La organización solicitada no existe.
 
 ```json
 {
   "detail": "Cliente no encontrado"
 }
 ```
+
+### 400 Bad Request
+
+Transición de estado inválida.
+
+```json
+{
+  "detail": "No se puede cambiar de DELETED a ACTIVE"
+}
+```
+
+---
+
+## Comparación: API Pública vs API Interna
+
+| Aspecto | API Pública (`/clients`) | API Interna (`/internal/clients`) |
+|---------|--------------------------|-----------------------------------|
+| **Autenticación** | Cognito (usuarios externos) | PASETO (servicios internos) |
+| **Acceso a datos** | Solo su propia organización | Todas las organizaciones |
+| **Operaciones** | Lectura de su organización | CRUD completo + capabilities |
+| **Caso de uso** | App de clientes finales | Panel administrativo (gac-web) |
+| **Usuarios** | Clientes del sistema | Administradores internos |
+| **Visibilidad** | Pública | Solo red interna |
+
+---
+
+## Notas de Seguridad
+
+1. **Protección del endpoint de tokens**: El endpoint `POST /api/v1/auth/internal` debe estar protegido por firewall, VPN o API Gateway.
+
+2. **Almacenamiento de tokens**: Los tokens PASETO deben almacenarse de forma segura en gac-web (variables de entorno, secretos de la aplicación).
+
+3. **Tiempo de expiración**: Use tiempos de expiración cortos (8-24 horas) para minimizar el riesgo si un token se compromete.
+
+4. **Auditoría**: Los tokens PASETO contienen el email del usuario. Use un email identificable para auditoría.
+
+5. **Rotación de tokens**: Implemente lógica para renovar tokens antes de que expiren.
+
+6. **Logs**: Registre todas las operaciones realizadas a través de la API interna para auditoría.
 
 ---
 
@@ -387,7 +634,7 @@ El cliente solicitado no existe.
 ```javascript
 // config.js
 const API_CONFIG = {
-  baseUrl: 'https://api.example.com/api/v1',
+  baseUrl: process.env.API_BASE_URL,
   internalEndpoint: '/auth/internal',
   service: 'gac',
   role: 'NEXUS_ADMIN',
@@ -395,24 +642,20 @@ const API_CONFIG = {
 };
 ```
 
-### Ejemplo de Servicio en JavaScript
+### Servicio de Cliente
 
 ```javascript
-// clientsService.js
-
-class ClientsService {
+class InternalClientsService {
   constructor() {
     this.token = null;
     this.tokenExpiry = null;
   }
 
   async getToken() {
-    // Verificar si el token actual es válido
     if (this.token && this.tokenExpiry > new Date()) {
       return this.token;
     }
 
-    // Obtener nuevo token
     const response = await fetch(`${API_CONFIG.baseUrl}/auth/internal`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -431,51 +674,34 @@ class ClientsService {
     return this.token;
   }
 
-  async listClients(params = {}) {
+  async listOrganizations(params = {}) {
     const token = await this.getToken();
     const queryString = new URLSearchParams(params).toString();
     
     const response = await fetch(
       `${API_CONFIG.baseUrl}/internal/clients?${queryString}`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }
+      { headers: { 'Authorization': `Bearer ${token}` } }
     );
     
     return response.json();
   }
 
-  async getClient(clientId) {
+  async getOrganization(orgId) {
     const token = await this.getToken();
     
     const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients/${clientId}`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }
+      `${API_CONFIG.baseUrl}/internal/clients/${orgId}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
     );
     
     return response.json();
   }
 
-  async getClientUsers(clientId) {
+  async updateStatus(orgId, newStatus) {
     const token = await this.getToken();
     
     const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients/${clientId}/users`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }
-    );
-    
-    return response.json();
-  }
-
-  async updateClientStatus(clientId, newStatus) {
-    const token = await this.getToken();
-    
-    const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients/${clientId}/status?new_status=${newStatus}`,
+      `${API_CONFIG.baseUrl}/internal/clients/${orgId}/status?new_status=${newStatus}`,
       {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -484,76 +710,12 @@ class ClientsService {
     
     return response.json();
   }
-
-  async getStats() {
-    const token = await this.getToken();
-    
-    const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients/stats`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }
-    );
-    
-    return response.json();
-  }
 }
 
-export const clientsService = new ClientsService();
-```
-
-### Uso del Servicio
-
-```javascript
-// Ejemplo de uso
-import { clientsService } from './clientsService';
-
-// Listar clientes activos
-const activeClients = await clientsService.listClients({ 
-  status: 'ACTIVE', 
-  limit: 20 
-});
-
-// Buscar clientes
-const results = await clientsService.listClients({ 
-  search: 'transportes' 
-});
-
-// Obtener estadísticas
-const stats = await clientsService.getStats();
-console.log(`Total clientes: ${stats.total}`);
-console.log(`Activos: ${stats.by_status.active}`);
-
-// Suspender un cliente
-await clientsService.updateClientStatus(
-  '456e4567-e89b-12d3-a456-426614174000', 
-  'SUSPENDED'
-);
+export const internalClientsService = new InternalClientsService();
 ```
 
 ---
 
-## Comparación: API Pública vs API Interna
-
-| Aspecto              | API Pública (`/clients`)       | API Interna (`/internal/clients`) |
-|----------------------|--------------------------------|-----------------------------------|
-| **Autenticación**    | Cognito (usuarios externos)    | PASETO (servicios internos)       |
-| **Acceso a datos**   | Solo su propio cliente         | Todos los clientes                |
-| **Operaciones**      | Lectura de su cliente          | CRUD completo                     |
-| **Caso de uso**      | App de clientes finales        | Panel administrativo (gac-web)    |
-| **Usuarios**         | Clientes del sistema           | Administradores internos          |
-
----
-
-## Notas de Seguridad
-
-1. **Protección del endpoint de tokens**: El endpoint `POST /api/v1/auth/internal` debe estar protegido por firewall, VPN o API Gateway.
-
-2. **Almacenamiento de tokens**: Los tokens PASETO deben almacenarse de forma segura en gac-web (variables de entorno, secretos de la aplicación).
-
-3. **Tiempo de expiración**: Use tiempos de expiración cortos (8-24 horas) para minimizar el riesgo si un token se compromete.
-
-4. **Auditoría**: Los tokens PASETO contienen el email del usuario. Asegúrese de usar un email identificable para auditoría.
-
-5. **Rotación de tokens**: Implemente lógica para renovar tokens antes de que expiren.
-
+**Última actualización**: Diciembre 2025  
+**Referencia**: [Modelo Organizacional](../guides/organizational-model.md)

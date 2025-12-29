@@ -62,7 +62,7 @@ def check_unit_access(
         db.query(Unit)
         .filter(
             Unit.id == unit_id,
-            Unit.client_id == user.client_id,
+            Unit.organization_id == user.organization_id,
             Unit.deleted_at.is_(None),
         )
         .first()
@@ -109,10 +109,10 @@ def get_units_for_user(db: Session, user: User, include_deleted: bool = False):
     """
     Retorna las unidades visibles para el usuario.
 
-    - Si es maestro: todas las del cliente
+    - Si es maestro: todas las de la organización
     - Si no es maestro: solo las que tiene en user_units
     """
-    query = db.query(Unit).filter(Unit.client_id == user.client_id)
+    query = db.query(Unit).filter(Unit.organization_id == user.organization_id)
 
     if not include_deleted:
         query = query.filter(Unit.deleted_at.is_(None))
@@ -169,7 +169,7 @@ def list_units(
             (UnitDevice.unit_id == Unit.id) & (UnitDevice.unassigned_at.is_(None)),
         )
         .outerjoin(Device, Device.device_id == UnitDevice.device_id)
-        .filter(Unit.client_id == current_user.client_id)
+        .filter(Unit.organization_id == current_user.organization_id)
     )
 
     # Filtrar unidades eliminadas (solo maestros pueden ver eliminadas)
@@ -231,7 +231,7 @@ def create_unit(
 
     # Crear la unidad
     new_unit = Unit(
-        client_id=current_user.client_id,
+        organization_id=current_user.organization_id,
         name=unit.name,
         description=unit.description,
     )
@@ -473,12 +473,12 @@ def assign_device_to_unit(
     # Verificar acceso con rol editor o superior
     unit = check_unit_access(db, unit_id, current_user, required_role="editor")
 
-    # Verificar que el dispositivo existe y pertenece al cliente
+    # Verificar que el dispositivo existe y pertenece a la organización
     device = (
         db.query(Device)
         .filter(
             Device.device_id == assignment.device_id,
-            Device.client_id == current_user.client_id,
+            Device.organization_id == current_user.organization_id,
         )
         .first()
     )
@@ -486,7 +486,7 @@ def assign_device_to_unit(
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dispositivo no encontrado o no pertenece a tu cliente",
+            detail="Dispositivo no encontrado o no pertenece a tu organización",
         )
 
     # Validar estado del dispositivo
@@ -987,17 +987,17 @@ def assign_user_to_unit(
             status_code=status.HTTP_404_NOT_FOUND, detail="Unidad no encontrada"
         )
 
-    # Verificar que el usuario existe y pertenece al cliente
+    # Verificar que el usuario existe y pertenece a la organización
     target_user = (
         db.query(User)
-        .filter(User.id == assignment.user_id, User.client_id == current_user.client_id)
+        .filter(User.id == assignment.user_id, User.organization_id == current_user.organization_id)
         .first()
     )
 
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado o no pertenece a tu cliente",
+            detail="Usuario no encontrado o no pertenece a tu organización",
         )
 
     # No permitir asignar a usuarios maestros

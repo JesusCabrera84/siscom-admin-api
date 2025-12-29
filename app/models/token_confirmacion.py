@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, text
@@ -44,7 +44,7 @@ class TokenConfirmacion(SQLModel, table=True):
             String, default=TokenType.EMAIL_VERIFICATION.value, nullable=False
         )
     )
-    user_id: UUID | None = Field(
+    user_id: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
             PGUUID(as_uuid=True),
@@ -53,22 +53,22 @@ class TokenConfirmacion(SQLModel, table=True):
         ),
     )
     # Campos adicionales para invitaciones
-    email: str | None = Field(
+    email: Optional[str] = Field(
         default=None, sa_column=Column(String(255), nullable=True)
     )
-    full_name: str | None = Field(
+    full_name: Optional[str] = Field(
         default=None, sa_column=Column(String(255), nullable=True)
     )
-    client_id: UUID | None = Field(
+    organization_id: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
             PGUUID(as_uuid=True),
-            ForeignKey("clients.id", ondelete="CASCADE"),
+            ForeignKey("organizations.id", ondelete="CASCADE"),
             nullable=True,
         ),
     )
     # Contraseña temporal (solo para EMAIL_VERIFICATION)
-    password_temp: str | None = Field(
+    password_temp: Optional[str] = Field(
         default=None, sa_column=Column(String(255), nullable=True)
     )
 
@@ -80,3 +80,14 @@ class TokenConfirmacion(SQLModel, table=True):
 
     # Relationships
     user: "User" = Relationship(back_populates="tokens")
+
+    # Alias para compatibilidad (DEPRECATED)
+    @property
+    def client_id(self) -> Optional[UUID]:
+        """DEPRECATED: Usar organization_id"""
+        return self.organization_id
+    
+    @client_id.setter
+    def client_id(self, value: Optional[UUID]):
+        """DEPRECATED: Usar organization_id"""
+        self.organization_id = value

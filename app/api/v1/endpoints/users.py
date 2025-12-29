@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_client_id, get_current_user_full
+from app.api.deps import get_current_organization_id, get_current_user_full
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
@@ -35,13 +35,13 @@ cognito = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
 
 @router.get("", response_model=List[UserOut])
 def list_users(
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
-    Lista todos los usuarios del cliente autenticado.
+    Lista todos los usuarios de la organización autenticada.
     """
-    users = db.query(User).filter(User.client_id == client_id).all()
+    users = db.query(User).filter(User.organization_id == organization_id).all()
     return users
 
 
@@ -112,7 +112,7 @@ def invite_user(
 
     token_record = TokenConfirmacion(
         token=invitation_token,
-        client_id=current_user.client_id,
+        organization_id=current_user.organization_id,
         email=data.email,
         full_name=data.full_name,
         expires_at=expires_at,
@@ -185,12 +185,12 @@ def accept_invitation(
             detail="Token de invitación expirado.",
         )
 
-    # 4️⃣ Extraer email, full_name y client_id del token
+    # 4️⃣ Extraer email, full_name y organization_id del token
     email = token_record.email
     full_name = token_record.full_name
-    client_id = token_record.client_id
+    organization_id = token_record.organization_id
 
-    if not email or not client_id:
+    if not email or not organization_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Datos de invitación incompletos.",
@@ -304,7 +304,7 @@ def accept_invitation(
     new_user = User(
         email=email,
         full_name=full_name or email,  # Usar full_name del token o email como fallback
-        client_id=client_id,
+        organization_id=organization_id,
         cognito_sub=cognito_sub,
         is_master=False,
         email_verified=True,
@@ -375,7 +375,7 @@ def resend_invitation(
         .filter(
             TokenConfirmacion.email == data.email,
             TokenConfirmacion.type == TokenType.INVITATION,
-            TokenConfirmacion.client_id == current_user.client_id,
+            TokenConfirmacion.organization_id == current_user.organization_id,
             ~TokenConfirmacion.used,
         )
         .all()
@@ -401,7 +401,7 @@ def resend_invitation(
 
     new_invitation = TokenConfirmacion(
         token=new_token,
-        client_id=current_user.client_id,
+        organization_id=current_user.organization_id,
         email=data.email,
         full_name=full_name,
         expires_at=expires_at,

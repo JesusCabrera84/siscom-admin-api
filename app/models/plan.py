@@ -1,18 +1,35 @@
+"""
+Modelo de Plan.
+
+Los planes definen las capabilities base disponibles para las organizaciones.
+Las capabilities específicas se definen en plan_capabilities.
+
+NOTA: Los campos max_devices, history_days, ai_features, analytics_tools
+están DEPRECADOS. Usar el sistema de capabilities (plan_capabilities).
+"""
+
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, text
+from sqlalchemy import Column, DateTime, Numeric, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from app.models.capability import PlanCapability
     from app.models.device_service import DeviceService
     from app.models.subscription import Subscription
 
 
 class Plan(SQLModel, table=True):
+    """
+    Plan de suscripción del sistema.
+    
+    Define el precio y las capabilities base.
+    Las capabilities específicas se configuran en plan_capabilities.
+    """
     __tablename__ = "plans"
 
     id: UUID = Field(
@@ -23,37 +40,41 @@ class Plan(SQLModel, table=True):
         )
     )
     name: str = Field(
-        sa_column=Column(String(100), unique=True, nullable=False, index=True)
+        sa_column=Column(Text, unique=True, nullable=False)
     )
-    description: Optional[str] = Field(default=None, max_length=500)
+    code: str = Field(
+        sa_column=Column(Text, unique=True, nullable=False),
+        description="Código único del plan (ej: 'basic', 'pro', 'enterprise')"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True)
+    )
     price_monthly: Decimal = Field(
         sa_column=Column(
-            String, nullable=False
-        )  # Stored as string to avoid precision issues
+            Numeric(10, 2),
+            default=0,
+            nullable=False
+        )
     )
-    price_yearly: Decimal = Field(sa_column=Column(String, nullable=False))
-    max_devices: int = Field(sa_column=Column(Integer, default=1, nullable=False))
-    history_days: int = Field(sa_column=Column(Integer, default=7, nullable=False))
-    ai_features: bool = Field(sa_column=Column(Boolean, default=False, nullable=False))
-    analytics_tools: bool = Field(
-        sa_column=Column(Boolean, default=False, nullable=False)
-    )
-    features: Optional[dict] = Field(
-        default=None, sa_column=Column(JSON, nullable=True)
+    price_yearly: Decimal = Field(
+        sa_column=Column(
+            Numeric(10, 2),
+            default=0,
+            nullable=False
+        )
     )
 
-    created_at: datetime = Field(
-        sa_column=Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
     )
-    updated_at: datetime = Field(
-        sa_column=Column(
-            DateTime,
-            default=datetime.utcnow,
-            onupdate=datetime.utcnow,
-            nullable=False,
-        )
+    updated_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
     )
 
     # Relationships
     subscriptions: list["Subscription"] = Relationship(back_populates="plan")
     device_services: list["DeviceService"] = Relationship(back_populates="plan")
+    plan_capabilities: list["PlanCapability"] = Relationship(back_populates="plan")
