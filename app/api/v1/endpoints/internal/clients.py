@@ -1,12 +1,15 @@
 """
-Endpoints internos para gestión de clientes/organizaciones.
+Endpoints internos para gestión de organizaciones.
 
 Estos endpoints están protegidos por tokens PASETO y están diseñados
 para ser usados por aplicaciones administrativas internas como gac-web.
 
 Requiere: Token PASETO con service="gac" y role="NEXUS_ADMIN"
 
-NOTA: "Client" es un alias de "Organization" mantenido por compatibilidad.
+MODELO CONCEPTUAL:
+==================
+Account = Raíz comercial (billing, facturación)
+Organization = Raíz operativa (permisos, uso diario)
 """
 
 from typing import Optional
@@ -83,10 +86,26 @@ def get_clients_stats(
     Retorna conteo por estado y total de clientes.
     """
     total = db.query(Organization).count()
-    pending = db.query(Organization).filter(Organization.status == OrganizationStatus.PENDING).count()
-    active = db.query(Organization).filter(Organization.status == OrganizationStatus.ACTIVE).count()
-    suspended = db.query(Organization).filter(Organization.status == OrganizationStatus.SUSPENDED).count()
-    deleted = db.query(Organization).filter(Organization.status == OrganizationStatus.DELETED).count()
+    pending = (
+        db.query(Organization)
+        .filter(Organization.status == OrganizationStatus.PENDING)
+        .count()
+    )
+    active = (
+        db.query(Organization)
+        .filter(Organization.status == OrganizationStatus.ACTIVE)
+        .count()
+    )
+    suspended = (
+        db.query(Organization)
+        .filter(Organization.status == OrganizationStatus.SUSPENDED)
+        .count()
+    )
+    deleted = (
+        db.query(Organization)
+        .filter(Organization.status == OrganizationStatus.DELETED)
+        .count()
+    )
 
     return {
         "total": total,

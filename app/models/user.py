@@ -25,14 +25,15 @@ if TYPE_CHECKING:
 class User(SQLModel, table=True):
     """
     Usuario del sistema.
-    
+
     Pertenece a una organización y tiene un rol definido en organization_users.
     La autenticación se maneja con AWS Cognito.
     """
+
     __tablename__ = "users"
     __table_args__ = (
         Index("idx_users_cognito_sub", "cognito_sub"),
-        Index("idx_users_organization_master", "client_id", "is_master"),
+        Index("idx_users_organization_master", "organization_id", "is_master"),
     )
 
     id: UUID = Field(
@@ -42,11 +43,8 @@ class User(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    # NOTA: La columna en BD se llama client_id (legacy), pero representa organization_id
-    # El nombre se mantiene por compatibilidad con índices existentes
     organization_id: UUID = Field(
         sa_column=Column(
-            "client_id",  # Nombre real de la columna en BD
             PGUUID(as_uuid=True),
             ForeignKey("organizations.id", ondelete="CASCADE"),
             nullable=False,
@@ -56,38 +54,31 @@ class User(SQLModel, table=True):
         default=None,
         sa_column=Column(Text, unique=True, nullable=True, index=True),
     )
-    email: str = Field(
-        sa_column=Column(Text, unique=True, nullable=False)
-    )
+    email: str = Field(sa_column=Column(Text, unique=True, nullable=False))
     full_name: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
+        default=None, sa_column=Column(Text, nullable=True)
     )
     password_hash: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, default="", nullable=True)
+        default=None, sa_column=Column(Text, default="", nullable=True)
     )
     email_verified: bool = Field(
-        default=False,
-        sa_column=Column(Boolean, default=False, nullable=False)
+        default=False, sa_column=Column(Boolean, default=False, nullable=False)
     )
     # DEPRECADO: Usar organization_users.role
     is_master: bool = Field(
-        default=False,
-        sa_column=Column(Boolean, default=False, nullable=True)
+        default=False, sa_column=Column(Boolean, default=False, nullable=True)
     )
     last_login_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime, nullable=True)
+        default=None, sa_column=Column(DateTime, nullable=True)
     )
 
     created_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
     )
     updated_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
     )
 
     # Relationships
@@ -102,7 +93,7 @@ class User(SQLModel, table=True):
     def client_id(self) -> UUID:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: UUID):
         """DEPRECATED: Usar organization_id"""
@@ -117,10 +108,10 @@ class User(SQLModel, table=True):
     def get_organization_role(self, organization_id: UUID) -> Optional[str]:
         """
         Obtiene el rol del usuario en una organización específica.
-        
+
         Args:
             organization_id: ID de la organización
-            
+
         Returns:
             El rol del usuario o None si no pertenece a la organización
         """

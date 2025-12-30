@@ -14,7 +14,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models.client import Client, ClientStatus
+from app.models.organization import Client, ClientStatus
 from app.models.device import Device
 from app.models.plan import Plan
 from app.models.user import User

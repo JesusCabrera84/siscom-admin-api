@@ -29,12 +29,13 @@ if TYPE_CHECKING:
 class SubscriptionStatus(str, enum.Enum):
     """
     Estados de una suscripción.
-    
+
     - ACTIVE: Suscripción vigente y operativa
     - TRIAL: Período de prueba
     - CANCELLED: Cancelada por el usuario/sistema
     - EXPIRED: Venció sin renovación
     """
+
     ACTIVE = "ACTIVE"
     CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
@@ -43,6 +44,7 @@ class SubscriptionStatus(str, enum.Enum):
 
 class BillingCycle(str, enum.Enum):
     """Ciclos de facturación disponibles."""
+
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
 
@@ -50,10 +52,11 @@ class BillingCycle(str, enum.Enum):
 class Subscription(SQLModel, table=True):
     """
     Suscripción de una organización a un plan.
-    
+
     Una organización puede tener múltiples suscripciones en diferentes estados.
     Las suscripciones activas determinan las capabilities disponibles.
     """
+
     __tablename__ = "subscriptions"
     __table_args__ = (
         Index("idx_subscriptions_organization", "organization_id"),
@@ -84,16 +87,12 @@ class Subscription(SQLModel, table=True):
         ),
     )
     status: SubscriptionStatus = Field(
-        sa_column=Column(
-            Text, default=SubscriptionStatus.ACTIVE.value, nullable=False
-        )
+        sa_column=Column(Text, default=SubscriptionStatus.ACTIVE.value, nullable=False)
     )
     started_at: datetime = Field(
         sa_column=Column(DateTime, server_default=text("now()"), nullable=False)
     )
-    expires_at: datetime = Field(
-        sa_column=Column(DateTime, nullable=False)
-    )
+    expires_at: datetime = Field(sa_column=Column(DateTime, nullable=False))
     cancelled_at: Optional[datetime] = Field(
         default=None, sa_column=Column(DateTime, nullable=True)
     )
@@ -102,40 +101,37 @@ class Subscription(SQLModel, table=True):
         sa_column=Column(
             PGUUID(as_uuid=True),
             ForeignKey("subscriptions.id", ondelete="SET NULL"),
-            nullable=True
+            nullable=True,
         ),
     )
     auto_renew: bool = Field(
-        default=True,
-        sa_column=Column(Boolean, default=True, nullable=True)
+        default=True, sa_column=Column(Boolean, default=True, nullable=True)
     )
-    
+
     # Campos adicionales
     external_id: Optional[str] = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
-        description="ID externo (ej: Stripe subscription ID)"
+        description="ID externo (ej: Stripe subscription ID)",
     )
     billing_cycle: str = Field(
         default=BillingCycle.MONTHLY.value,
-        sa_column=Column(Text, default="MONTHLY", nullable=True)
+        sa_column=Column(Text, default="MONTHLY", nullable=True),
     )
     current_period_start: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime(timezone=True), nullable=True)
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     current_period_end: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime(timezone=True), nullable=True)
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
 
     created_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
     )
     updated_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
     )
 
     # Relationships
@@ -150,7 +146,7 @@ class Subscription(SQLModel, table=True):
     def client_id(self) -> UUID:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: UUID):
         """DEPRECATED: Usar organization_id"""

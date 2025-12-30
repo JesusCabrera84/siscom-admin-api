@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 class CapabilityBase(BaseModel):
     """Base para una capability."""
+
     code: str = Field(..., description="Código único de la capability")
     description: str = Field(..., description="Descripción de la capability")
     value_type: str = Field(..., description="Tipo de valor: int, bool, text")
@@ -20,6 +21,7 @@ class CapabilityBase(BaseModel):
 
 class CapabilityOut(CapabilityBase):
     """Capability en respuestas."""
+
     id: UUID
     created_at: Optional[datetime] = None
 
@@ -39,14 +41,19 @@ class CapabilityOut(CapabilityBase):
 class ResolvedCapabilityOut(BaseModel):
     """
     Capability resuelta para una organización.
-    
+
     Incluye el valor efectivo y la fuente de donde se obtuvo.
     """
+
     code: str = Field(..., description="Código de la capability")
     value: Union[int, bool, str, None] = Field(..., description="Valor resuelto")
-    source: str = Field(..., description="Fuente del valor: organization, plan, default")
+    source: str = Field(
+        ..., description="Fuente del valor: organization, plan, default"
+    )
     plan_id: Optional[UUID] = Field(None, description="ID del plan si aplica")
-    expires_at: Optional[datetime] = Field(None, description="Fecha de expiración si es override")
+    expires_at: Optional[datetime] = Field(
+        None, description="Fecha de expiración si es override"
+    )
 
     class Config:
         json_schema_extra = {
@@ -63,9 +70,10 @@ class ResolvedCapabilityOut(BaseModel):
 class CapabilitiesSummaryOut(BaseModel):
     """
     Resumen de capabilities de una organización.
-    
+
     Agrupa límites y features para fácil consumo.
     """
+
     limits: dict[str, int] = Field(..., description="Capabilities de tipo límite")
     features: dict[str, Any] = Field(..., description="Capabilities de tipo feature")
 
@@ -90,6 +98,7 @@ class CapabilitiesSummaryOut(BaseModel):
 
 class OrganizationCapabilityCreate(BaseModel):
     """Schema para crear/actualizar un override de capability."""
+
     capability_code: str = Field(..., description="Código de la capability")
     value_int: Optional[int] = Field(None, description="Valor entero")
     value_bool: Optional[bool] = Field(None, description="Valor booleano")
@@ -110,6 +119,7 @@ class OrganizationCapabilityCreate(BaseModel):
 
 class OrganizationCapabilityOut(BaseModel):
     """Override de capability en respuestas."""
+
     client_id: UUID
     capability_id: UUID
     capability_code: str
@@ -133,6 +143,7 @@ class OrganizationCapabilityOut(BaseModel):
 
 class PlanCapabilityOut(BaseModel):
     """Capability de un plan en respuestas."""
+
     plan_id: UUID
     capability_code: str
     value: Union[int, bool, str, None]
@@ -149,6 +160,7 @@ class PlanCapabilityOut(BaseModel):
 
 class ValidateLimitRequest(BaseModel):
     """Request para validar un límite."""
+
     capability_code: str = Field(..., description="Código de la capability de límite")
     current_count: int = Field(..., ge=0, description="Cantidad actual")
 
@@ -163,6 +175,7 @@ class ValidateLimitRequest(BaseModel):
 
 class ValidateLimitResponse(BaseModel):
     """Response de validación de límite."""
+
     can_add: bool = Field(..., description="Si puede agregar uno más")
     current_count: int = Field(..., description="Cantidad actual")
     limit: int = Field(..., description="Límite de la capability")
@@ -177,4 +190,3 @@ class ValidateLimitResponse(BaseModel):
                 "remaining": 2,
             }
         }
-

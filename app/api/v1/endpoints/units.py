@@ -345,7 +345,7 @@ def delete_unit(
         db.query(Unit)
         .filter(
             Unit.id == unit_id,
-            Unit.client_id == current_user.client_id,
+            Unit.organization_id == current_user.organization_id,
             Unit.deleted_at.is_(None),
         )
         .first()
@@ -976,7 +976,7 @@ def assign_user_to_unit(
         db.query(Unit)
         .filter(
             Unit.id == unit_id,
-            Unit.client_id == current_user.client_id,
+            Unit.organization_id == current_user.organization_id,
             Unit.deleted_at.is_(None),
         )
         .first()
@@ -990,7 +990,10 @@ def assign_user_to_unit(
     # Verificar que el usuario existe y pertenece a la organización
     target_user = (
         db.query(User)
-        .filter(User.id == assignment.user_id, User.organization_id == current_user.organization_id)
+        .filter(
+            User.id == assignment.user_id,
+            User.organization_id == current_user.organization_id,
+        )
         .first()
     )
 
@@ -1064,7 +1067,7 @@ def remove_user_from_unit(
     # Verificar que la unidad pertenece al cliente
     unit = (
         db.query(Unit)
-        .filter(Unit.id == unit_id, Unit.client_id == current_user.client_id)
+        .filter(Unit.id == unit_id, Unit.organization_id == current_user.organization_id)
         .first()
     )
 

@@ -1,3 +1,10 @@
+"""
+Endpoints de órdenes de compra.
+
+Gestiona la creación y consulta de órdenes de compra
+asociadas a organizaciones.
+"""
+
 from decimal import Decimal
 from typing import List
 from uuid import UUID
@@ -5,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_client_id
+from app.api.deps import get_current_organization_id
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -18,7 +25,7 @@ router = APIRouter()
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
 def create_order(
     order_in: OrderCreate,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -33,7 +40,7 @@ def create_order(
 
     # Crear payment en estado PENDING
     payment = Payment(
-        client_id=client_id,
+        client_id=organization_id,
         amount=str(total_amount),
         currency="MXN",
         status=PaymentStatus.PENDING.value,
@@ -43,7 +50,7 @@ def create_order(
 
     # Crear orden
     order = Order(
-        client_id=client_id,
+        client_id=organization_id,
         total_amount=str(total_amount),
         status="PENDING",
         payment_id=payment.id,
@@ -78,18 +85,18 @@ def create_order(
 
 @router.get("", response_model=List[OrderOut])
 def list_orders(
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
     limit: int = 50,
     offset: int = 0,
 ):
     """
-    Lista las órdenes del cliente autenticado.
+    Lista las órdenes de la organización autenticada.
     Soporta paginación con limit y offset.
     """
     orders = (
         db.query(Order)
-        .filter(Order.client_id == client_id)
+        .filter(Order.client_id == organization_id)
         .order_by(Order.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -101,7 +108,7 @@ def list_orders(
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(
     order_id: UUID,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -111,7 +118,7 @@ def get_order(
         db.query(Order)
         .filter(
             Order.id == order_id,
-            Order.client_id == client_id,
+            Order.client_id == organization_id,
         )
         .first()
     )

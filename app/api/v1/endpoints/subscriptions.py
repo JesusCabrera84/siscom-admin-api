@@ -33,8 +33,8 @@ from app.models.subscription import Subscription, SubscriptionStatus
 from app.schemas.subscription import (
     SubscriptionCancelRequest,
     SubscriptionOut,
-    SubscriptionWithPlanOut,
     SubscriptionsListOut,
+    SubscriptionWithPlanOut,
 )
 
 router = APIRouter()
@@ -51,49 +51,45 @@ def list_subscriptions(
 ):
     """
     Lista las suscripciones de la organización.
-    
+
     Retorna:
     - Suscripciones activas (ACTIVE, TRIAL)
     - Opcionalmente, suscripciones históricas (CANCELLED, EXPIRED)
     """
     now = datetime.utcnow()
-    
-    query = db.query(Subscription).filter(Subscription.organization_id == organization_id)
-    
+
+    query = db.query(Subscription).filter(
+        Subscription.organization_id == organization_id
+    )
+
     if not include_history:
         query = query.filter(
-            Subscription.status.in_([
-                SubscriptionStatus.ACTIVE.value,
-                SubscriptionStatus.TRIAL.value
-            ])
+            Subscription.status.in_(
+                [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
+            )
         )
-    
-    subscriptions = (
-        query
-        .order_by(Subscription.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-    
+
+    subscriptions = query.order_by(Subscription.created_at.desc()).limit(limit).all()
+
     result = []
     active_count = 0
-    
+
     for sub in subscriptions:
         plan = db.query(Plan).filter(Plan.id == sub.plan_id).first()
-        
-        is_active = (
-            sub.status in [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
-            and (sub.expires_at is None or sub.expires_at > now)
-        )
-        
+
+        is_active = sub.status in [
+            SubscriptionStatus.ACTIVE.value,
+            SubscriptionStatus.TRIAL.value,
+        ] and (sub.expires_at is None or sub.expires_at > now)
+
         if is_active:
             active_count += 1
-        
+
         days_remaining = None
         if sub.expires_at:
             delta = sub.expires_at - now
             days_remaining = max(0, delta.days)
-        
+
         result.append(
             SubscriptionWithPlanOut(
                 id=sub.id,
@@ -117,7 +113,7 @@ def list_subscriptions(
                 is_active=is_active,
             )
         )
-    
+
     return SubscriptionsListOut(
         subscriptions=result,
         active_count=active_count,
@@ -132,36 +128,35 @@ def list_active_subscriptions(
 ):
     """
     Lista solo las suscripciones activas de la organización.
-    
+
     Una suscripción está activa si:
     - status = ACTIVE o TRIAL
     - expires_at > now() o expires_at es NULL
     """
     now = datetime.utcnow()
-    
+
     subscriptions = (
         db.query(Subscription)
         .filter(
             Subscription.organization_id == organization_id,
-            Subscription.status.in_([
-                SubscriptionStatus.ACTIVE.value,
-                SubscriptionStatus.TRIAL.value
-            ]),
+            Subscription.status.in_(
+                [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
+            ),
             Subscription.expires_at > now,
         )
         .order_by(Subscription.started_at.desc())
         .all()
     )
-    
+
     result = []
     for sub in subscriptions:
         plan = db.query(Plan).filter(Plan.id == sub.plan_id).first()
-        
+
         days_remaining = None
         if sub.expires_at:
             delta = sub.expires_at - now
             days_remaining = max(0, delta.days)
-        
+
         result.append(
             SubscriptionWithPlanOut(
                 id=sub.id,
@@ -185,7 +180,7 @@ def list_active_subscriptions(
                 is_active=True,
             )
         )
-    
+
     return result
 
 
@@ -199,7 +194,7 @@ def get_subscription(
     Obtiene los detalles de una suscripción específica.
     """
     now = datetime.utcnow()
-    
+
     subscription = (
         db.query(Subscription)
         .filter(
@@ -208,25 +203,25 @@ def get_subscription(
         )
         .first()
     )
-    
+
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Suscripción no encontrada",
         )
-    
+
     plan = db.query(Plan).filter(Plan.id == subscription.plan_id).first()
-    
-    is_active = (
-        subscription.status in [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
-        and (subscription.expires_at is None or subscription.expires_at > now)
-    )
-    
+
+    is_active = subscription.status in [
+        SubscriptionStatus.ACTIVE.value,
+        SubscriptionStatus.TRIAL.value,
+    ] and (subscription.expires_at is None or subscription.expires_at > now)
+
     days_remaining = None
     if subscription.expires_at:
         delta = subscription.expires_at - now
         days_remaining = max(0, delta.days)
-    
+
     return SubscriptionWithPlanOut(
         id=subscription.id,
         organization_id=subscription.organization_id,
@@ -259,9 +254,9 @@ def cancel_subscription(
 ):
     """
     Cancela una suscripción.
-    
+
     Requiere rol: owner o billing
-    
+
     Opciones:
     - cancel_immediately=True: Cancela inmediatamente
     - cancel_immediately=False: Cancela al final del período actual
@@ -274,33 +269,33 @@ def cancel_subscription(
         )
         .first()
     )
-    
+
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Suscripción no encontrada",
         )
-    
+
     if subscription.status == SubscriptionStatus.CANCELLED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La suscripción ya está cancelada",
         )
-    
+
     now = datetime.utcnow()
     subscription.cancelled_at = now
     subscription.auto_renew = False
-    
+
     if request.cancel_immediately:
         subscription.status = SubscriptionStatus.CANCELLED
         subscription.expires_at = now
     else:
         # Se mantiene activa hasta que expire
         subscription.status = SubscriptionStatus.CANCELLED
-    
+
     db.commit()
     db.refresh(subscription)
-    
+
     return subscription
 
 
@@ -313,7 +308,7 @@ def toggle_auto_renew(
 ):
     """
     Activa o desactiva la renovación automática de una suscripción.
-    
+
     Requiere rol: owner o billing
     """
     subscription = (
@@ -324,21 +319,24 @@ def toggle_auto_renew(
         )
         .first()
     )
-    
+
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Suscripción no encontrada",
         )
-    
-    if subscription.status not in [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]:
+
+    if subscription.status not in [
+        SubscriptionStatus.ACTIVE.value,
+        SubscriptionStatus.TRIAL.value,
+    ]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Solo se puede modificar suscripciones activas",
         )
-    
+
     subscription.auto_renew = auto_renew
     db.commit()
     db.refresh(subscription)
-    
+
     return subscription

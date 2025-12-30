@@ -29,7 +29,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session, Query
+from sqlalchemy.orm import Query, Session
 
 from app.models.subscription import Subscription, SubscriptionStatus
 
@@ -40,33 +40,29 @@ def _build_active_subscriptions_query(
 ) -> Query:
     """
     Construye la query base para suscripciones activas.
-    
+
     Esta función encapsula la ÚNICA definición de qué es una suscripción activa.
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
-        
+
     Returns:
         Query configurada para filtrar suscripciones activas
     """
     now = datetime.utcnow()
-    
+
     return (
         db.query(Subscription)
         .filter(
             Subscription.organization_id == organization_id,
             # Condición 1: Status debe ser ACTIVE o TRIAL
-            Subscription.status.in_([
-                SubscriptionStatus.ACTIVE.value,
-                SubscriptionStatus.TRIAL.value
-            ]),
+            Subscription.status.in_(
+                [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
+            ),
             # Condición 2: No debe estar expirada
             # expires_at > now OR expires_at IS NULL (suscripción sin expiración)
-            or_(
-                Subscription.expires_at > now,
-                Subscription.expires_at.is_(None)
-            )
+            or_(Subscription.expires_at > now, Subscription.expires_at.is_(None)),
         )
         .order_by(Subscription.started_at.desc())
     )
@@ -78,14 +74,14 @@ def get_active_subscriptions(
 ) -> list[Subscription]:
     """
     Obtiene TODAS las suscripciones activas de una organización.
-    
+
     Útil cuando se necesita ver todas las suscripciones vigentes
     (por ejemplo, para mostrar en dashboard o para auditoría).
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
-        
+
     Returns:
         Lista de suscripciones activas, ordenadas por started_at DESC (más reciente primero)
     """
@@ -98,29 +94,29 @@ def get_primary_active_subscription(
 ) -> Optional[Subscription]:
     """
     Obtiene la suscripción activa PRINCIPAL de una organización.
-    
+
     ESTRATEGIA DE SELECCIÓN:
     ------------------------
     Cuando existen múltiples suscripciones activas para una organización,
     el sistema selecciona como suscripción principal la más reciente según `started_at`.
-    
+
     Esta suscripción se usa para:
     - Determinar el plan a mostrar en billing/UI
     - Resolver capabilities desde plan_capabilities (si no hay override)
     - Calcular próxima fecha de cobro
-    
+
     Esta suscripción NO determina:
     - Las capabilities finales (pueden venir de organization_capabilities override)
     - Que la organización solo pueda tener una suscripción
     - Restricciones operativas del sistema
-    
+
     NOTA: Esta es una regla de PRESENTACIÓN, no una limitación de negocio.
     Las capabilities se resuelven de forma independiente en CapabilityService.
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
-        
+
     Returns:
         La suscripción activa principal (más reciente por started_at),
         o None si no hay ninguna suscripción activa
@@ -134,14 +130,14 @@ def get_active_plan_id(
 ) -> Optional[UUID]:
     """
     Obtiene el plan_id de la suscripción activa principal.
-    
+
     Esta es la función que debe usar CapabilityService para
     resolver capabilities basadas en el plan.
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
-        
+
     Returns:
         UUID del plan de la suscripción activa, o None si no hay suscripción activa
     """
@@ -155,11 +151,11 @@ def has_active_subscription(
 ) -> bool:
     """
     Verifica si una organización tiene al menos una suscripción activa.
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
-        
+
     Returns:
         True si tiene al menos una suscripción activa
     """
@@ -173,14 +169,14 @@ def get_subscription_history(
 ) -> list[Subscription]:
     """
     Obtiene el historial completo de suscripciones de una organización.
-    
+
     Incluye suscripciones activas, canceladas y expiradas.
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
         limit: Número máximo de resultados
-        
+
     Returns:
         Lista de todas las suscripciones, ordenadas por created_at DESC
     """
@@ -199,11 +195,11 @@ def count_active_subscriptions(
 ) -> int:
     """
     Cuenta el número de suscripciones activas de una organización.
-    
+
     Args:
         db: Sesión de base de datos
         organization_id: ID de la organización
-        
+
     Returns:
         Número de suscripciones activas
     """
@@ -214,12 +210,17 @@ def count_active_subscriptions(
 # Aliases de compatibilidad (DEPRECATED)
 # =====================================================
 
-def get_active_subscriptions_for_client(db: Session, client_id: UUID) -> list[Subscription]:
+
+def get_active_subscriptions_for_client(
+    db: Session, client_id: UUID
+) -> list[Subscription]:
     """DEPRECATED: Usar get_active_subscriptions con organization_id"""
     return get_active_subscriptions(db, client_id)
 
 
-def get_primary_active_subscription_for_client(db: Session, client_id: UUID) -> Optional[Subscription]:
+def get_primary_active_subscription_for_client(
+    db: Session, client_id: UUID
+) -> Optional[Subscription]:
     """DEPRECATED: Usar get_primary_active_subscription con organization_id"""
     return get_primary_active_subscription(db, client_id)
 

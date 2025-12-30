@@ -10,22 +10,20 @@ Organization = Raíz operativa (permisos, uso diario) - SIEMPRE pertenece a Acco
 
 Relación: Account 1 ──< Organization *
 
-En el onboarding:
-1. Se crea Account
-2. Se crea Organization (default, pertenece a Account)
-3. Se crea User (owner de Organization)
+En el onboarding rápido (POST /clients):
+1. Se crea Account (name = account_name del input)
+2. Se crea Organization default (pertenece a Account)
+3. Se crea User master (owner de Organization)
+4. Se registra en Cognito
 
-ALIASES DE COMPATIBILIDAD:
-==========================
-- Client = Organization (DEPRECATED)
-- ClientStatus = OrganizationStatus (DEPRECATED)
+REGLA DE ORO:
+=============
+Los nombres NO son identidad. Los UUID sí.
+Los nombres pueden repetirse; la unicidad está en los UUIDs.
 """
 
 # Account (raíz comercial)
 from app.models.account import Account, AccountStatus
-
-# Organization (raíz operativa, antes "Client")
-from app.models.organization import Organization, OrganizationStatus
 
 # Capabilities
 from app.models.capability import (
@@ -35,32 +33,9 @@ from app.models.capability import (
     PlanCapability,
 )
 
-# Organization Users (roles)
-from app.models.organization_user import OrganizationRole, OrganizationUser
-
-# Users
-from app.models.user import User
-from app.models.invitation import Invitation
-
-# Subscriptions & Plans
-from app.models.plan import Plan
-from app.models.subscription import BillingCycle, Subscription, SubscriptionStatus
-
 # Commands
 from app.models.command import Command
-
-# Units & Devices
-from app.models.unit import Unit
-from app.models.unit_profile import UnitProfile
-from app.models.vehicle_profile import VehicleProfile
 from app.models.device import Device, DeviceEvent
-from app.models.unit_device import UnitDevice
-from app.models.user_unit import UserUnit
-
-# Payments & Orders
-from app.models.payment import Payment, PaymentStatus
-from app.models.order import Order, OrderStatus
-from app.models.order_item import OrderItem, OrderItemType
 
 # Device Services (LEGACY - no usar en código nuevo)
 from app.models.device_service import (
@@ -68,28 +43,43 @@ from app.models.device_service import (
     DeviceServiceStatus,
     SubscriptionType,
 )
+from app.models.invitation import Invitation
+from app.models.order import Order, OrderStatus
+from app.models.order_item import OrderItem, OrderItemType
+
+# Organization (raíz operativa, antes "Client")
+from app.models.organization import Organization, OrganizationStatus
+
+# Organization Users (roles)
+from app.models.organization_user import OrganizationRole, OrganizationUser
+
+# Payments & Orders
+from app.models.payment import Payment, PaymentStatus
+
+# Subscriptions & Plans
+from app.models.plan import Plan
+
+# SIM Cards
+from app.models.sim_card import SimCard
+from app.models.sim_kore_profile import SimKoreProfile
+from app.models.subscription import BillingCycle, Subscription, SubscriptionStatus
 
 # Tokens
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 
 # Trips
 from app.models.trip import Trip, TripAlert, TripEvent, TripPoint
-
-# SIM Cards
-from app.models.sim_card import SimCard
-from app.models.sim_kore_profile import SimKoreProfile
 from app.models.unified_sim_profile import UnifiedSimProfile
 
-# ===========================================
-# ALIASES DE COMPATIBILIDAD (DEPRECATED)
-# ===========================================
-# Estos aliases existen para compatibilidad con código existente.
-# NO USAR en código nuevo. Usar Organization directamente.
+# Units & Devices
+from app.models.unit import Unit
+from app.models.unit_device import UnitDevice
+from app.models.unit_profile import UnitProfile
 
-Client = Organization
-ClientStatus = OrganizationStatus
-
-# ===========================================
+# Users
+from app.models.user import User
+from app.models.user_unit import UserUnit
+from app.models.vehicle_profile import VehicleProfile
 
 __all__ = [
     # Account (raíz comercial)
@@ -100,9 +90,6 @@ __all__ = [
     "OrganizationStatus",
     "OrganizationUser",
     "OrganizationRole",
-    # Aliases de compatibilidad (DEPRECATED)
-    "Client",
-    "ClientStatus",
     # Capabilities
     "Capability",
     "CapabilityValueType",

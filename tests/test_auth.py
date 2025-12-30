@@ -1,6 +1,9 @@
 """
 Tests de autenticación.
 Verifica que los endpoints rechacen requests sin token válido.
+
+NOTA: Los endpoints /api/v1/clients/ siguen existiendo para compatibilidad,
+pero representan Organizations a nivel de negocio.
 """
 
 from fastapi import status
@@ -10,6 +13,7 @@ def test_endpoint_without_token_returns_401(client):
     """
     Test que un endpoint protegido sin token retorna 401.
     """
+    # /api/v1/clients/ es el endpoint de organizaciones (por compatibilidad)
     response = client.get("/api/v1/clients/")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 

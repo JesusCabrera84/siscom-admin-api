@@ -13,8 +13,8 @@ from app.api.deps import (
     get_current_user_id,
 )
 from app.db.session import get_db
-from app.models.organization import Organization
 from app.models.device import Device, DeviceEvent
+from app.models.organization import Organization
 from app.models.sim_card import SimCard
 from app.models.sim_kore_profile import SimKoreProfile
 from app.models.unit import Unit
@@ -236,7 +236,7 @@ def list_devices(
         query = query.filter(Device.status == status_filter)
 
     if client_id:
-        query = query.filter(Device.client_id == client_id)
+        query = query.filter(Device.organization_id == client_id)
 
     if brand:
         query = query.filter(Device.brand.ilike(f"%{brand}%"))
@@ -859,7 +859,8 @@ def get_device_trips(
     device = (
         db.query(Device)
         .filter(
-            Device.device_id == device_id, Device.organization_id == current_user.organization_id
+            Device.device_id == device_id,
+            Device.organization_id == current_user.organization_id,
         )
         .first()
     )

@@ -26,10 +26,11 @@ if TYPE_CHECKING:
 class Plan(SQLModel, table=True):
     """
     Plan de suscripción del sistema.
-    
+
     Define el precio y las capabilities base.
     Las capabilities específicas se configuran en plan_capabilities.
     """
+
     __tablename__ = "plans"
 
     id: UUID = Field(
@@ -39,39 +40,28 @@ class Plan(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    name: str = Field(
-        sa_column=Column(Text, unique=True, nullable=False)
-    )
+    name: str = Field(sa_column=Column(Text, unique=True, nullable=False))
     code: str = Field(
         sa_column=Column(Text, unique=True, nullable=False),
-        description="Código único del plan (ej: 'basic', 'pro', 'enterprise')"
+        description="Código único del plan (ej: 'basic', 'pro', 'enterprise')",
     )
     description: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
+        default=None, sa_column=Column(Text, nullable=True)
     )
     price_monthly: Decimal = Field(
-        sa_column=Column(
-            Numeric(10, 2),
-            default=0,
-            nullable=False
-        )
+        sa_column=Column(Numeric(10, 2), default=0, nullable=False)
     )
     price_yearly: Decimal = Field(
-        sa_column=Column(
-            Numeric(10, 2),
-            default=0,
-            nullable=False
-        )
+        sa_column=Column(Numeric(10, 2), default=0, nullable=False)
     )
 
     created_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
     )
     updated_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime, server_default=text("now()"), nullable=True)
+        sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
     )
 
     # Relationships

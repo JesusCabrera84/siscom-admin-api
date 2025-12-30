@@ -37,10 +37,9 @@ router = APIRouter()
 
 # Emitir warning al importar este módulo
 warnings.warn(
-    "Los endpoints /services son LEGACY. "
-    "Para código nuevo, usar /subscriptions.",
+    "Los endpoints /services son LEGACY. " "Para código nuevo, usar /subscriptions.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 
@@ -87,7 +86,8 @@ def confirm_service_payment(
         db.query(DeviceService)
         .filter(
             DeviceService.id == payment_confirm.device_service_id,
-            DeviceService.client_id == organization_id,  # Mantiene client_id en DeviceService por ser LEGACY
+            DeviceService.client_id
+            == organization_id,  # Mantiene client_id en DeviceService por ser LEGACY
         )
         .first()
     )
@@ -131,7 +131,8 @@ def list_active_services(
         .join(Device, DeviceService.device_id == Device.device_id)
         .join(Plan, DeviceService.plan_id == Plan.id)
         .filter(
-            DeviceService.client_id == organization_id,  # Mantiene client_id en DeviceService por ser LEGACY
+            DeviceService.client_id
+            == organization_id,  # Mantiene client_id en DeviceService por ser LEGACY
             DeviceService.status == DeviceServiceStatus.ACTIVE.value,
         )
         .all()

@@ -61,7 +61,7 @@ class Unit(SQLModel, table=True):
     def client_id(self) -> UUID:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: UUID):
         """DEPRECATED: Usar organization_id"""

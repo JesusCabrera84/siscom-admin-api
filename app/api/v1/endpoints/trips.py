@@ -82,7 +82,7 @@ def get_accessible_unit_ids(db: Session, user: User) -> List[UUID]:
         unit_ids = (
             db.query(Unit.id)
             .filter(
-                Unit.client_id == user.client_id,
+                Unit.organization_id == user.organization_id,
                 Unit.deleted_at.is_(None),
             )
             .all()

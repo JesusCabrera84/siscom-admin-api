@@ -28,7 +28,6 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.capability import Capability, OrganizationCapability, PlanCapability
-from app.models.organization import Organization
 from app.services.subscription_query import get_active_plan_id as _get_active_plan_id
 
 
@@ -36,7 +35,7 @@ from app.services.subscription_query import get_active_plan_id as _get_active_pl
 class ResolvedCapability:
     """
     Resultado de la resolución de una capability.
-    
+
     Attributes:
         code: Código de la capability
         value: Valor resuelto (int, bool, o str)
@@ -44,6 +43,7 @@ class ResolvedCapability:
         plan_id: ID del plan de donde se obtuvo (si aplica)
         expires_at: Fecha de expiración del override (si aplica)
     """
+
     code: str
     value: Union[int, bool, str, None]
     source: str  # 'organization', 'plan', 'default'
@@ -65,7 +65,7 @@ class ResolvedCapability:
         if isinstance(self.value, int):
             return self.value > 0
         if isinstance(self.value, str):
-            return self.value.lower() in ('true', '1', 'yes', 'enabled')
+            return self.value.lower() in ("true", "1", "yes", "enabled")
         return False
 
 
@@ -89,7 +89,7 @@ DEFAULT_CAPABILITIES: dict[str, Any] = {
 class CapabilityService:
     """
     Servicio centralizado para resolución de capabilities.
-    
+
     Regla de resolución:
     1. Si existe override de organización (no expirado) → usar override
     2. Si existe en plan_capabilities del plan activo → usar plan
@@ -101,10 +101,10 @@ class CapabilityService:
     def get_active_plan_id(db: Session, organization_id: UUID) -> Optional[UUID]:
         """
         Obtiene el plan_id de la suscripción activa de la organización.
-        
+
         DELEGACIÓN: Esta función delega a subscription_query.get_active_plan_id()
         que es la ÚNICA fuente de verdad para la regla de suscripción activa.
-        
+
         Si hay múltiples suscripciones activas, retorna la de la más reciente por started_at.
         """
         return _get_active_plan_id(db, organization_id)
@@ -117,33 +117,29 @@ class CapabilityService:
     ) -> ResolvedCapability:
         """
         Resuelve una capability para una organización.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             capability_code: Código de la capability (ej: "max_devices")
-            
+
         Returns:
             ResolvedCapability con el valor y metadatos
         """
         now = datetime.utcnow()
-        
+
         # 1. Buscar la definición de la capability
         capability = (
-            db.query(Capability)
-            .filter(Capability.code == capability_code)
-            .first()
+            db.query(Capability).filter(Capability.code == capability_code).first()
         )
-        
+
         if not capability:
             # Capability no existe, usar default si lo hay
             default_value = DEFAULT_CAPABILITIES.get(capability_code)
             return ResolvedCapability(
-                code=capability_code,
-                value=default_value,
-                source="default"
+                code=capability_code, value=default_value, source="default"
             )
-        
+
         # 2. Buscar override de organización (no expirado)
         org_override = (
             db.query(OrganizationCapability)
@@ -153,18 +149,18 @@ class CapabilityService:
             )
             .first()
         )
-        
+
         if org_override and not org_override.is_expired():
             return ResolvedCapability(
                 code=capability_code,
                 value=org_override.get_value(),
                 source="organization",
-                expires_at=org_override.expires_at
+                expires_at=org_override.expires_at,
             )
-        
+
         # 3. Buscar en plan de suscripción activa
         plan_id = CapabilityService.get_active_plan_id(db, organization_id)
-        
+
         if plan_id:
             plan_cap = (
                 db.query(PlanCapability)
@@ -174,21 +170,19 @@ class CapabilityService:
                 )
                 .first()
             )
-            
+
             if plan_cap:
                 return ResolvedCapability(
                     code=capability_code,
                     value=plan_cap.get_value(),
                     source="plan",
-                    plan_id=plan_id
+                    plan_id=plan_id,
                 )
-        
+
         # 4. Usar valor por defecto
         default_value = DEFAULT_CAPABILITIES.get(capability_code)
         return ResolvedCapability(
-            code=capability_code,
-            value=default_value,
-            source="default"
+            code=capability_code, value=default_value, source="default"
         )
 
     @staticmethod
@@ -198,28 +192,26 @@ class CapabilityService:
     ) -> dict[str, ResolvedCapability]:
         """
         Obtiene todas las capabilities resueltas para una organización.
-        
+
         Returns:
             Diccionario con código -> ResolvedCapability
         """
         result = {}
-        
+
         # Obtener todas las capabilities definidas
         capabilities = db.query(Capability).all()
-        
+
         for cap in capabilities:
             resolved = CapabilityService.get_capability(db, organization_id, cap.code)
             result[cap.code] = resolved
-        
+
         # Agregar defaults que no están en la BD
         for code, default_value in DEFAULT_CAPABILITIES.items():
             if code not in result:
                 result[code] = ResolvedCapability(
-                    code=code,
-                    value=default_value,
-                    source="default"
+                    code=code, value=default_value, source="default"
                 )
-        
+
         return result
 
     @staticmethod
@@ -230,16 +222,18 @@ class CapabilityService:
     ) -> bool:
         """
         Verifica si una organización tiene habilitada una capability booleana.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             capability_code: Código de la capability
-            
+
         Returns:
             True si la capability está habilitada
         """
-        resolved = CapabilityService.get_capability(db, organization_id, capability_code)
+        resolved = CapabilityService.get_capability(
+            db, organization_id, capability_code
+        )
         return resolved.as_bool()
 
     @staticmethod
@@ -250,16 +244,18 @@ class CapabilityService:
     ) -> int:
         """
         Obtiene el límite numérico de una capability.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             capability_code: Código de la capability
-            
+
         Returns:
             El límite como entero
         """
-        resolved = CapabilityService.get_capability(db, organization_id, capability_code)
+        resolved = CapabilityService.get_capability(
+            db, organization_id, capability_code
+        )
         return resolved.as_int()
 
     @staticmethod
@@ -271,22 +267,22 @@ class CapabilityService:
     ) -> bool:
         """
         Valida si se puede agregar un elemento más sin exceder el límite.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             capability_code: Código de la capability de límite
             current_count: Cantidad actual de elementos
-            
+
         Returns:
             True si se puede agregar uno más
         """
         limit = CapabilityService.get_limit(db, organization_id, capability_code)
-        
+
         # Si el límite es 0 o negativo, se considera ilimitado
         if limit <= 0:
             return True
-        
+
         return current_count < limit
 
     @staticmethod
@@ -296,15 +292,15 @@ class CapabilityService:
     ) -> dict:
         """
         Obtiene un resumen de capabilities para mostrar al usuario.
-        
+
         Returns:
             Diccionario con límites y features agrupados
         """
         all_caps = CapabilityService.get_all_capabilities(db, organization_id)
-        
+
         limits = {}
         features = {}
-        
+
         for code, resolved in all_caps.items():
             if isinstance(resolved.value, bool):
                 features[code] = resolved.value
@@ -312,7 +308,7 @@ class CapabilityService:
                 limits[code] = resolved.value
             else:
                 features[code] = resolved.value
-        
+
         return {
             "limits": limits,
             "features": features,
@@ -322,6 +318,7 @@ class CapabilityService:
 # =====================================================
 # Funciones de conveniencia para uso directo
 # =====================================================
+
 
 def get_capability(db: Session, organization_id: UUID, code: str) -> ResolvedCapability:
     """Atajo para CapabilityService.get_capability"""
@@ -342,7 +339,10 @@ def validate_limit(db: Session, organization_id: UUID, code: str, current: int) 
 # Aliases de compatibilidad (DEPRECATED)
 # =====================================================
 
-def get_capability_for_client(db: Session, client_id: UUID, code: str) -> ResolvedCapability:
+
+def get_capability_for_client(
+    db: Session, client_id: UUID, code: str
+) -> ResolvedCapability:
     """DEPRECATED: Usar get_capability con organization_id"""
     return get_capability(db, client_id, code)
 
@@ -352,6 +352,8 @@ def has_capability_for_client(db: Session, client_id: UUID, code: str) -> bool:
     return has_capability(db, client_id, code)
 
 
-def validate_limit_for_client(db: Session, client_id: UUID, code: str, current: int) -> bool:
+def validate_limit_for_client(
+    db: Session, client_id: UUID, code: str, current: int
+) -> bool:
     """DEPRECATED: Usar validate_limit con organization_id"""
     return validate_limit(db, client_id, code, current)

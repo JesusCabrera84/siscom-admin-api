@@ -8,8 +8,8 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.organization import Organization
     from app.models.device_service import DeviceService
+    from app.models.organization import Organization
     from app.models.sim_card import SimCard
     from app.models.unit_device import UnitDevice
     from app.models.user import User
@@ -107,7 +107,7 @@ class Device(SQLModel, table=True):
     def client_id(self) -> Optional[UUID]:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: Optional[UUID]):
         """DEPRECATED: Usar organization_id"""

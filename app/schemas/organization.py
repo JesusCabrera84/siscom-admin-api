@@ -18,11 +18,13 @@ from app.models.organization_user import OrganizationRole
 
 class OrganizationBase(BaseModel):
     """Base para una organización."""
+
     name: str = Field(..., description="Nombre de la organización")
 
 
 class OrganizationOut(OrganizationBase):
     """Organización en respuestas."""
+
     id: UUID
     status: str
     billing_email: Optional[str] = None
@@ -49,6 +51,7 @@ class OrganizationOut(OrganizationBase):
 
 class OrganizationUpdate(BaseModel):
     """Schema para actualizar una organización."""
+
     name: Optional[str] = Field(None, description="Nombre de la organización")
     billing_email: Optional[EmailStr] = Field(None, description="Email de facturación")
     country: Optional[str] = Field(None, max_length=2, description="Código de país ISO")
@@ -65,8 +68,10 @@ class OrganizationUpdate(BaseModel):
 
 # --- Membresías y Roles ---
 
+
 class OrganizationMemberOut(BaseModel):
     """Miembro de una organización en respuestas."""
+
     user_id: UUID
     email: str
     full_name: Optional[str] = None
@@ -89,6 +94,7 @@ class OrganizationMemberOut(BaseModel):
 
 class OrganizationMembersListOut(BaseModel):
     """Lista de miembros de una organización."""
+
     members: list[OrganizationMemberOut]
     total: int
 
@@ -120,6 +126,7 @@ class OrganizationMembersListOut(BaseModel):
 
 class UpdateMemberRoleRequest(BaseModel):
     """Request para actualizar el rol de un miembro."""
+
     role: OrganizationRole = Field(..., description="Nuevo rol")
 
     class Config:
@@ -132,11 +139,11 @@ class UpdateMemberRoleRequest(BaseModel):
 
 class InviteUserRequest(BaseModel):
     """Request para invitar un usuario a la organización."""
+
     email: EmailStr = Field(..., description="Email del usuario a invitar")
     full_name: str = Field(..., min_length=1, description="Nombre completo")
     role: OrganizationRole = Field(
-        default=OrganizationRole.MEMBER,
-        description="Rol a asignar"
+        default=OrganizationRole.MEMBER, description="Rol a asignar"
     )
 
     class Config:
@@ -151,8 +158,10 @@ class InviteUserRequest(BaseModel):
 
 # --- Suscripciones ---
 
+
 class SubscriptionSummaryOut(BaseModel):
     """Resumen de una suscripción."""
+
     id: UUID
     plan_id: UUID
     plan_name: Optional[str] = None
@@ -179,6 +188,7 @@ class SubscriptionSummaryOut(BaseModel):
 
 class SubscriptionsListOut(BaseModel):
     """Lista de suscripciones de una organización."""
+
     active: list[SubscriptionSummaryOut] = Field(default_factory=list)
     history: list[SubscriptionSummaryOut] = Field(default_factory=list)
 
@@ -215,12 +225,14 @@ class SubscriptionsListOut(BaseModel):
 
 # --- Resumen de Organización ---
 
+
 class OrganizationSummaryOut(BaseModel):
     """
     Resumen completo de una organización.
-    
+
     Incluye información básica, suscripciones activas y conteo de miembros.
     """
+
     organization: OrganizationOut
     subscriptions: SubscriptionsListOut
     members_count: int
@@ -266,4 +278,3 @@ class OrganizationSummaryOut(BaseModel):
                 },
             }
         }
-

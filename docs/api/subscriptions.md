@@ -6,6 +6,8 @@ Endpoints para gestionar las suscripciones de una organización. Una organizaci�
 
 > **Concepto Clave**: Las suscripciones activas se **calculan dinámicamente**, no se almacenan como un campo fijo. Ver [Modelo Organizacional](../guides/organizational-model.md).
 
+> **Modelo v2**: Las suscripciones pertenecen a `organizations` (no a `accounts`). El campo `organization_id` es la FK.
+
 ---
 
 ## Principios Fundamentales
@@ -41,8 +43,8 @@ from app.services.subscription_query import (
     has_active_subscription,         # Verificar si tiene alguna
 )
 
-# Enfoque INCORRECTO (DEPRECADO)
-# NO usar: client.active_subscription_id
+# Todas las funciones usan organization_id como parámetro
+get_active_subscriptions(db, organization_id)
 ```
 
 #### Múltiples Suscripciones Activas
@@ -90,7 +92,7 @@ Authorization: Bearer <access_token>
   "subscriptions": [
     {
       "id": "123e4567-e89b-12d3-a456-426614174000",
-      "client_id": "456e4567-e89b-12d3-a456-426614174000",
+      "organization_id": "456e4567-e89b-12d3-a456-426614174000",
       "plan_id": "789e4567-e89b-12d3-a456-426614174000",
       "plan_name": "Plan Enterprise",
       "plan_code": "enterprise",
@@ -104,7 +106,7 @@ Authorization: Bearer <access_token>
     },
     {
       "id": "234e4567-e89b-12d3-a456-426614174001",
-      "client_id": "456e4567-e89b-12d3-a456-426614174000",
+      "organization_id": "456e4567-e89b-12d3-a456-426614174000",
       "plan_id": "890e4567-e89b-12d3-a456-426614174000",
       "plan_name": "Plan Pro",
       "plan_code": "pro",
@@ -173,7 +175,7 @@ Authorization: Bearer <access_token>
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
-  "client_id": "456e4567-e89b-12d3-a456-426614174000",
+  "organization_id": "456e4567-e89b-12d3-a456-426614174000",
   "plan_id": "789e4567-e89b-12d3-a456-426614174000",
   "plan_name": "Plan Enterprise",
   "plan_code": "enterprise",
@@ -331,7 +333,7 @@ Authorization: Bearer <access_token>
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | `id` | UUID | Identificador único |
-| `client_id` | UUID | Organización propietaria |
+| `organization_id` | UUID | Organización propietaria |
 | `plan_id` | UUID | Plan asociado |
 | `status` | enum | Estado actual |
 | `billing_cycle` | enum | MONTHLY o YEARLY |

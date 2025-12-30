@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user_full
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.client import Client, ClientStatus
+from app.models.organization import Organization, OrganizationStatus
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.user import User
 from app.schemas.user import (
@@ -707,12 +707,12 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     # FLUJO A - Usuario master con password_temp
     # ========================================
 
-    # Buscar el cliente asociado
-    client = db.query(Client).filter(Client.id == user.client_id).first()
+    # Buscar la organización asociada
+    organization = db.query(Organization).filter(Organization.id == user.organization_id).first()
 
-    if not client:
+    if not organization:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organización no encontrada"
         )
 
     # Verificar si el usuario ya existe en Cognito
@@ -833,8 +833,8 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     user.cognito_sub = cognito_sub
     user.email_verified = True
 
-    # Actualizar cliente a ACTIVE
-    client.status = ClientStatus.ACTIVE
+    # Actualizar organización a ACTIVE
+    organization.status = OrganizationStatus.ACTIVE
 
     # Marcar token como usado y limpiar contraseña temporal
     token_record.used = True
@@ -842,7 +842,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
     db.commit()
 
-    print(f"[VERIFY EMAIL - FLUJO A] Cliente activado exitosamente: {client.name}")
+    print(f"[VERIFY EMAIL - FLUJO A] Organización activada exitosamente: {organization.name}")
 
     return ConfirmEmailResponse(
         message="Email verificado exitosamente. Tu cuenta ha sido activada y ahora puedes iniciar sesión."

@@ -25,19 +25,20 @@ USO:
     role = OrganizationService.get_user_role(db, user_id, org_id)
 """
 
-from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.organization import Organization, OrganizationStatus
+from app.models.organization import Organization
 from app.models.organization_user import OrganizationRole, OrganizationUser
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.subscription_query import (
     get_active_subscriptions as _get_active_subscriptions,
+)
+from app.services.subscription_query import (
     get_subscription_history as _get_subscription_history,
 )
 
@@ -55,12 +56,12 @@ class OrganizationService:
     ) -> Optional[OrganizationRole]:
         """
         Obtiene el rol de un usuario en una organización.
-        
+
         Args:
             db: Sesión de base de datos
             user_id: ID del usuario
             organization_id: ID de la organización
-            
+
         Returns:
             OrganizationRole o None si no es miembro
         """
@@ -72,15 +73,15 @@ class OrganizationService:
             )
             .first()
         )
-        
+
         if membership:
             return OrganizationRole(membership.role)
-        
+
         # Fallback: verificar is_master (legacy)
         user = db.query(User).filter(User.id == user_id).first()
         if user and user.organization_id == organization_id and user.is_master:
             return OrganizationRole.OWNER
-        
+
         return None
 
     @staticmethod
@@ -101,7 +102,7 @@ class OrganizationService:
     ) -> bool:
         """
         Verifica si el usuario puede gestionar otros usuarios.
-        
+
         Roles permitidos: owner, admin
         """
         role = OrganizationService.get_user_role(db, user_id, organization_id)
@@ -117,7 +118,7 @@ class OrganizationService:
     ) -> bool:
         """
         Verifica si el usuario puede gestionar facturación.
-        
+
         Roles permitidos: owner, billing
         """
         role = OrganizationService.get_user_role(db, user_id, organization_id)
@@ -133,7 +134,7 @@ class OrganizationService:
     ) -> bool:
         """
         Verifica si el usuario puede gestionar la organización.
-        
+
         Solo el owner puede hacer esto.
         """
         role = OrganizationService.get_user_role(db, user_id, organization_id)
@@ -156,7 +157,7 @@ class OrganizationService:
     ) -> list[dict]:
         """
         Obtiene todos los miembros de una organización con sus roles.
-        
+
         Returns:
             Lista de diccionarios con información de cada miembro
         """
@@ -166,18 +167,24 @@ class OrganizationService:
             .filter(OrganizationUser.organization_id == organization_id)
             .all()
         )
-        
+
         result = []
         for membership, user in memberships:
-            result.append({
-                "user_id": str(user.id),
-                "email": user.email,
-                "full_name": user.full_name,
-                "role": membership.role,
-                "joined_at": membership.created_at.isoformat() if membership.created_at else None,
-                "email_verified": user.email_verified,
-            })
-        
+            result.append(
+                {
+                    "user_id": str(user.id),
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "role": membership.role,
+                    "joined_at": (
+                        membership.created_at.isoformat()
+                        if membership.created_at
+                        else None
+                    ),
+                    "email_verified": user.email_verified,
+                }
+            )
+
         return result
 
     @staticmethod
@@ -189,13 +196,13 @@ class OrganizationService:
     ) -> OrganizationUser:
         """
         Agrega un miembro a la organización.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             user_id: ID del usuario
             role: Rol a asignar
-            
+
         Returns:
             El registro de OrganizationUser creado
         """
@@ -208,13 +215,13 @@ class OrganizationService:
             )
             .first()
         )
-        
+
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El usuario ya es miembro de esta organización"
+                detail="El usuario ya es miembro de esta organización",
             )
-        
+
         # Verificar que solo haya un owner
         if role == OrganizationRole.OWNER:
             existing_owner = (
@@ -228,19 +235,19 @@ class OrganizationService:
             if existing_owner:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Ya existe un owner para esta organización"
+                    detail="Ya existe un owner para esta organización",
                 )
-        
+
         membership = OrganizationUser(
             organization_id=organization_id,
             user_id=user_id,
             role=role,
         )
-        
+
         db.add(membership)
         db.commit()
         db.refresh(membership)
-        
+
         return membership
 
     @staticmethod
@@ -253,24 +260,26 @@ class OrganizationService:
     ) -> OrganizationUser:
         """
         Actualiza el rol de un miembro.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             user_id: ID del usuario a modificar
             new_role: Nuevo rol
             performed_by_user_id: ID del usuario que realiza la acción
-            
+
         Returns:
             El registro de OrganizationUser actualizado
         """
         # Verificar que quien hace el cambio tenga permisos
-        if not OrganizationService.can_manage_users(db, performed_by_user_id, organization_id):
+        if not OrganizationService.can_manage_users(
+            db, performed_by_user_id, organization_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tienes permisos para gestionar usuarios"
+                detail="No tienes permisos para gestionar usuarios",
             )
-        
+
         membership = (
             db.query(OrganizationUser)
             .filter(
@@ -279,31 +288,31 @@ class OrganizationService:
             )
             .first()
         )
-        
+
         if not membership:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado en la organización"
+                detail="Usuario no encontrado en la organización",
             )
-        
+
         # No se puede cambiar el rol del owner
         if membership.role == OrganizationRole.OWNER.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede cambiar el rol del owner"
+                detail="No se puede cambiar el rol del owner",
             )
-        
+
         # No se puede asignar owner a otro usuario
         if new_role == OrganizationRole.OWNER:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede asignar el rol de owner"
+                detail="No se puede asignar el rol de owner",
             )
-        
+
         membership.role = new_role
         db.commit()
         db.refresh(membership)
-        
+
         return membership
 
     @staticmethod
@@ -315,23 +324,25 @@ class OrganizationService:
     ) -> bool:
         """
         Remueve un miembro de la organización.
-        
+
         Args:
             db: Sesión de base de datos
             organization_id: ID de la organización
             user_id: ID del usuario a remover
             performed_by_user_id: ID del usuario que realiza la acción
-            
+
         Returns:
             True si se removió correctamente
         """
         # Verificar permisos
-        if not OrganizationService.can_manage_users(db, performed_by_user_id, organization_id):
+        if not OrganizationService.can_manage_users(
+            db, performed_by_user_id, organization_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tienes permisos para gestionar usuarios"
+                detail="No tienes permisos para gestionar usuarios",
             )
-        
+
         membership = (
             db.query(OrganizationUser)
             .filter(
@@ -340,23 +351,23 @@ class OrganizationService:
             )
             .first()
         )
-        
+
         if not membership:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado en la organización"
+                detail="Usuario no encontrado en la organización",
             )
-        
+
         # No se puede remover al owner
         if membership.role == OrganizationRole.OWNER.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede remover al owner de la organización"
+                detail="No se puede remover al owner de la organización",
             )
-        
+
         db.delete(membership)
         db.commit()
-        
+
         return True
 
     @staticmethod
@@ -366,10 +377,10 @@ class OrganizationService:
     ) -> list[Subscription]:
         """
         Obtiene las suscripciones activas de una organización.
-        
+
         DELEGACIÓN: Esta función delega a subscription_query.get_active_subscriptions()
         que es la ÚNICA fuente de verdad para la regla de suscripción activa.
-        
+
         Returns:
             Lista de suscripciones activas, ordenadas por started_at DESC
         """
@@ -383,9 +394,9 @@ class OrganizationService:
     ) -> list[Subscription]:
         """
         Obtiene el historial de suscripciones de una organización.
-        
+
         DELEGACIÓN: Esta función delega a subscription_query.get_subscription_history()
-        
+
         Returns:
             Lista de suscripciones (activas e históricas)
         """
@@ -398,34 +409,42 @@ class OrganizationService:
     ) -> dict:
         """
         Obtiene un resumen completo de la organización.
-        
+
         Incluye: información básica, suscripciones activas, conteo de miembros
         """
-        organization = db.query(Organization).filter(Organization.id == organization_id).first()
-        
+        organization = (
+            db.query(Organization).filter(Organization.id == organization_id).first()
+        )
+
         if not organization:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organización no encontrada"
+                detail="Organización no encontrada",
             )
-        
+
         active_subs = OrganizationService.get_active_subscriptions(db, organization_id)
         members_count = (
             db.query(OrganizationUser)
             .filter(OrganizationUser.organization_id == organization_id)
             .count()
         )
-        
+
         return {
             "organization": {
                 "id": str(organization.id),
-                "account_id": str(organization.account_id) if organization.account_id else None,
+                "account_id": (
+                    str(organization.account_id) if organization.account_id else None
+                ),
                 "name": organization.name,
                 "status": organization.status,
                 "billing_email": organization.billing_email,
                 "country": organization.country,
                 "timezone": organization.timezone,
-                "created_at": organization.created_at.isoformat() if organization.created_at else None,
+                "created_at": (
+                    organization.created_at.isoformat()
+                    if organization.created_at
+                    else None
+                ),
             },
             "subscriptions": {
                 "active": [
@@ -433,7 +452,9 @@ class OrganizationService:
                         "id": str(sub.id),
                         "plan_id": str(sub.plan_id),
                         "status": sub.status,
-                        "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+                        "expires_at": (
+                            sub.expires_at.isoformat() if sub.expires_at else None
+                        ),
                         "auto_renew": sub.auto_renew,
                     }
                     for sub in active_subs
@@ -450,7 +471,10 @@ class OrganizationService:
 # Funciones de conveniencia
 # =====================================================
 
-def get_user_role(db: Session, user_id: UUID, organization_id: UUID) -> Optional[OrganizationRole]:
+
+def get_user_role(
+    db: Session, user_id: UUID, organization_id: UUID
+) -> Optional[OrganizationRole]:
     """Atajo para OrganizationService.get_user_role"""
     return OrganizationService.get_user_role(db, user_id, organization_id)
 
@@ -469,7 +493,10 @@ def can_manage_billing(db: Session, user_id: UUID, organization_id: UUID) -> boo
 # Aliases de compatibilidad (DEPRECATED)
 # =====================================================
 
-def get_user_role_for_client(db: Session, user_id: UUID, client_id: UUID) -> Optional[OrganizationRole]:
+
+def get_user_role_for_client(
+    db: Session, user_id: UUID, client_id: UUID
+) -> Optional[OrganizationRole]:
     """DEPRECATED: Usar get_user_role con organization_id"""
     return get_user_role(db, user_id, client_id)
 

@@ -21,17 +21,18 @@ from pydantic import BaseModel, Field
 
 class BillingCycle(str, Enum):
     """Ciclos de facturación disponibles."""
+
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
 
 
 class PlanPricing(BaseModel):
     """Precios de un plan por ciclo de facturación."""
+
     monthly: Decimal = Field(..., description="Precio mensual")
     yearly: Decimal = Field(..., description="Precio anual")
     yearly_savings_percent: int = Field(
-        default=0,
-        description="Porcentaje de ahorro al pagar anualmente"
+        default=0, description="Porcentaje de ahorro al pagar anualmente"
     )
 
     class Config:
@@ -39,20 +40,24 @@ class PlanPricing(BaseModel):
             "example": {
                 "monthly": "599.00",
                 "yearly": "5990.00",
-                "yearly_savings_percent": 17
+                "yearly_savings_percent": 17,
             }
         }
 
 
 class PlanBase(BaseModel):
     """Base para un plan."""
+
     name: str = Field(..., description="Nombre del plan")
-    code: str = Field(..., description="Código único del plan (ej: basic, pro, enterprise)")
+    code: str = Field(
+        ..., description="Código único del plan (ej: basic, pro, enterprise)"
+    )
     description: Optional[str] = Field(None, description="Descripción del plan")
 
 
 class PlanOut(PlanBase):
     """Plan en respuestas (lectura básica)."""
+
     id: UUID
     price_monthly: Decimal = Field(..., description="Precio mensual")
     price_yearly: Decimal = Field(..., description="Precio anual")
@@ -85,23 +90,22 @@ class PlanDetailOut(PlanBase):
     - Capabilities del plan
     - Features destacados (para UI)
     """
+
     id: UUID
     pricing: PlanPricing = Field(..., description="Estructura de precios")
     billing_cycles: list[BillingCycle] = Field(
         default=[BillingCycle.MONTHLY, BillingCycle.YEARLY],
-        description="Ciclos de facturación disponibles para este plan"
+        description="Ciclos de facturación disponibles para este plan",
     )
     capabilities: dict[str, Any] = Field(
         default_factory=dict,
-        description="Capabilities incluidas en el plan (límites y features)"
+        description="Capabilities incluidas en el plan (límites y features)",
     )
     highlighted_features: list[str] = Field(
-        default_factory=list,
-        description="Features destacados para mostrar en UI"
+        default_factory=list, description="Features destacados para mostrar en UI"
     )
     is_popular: bool = Field(
-        default=False,
-        description="Indica si es el plan más popular/recomendado"
+        default=False, description="Indica si es el plan más popular/recomendado"
     )
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -117,7 +121,7 @@ class PlanDetailOut(PlanBase):
                 "pricing": {
                     "monthly": "599.00",
                     "yearly": "5990.00",
-                    "yearly_savings_percent": 17
+                    "yearly_savings_percent": 17,
                 },
                 "billing_cycles": ["MONTHLY", "YEARLY"],
                 "capabilities": {
@@ -132,7 +136,7 @@ class PlanDetailOut(PlanBase):
                     "Hasta 50 dispositivos",
                     "100 geocercas",
                     "90 días de historial",
-                    "Funciones de IA incluidas"
+                    "Funciones de IA incluidas",
                 ],
                 "is_popular": True,
                 "created_at": "2024-01-01T00:00:00Z",
@@ -147,6 +151,7 @@ PlanWithCapabilitiesOut = PlanDetailOut
 
 class PlansListOut(BaseModel):
     """Lista de planes disponibles."""
+
     plans: list[PlanDetailOut]
     total: int
 
@@ -162,19 +167,19 @@ class PlansListOut(BaseModel):
                         "pricing": {
                             "monthly": "299.00",
                             "yearly": "2990.00",
-                            "yearly_savings_percent": 17
+                            "yearly_savings_percent": 17,
                         },
                         "billing_cycles": ["MONTHLY", "YEARLY"],
                         "capabilities": {
                             "max_devices": 10,
                             "max_geofences": 20,
-                            "history_days": 30
+                            "history_days": 30,
                         },
                         "highlighted_features": [
                             "Hasta 10 dispositivos",
-                            "20 geocercas"
+                            "20 geocercas",
                         ],
-                        "is_popular": False
+                        "is_popular": False,
                     },
                     {
                         "id": "223e4567-e89b-12d3-a456-426614174000",
@@ -184,18 +189,15 @@ class PlansListOut(BaseModel):
                         "pricing": {
                             "monthly": "599.00",
                             "yearly": "5990.00",
-                            "yearly_savings_percent": 17
+                            "yearly_savings_percent": 17,
                         },
                         "billing_cycles": ["MONTHLY", "YEARLY"],
-                        "capabilities": {
-                            "max_devices": 50,
-                            "ai_features": True
-                        },
+                        "capabilities": {"max_devices": 50, "ai_features": True},
                         "highlighted_features": [
                             "Hasta 50 dispositivos",
-                            "Funciones de IA"
+                            "Funciones de IA",
                         ],
-                        "is_popular": True
+                        "is_popular": True,
                     },
                 ],
                 "total": 2,

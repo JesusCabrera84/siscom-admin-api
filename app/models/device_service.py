@@ -36,18 +36,20 @@ warnings.warn(
     "DeviceService es un modelo LEGACY. "
     "Para código nuevo, usar Subscription y subscription_query.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 
 class SubscriptionType(str, enum.Enum):
     """LEGACY: Tipos de suscripción por dispositivo."""
+
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
 
 
 class DeviceServiceStatus(str, enum.Enum):
     """LEGACY: Estados de servicio por dispositivo."""
+
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
     CANCELLED = "CANCELLED"
@@ -57,14 +59,15 @@ class DeviceServiceStatus(str, enum.Enum):
 class DeviceService(SQLModel, table=True):
     """
     ⚠️ LEGACY MODEL ⚠️
-    
+
     Servicio de rastreo por dispositivo.
-    
+
     DEPRECATED: El modelo actual usa Subscriptions a nivel de Organization.
     Este modelo se mantiene solo por compatibilidad con endpoints /services/*.
-    
+
     NO USAR EN CÓDIGO NUEVO.
     """
+
     __tablename__ = "device_services"
     __table_args__ = (
         Index("idx_device_services_device", "device_id"),

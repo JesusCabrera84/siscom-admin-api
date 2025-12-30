@@ -20,17 +20,17 @@ from app.models.subscription import BillingCycle, SubscriptionStatus
 
 class SubscriptionBase(BaseModel):
     """Base para una suscripción."""
+
     plan_id: UUID = Field(..., description="ID del plan")
     billing_cycle: BillingCycle = Field(
-        default=BillingCycle.MONTHLY,
-        description="Ciclo de facturación"
+        default=BillingCycle.MONTHLY, description="Ciclo de facturación"
     )
     auto_renew: bool = Field(default=True, description="Renovación automática")
 
 
 class SubscriptionCreate(SubscriptionBase):
     """Schema para crear una suscripción."""
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -43,6 +43,7 @@ class SubscriptionCreate(SubscriptionBase):
 
 class SubscriptionOut(BaseModel):
     """Suscripción en respuestas."""
+
     id: UUID
     organization_id: UUID
     plan_id: UUID
@@ -90,6 +91,7 @@ class SubscriptionOut(BaseModel):
 
 class SubscriptionWithPlanOut(SubscriptionOut):
     """Suscripción con información del plan."""
+
     plan_name: Optional[str] = None
     plan_code: Optional[str] = None
     days_remaining: Optional[int] = None
@@ -116,10 +118,13 @@ class SubscriptionWithPlanOut(SubscriptionOut):
 
 class SubscriptionCancelRequest(BaseModel):
     """Request para cancelar una suscripción."""
-    reason: Optional[str] = Field(None, max_length=500, description="Razón de cancelación")
+
+    reason: Optional[str] = Field(
+        None, max_length=500, description="Razón de cancelación"
+    )
     cancel_immediately: bool = Field(
         default=False,
-        description="Si es True, cancela inmediatamente. Si es False, cancela al final del período."
+        description="Si es True, cancela inmediatamente. Si es False, cancela al final del período.",
     )
 
     class Config:
@@ -133,8 +138,13 @@ class SubscriptionCancelRequest(BaseModel):
 
 class SubscriptionRenewRequest(BaseModel):
     """Request para renovar una suscripción."""
-    new_plan_id: Optional[UUID] = Field(None, description="ID del nuevo plan (para upgrade/downgrade)")
-    billing_cycle: Optional[BillingCycle] = Field(None, description="Nuevo ciclo de facturación")
+
+    new_plan_id: Optional[UUID] = Field(
+        None, description="ID del nuevo plan (para upgrade/downgrade)"
+    )
+    billing_cycle: Optional[BillingCycle] = Field(
+        None, description="Nuevo ciclo de facturación"
+    )
 
     class Config:
         json_schema_extra = {
@@ -147,6 +157,7 @@ class SubscriptionRenewRequest(BaseModel):
 
 class SubscriptionsListOut(BaseModel):
     """Lista de suscripciones."""
+
     subscriptions: list[SubscriptionWithPlanOut]
     active_count: int = 0
     total_count: int = 0

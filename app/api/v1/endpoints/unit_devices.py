@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_client_id, get_current_user_id
+from app.api.deps import get_current_organization_id, get_current_user_id
 from app.db.session import get_db
 from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
@@ -49,22 +49,22 @@ def create_device_event(
 
 @router.get("", response_model=List[UnitDeviceOut])
 def list_unit_devices(
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
     active_only: bool = True,
 ):
     """
-    Lista todas las relaciones unit-device del cliente.
+    Lista todas las relaciones unit-device de la organización.
 
     Por defecto solo muestra las activas (unassigned_at IS NULL).
     Usa active_only=false para ver todas incluyendo históricas.
 
-    Requiere: Usuario maestro del cliente.
+    Requiere: Usuario de la organización autenticado.
     """
-    # Subconsulta para obtener units del cliente
-    client_units = db.query(Unit.id).filter(Unit.client_id == client_id).subquery()
+    # Subconsulta para obtener units de la organización
+    org_units = db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
 
-    query = db.query(UnitDevice).filter(UnitDevice.unit_id.in_(client_units))
+    query = db.query(UnitDevice).filter(UnitDevice.unit_id.in_(org_units))
 
     if active_only:
         query = query.filter(UnitDevice.unassigned_at.is_(None))
@@ -76,7 +76,7 @@ def list_unit_devices(
 @router.post("", response_model=UnitDeviceOut, status_code=status.HTTP_201_CREATED)
 def create_unit_device(
     assignment: UnitDeviceCreate,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -84,8 +84,8 @@ def create_unit_device(
     Asigna un dispositivo a una unidad.
 
     Validaciones:
-    - La unidad debe pertenecer al cliente autenticado
-    - El dispositivo debe pertenecer al cliente autenticado
+    - La unidad debe pertenecer a la organización autenticada
+    - El dispositivo debe pertenecer a la organización autenticada
     - El dispositivo debe estar en estado 'entregado' o 'devuelto'
     - No debe existir una asignación activa previa
 
@@ -95,30 +95,30 @@ def create_unit_device(
     - Actualiza device.last_assignment_at
     - Crea evento en device_events
     """
-    # Verificar que la unidad existe y pertenece al cliente
+    # Verificar que la unidad existe y pertenece a la organización
     unit = (
         db.query(Unit)
-        .filter(Unit.id == assignment.unit_id, Unit.client_id == client_id)
+        .filter(Unit.id == assignment.unit_id, Unit.organization_id == organization_id)
         .first()
     )
 
     if not unit:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Unidad no encontrada o no pertenece a tu cliente",
+            detail="Unidad no encontrada o no pertenece a tu organización",
         )
 
-    # Verificar que el dispositivo existe y pertenece al cliente
+    # Verificar que el dispositivo existe y pertenece a la organización
     device = (
         db.query(Device)
-        .filter(Device.device_id == assignment.device_id, Device.client_id == client_id)
+        .filter(Device.device_id == assignment.device_id, Device.client_id == organization_id)
         .first()
     )
 
     if not device:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dispositivo no encontrado o no pertenece a tu cliente",
+            detail="Dispositivo no encontrado o no pertenece a tu organización",
         )
 
     # Validar estado del dispositivo
@@ -178,7 +178,7 @@ def create_unit_device(
 @router.get("/{assignment_id}", response_model=UnitDeviceDetail)
 def get_unit_device(
     assignment_id: UUID,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -186,12 +186,12 @@ def get_unit_device(
 
     Incluye información adicional de la unidad y el dispositivo.
     """
-    # Subconsulta para obtener units del cliente
-    client_units = db.query(Unit.id).filter(Unit.client_id == client_id).subquery()
+    # Subconsulta para obtener units de la organización
+    org_units = db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
 
     assignment = (
         db.query(UnitDevice)
-        .filter(UnitDevice.id == assignment_id, UnitDevice.unit_id.in_(client_units))
+        .filter(UnitDevice.id == assignment_id, UnitDevice.unit_id.in_(org_units))
         .first()
     )
 
@@ -223,7 +223,7 @@ def get_unit_device(
 @router.delete("/{assignment_id}", status_code=status.HTTP_200_OK)
 def delete_unit_device(
     assignment_id: UUID,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -237,12 +237,12 @@ def delete_unit_device(
     - Si el dispositivo no tiene otras asignaciones activas → status = 'entregado'
     - Crea evento en device_events
     """
-    # Subconsulta para obtener units del cliente
-    client_units = db.query(Unit.id).filter(Unit.client_id == client_id).subquery()
+    # Subconsulta para obtener units de la organización
+    org_units = db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
 
     assignment = (
         db.query(UnitDevice)
-        .filter(UnitDevice.id == assignment_id, UnitDevice.unit_id.in_(client_units))
+        .filter(UnitDevice.id == assignment_id, UnitDevice.unit_id.in_(org_units))
         .first()
     )
 

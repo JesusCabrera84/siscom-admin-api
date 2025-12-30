@@ -9,8 +9,8 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.organization import Organization
     from app.models.order_item import OrderItem
+    from app.models.organization import Organization
     from app.models.payment import Payment
 
 
@@ -71,7 +71,7 @@ class Order(SQLModel, table=True):
     def client_id(self) -> UUID:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: UUID):
         """DEPRECATED: Usar organization_id"""

@@ -7,6 +7,15 @@ MODELO CONCEPTUAL:
 ==================
 Account = Raíz comercial (billing, facturación) - SIEMPRE existe
 Organization = Raíz operativa (permisos, uso diario) - SIEMPRE pertenece a Account
+
+ONBOARDING:
+===========
+POST /clients usa OnboardingRequest/OnboardingResponse
+PATCH /accounts/{id} usa AccountUpdate/AccountUpdateResponse
+
+REGLA DE ORO:
+=============
+Los nombres NO son identidad. Los UUID sí.
 """
 
 # Account
@@ -14,6 +23,7 @@ from app.schemas.account import (
     AccountCreate,
     AccountOut,
     AccountUpdate,
+    AccountUpdateResponse,
     AccountWithOrganizationsOut,
 )
 
@@ -28,8 +38,13 @@ from app.schemas.capability import (
     ValidateLimitResponse,
 )
 
-# Client/Organization
-from app.schemas.client import ClientBase, ClientCreate, ClientOut, ClientUpdate
+# Onboarding (POST /clients)
+from app.schemas.client import (
+    ClientBase,
+    ClientOut,
+    OnboardingRequest,
+    OnboardingResponse,
+)
 
 # Commands
 from app.schemas.command import (
@@ -77,7 +92,7 @@ from app.schemas.organization import (
 from app.schemas.payment import PaymentBase, PaymentCreate, PaymentOut
 
 # Plans
-from app.schemas.plan import PlanBase, PlanOut, PlanWithCapabilitiesOut, PlansListOut
+from app.schemas.plan import PlanBase, PlanOut, PlansListOut, PlanWithCapabilitiesOut
 
 # Subscriptions
 from app.schemas.subscription import (
@@ -107,6 +122,7 @@ __all__ = [
     "AccountCreate",
     "AccountOut",
     "AccountUpdate",
+    "AccountUpdateResponse",
     "AccountWithOrganizationsOut",
     # Capabilities
     "CapabilityOut",
@@ -116,11 +132,12 @@ __all__ = [
     "OrganizationCapabilityOut",
     "ValidateLimitRequest",
     "ValidateLimitResponse",
-    # Client/Organization (DEPRECATED aliases)
+    # Onboarding
+    "OnboardingRequest",
+    "OnboardingResponse",
+    # Client/Organization (legacy compatibility)
     "ClientBase",
-    "ClientCreate",
     "ClientOut",
-    "ClientUpdate",
     # Organization
     "OrganizationOut",
     "OrganizationUpdate",

@@ -86,7 +86,7 @@ class TokenConfirmacion(SQLModel, table=True):
     def client_id(self) -> Optional[UUID]:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: Optional[UUID]):
         """DEPRECATED: Usar organization_id"""

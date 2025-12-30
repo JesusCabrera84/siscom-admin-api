@@ -35,9 +35,10 @@ class PaymentStatus(str, enum.Enum):
 class Payment(SQLModel, table=True):
     """
     Registro de pago.
-    
+
     Pertenece a Account (entidad comercial/billing).
     """
+
     __tablename__ = "payments"
     __table_args__ = (
         Index("idx_payments_account", "account_id"),

@@ -40,7 +40,7 @@ security = HTTPBearer()
 class AuthResult:
     """
     Resultado de autenticación que soporta tanto Cognito como PASETO.
-    
+
     Attributes:
         auth_type: Tipo de autenticación ('cognito' o 'paseto')
         payload: Payload del token decodificado
@@ -175,10 +175,10 @@ def get_current_user_with_role(
 ) -> tuple:
     """
     Retorna el usuario y su rol organizacional.
-    
+
     DELEGACIÓN: Usa OrganizationService.get_user_role() como única fuente
     de verdad para roles. El fallback a is_master se maneja internamente.
-    
+
     Returns:
         Tuple de (User, OrganizationRole o None)
     """
@@ -191,10 +191,10 @@ def get_current_user_with_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado",
         )
-    
+
     # Obtener rol usando OrganizationService (única fuente de verdad)
     role = OrganizationService.get_user_role(db, user.id, user.organization_id)
-    
+
     return user, role
 
 
@@ -220,7 +220,7 @@ def get_auth_cognito_or_paseto(
         """
         Verifica el token de autenticación.
         Intenta primero con Cognito, si falla intenta con PASETO.
-        
+
         DELEGACIÓN: Usa OrganizationService.get_user_role() como única fuente
         de verdad para roles. El fallback a is_master se maneja internamente.
         """
@@ -246,9 +246,11 @@ def get_auth_cognito_or_paseto(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Usuario no encontrado en el sistema",
                 )
-            
+
             # Obtener rol usando OrganizationService (única fuente de verdad)
-            org_role = OrganizationService.get_user_role(db, user.id, user.organization_id)
+            org_role = OrganizationService.get_user_role(
+                db, user.id, user.organization_id
+            )
             # Convertir a string para el AuthResult
             org_role_str = org_role.value if org_role else None
 
@@ -294,23 +296,24 @@ def get_auth_cognito_or_paseto(
 def require_organization_role(*allowed_roles: str):
     """
     Factory para crear una dependencia que requiere roles específicos.
-    
+
     DELEGACIÓN: Usa OrganizationService.get_user_role() como única fuente
     de verdad para roles. El fallback a is_master se maneja internamente.
-    
+
     Uso:
         @router.post("/admin-action")
         def admin_action(
             auth: AuthResult = Depends(require_organization_role("owner", "admin"))
         ):
             ...
-    
+
     Args:
         allowed_roles: Roles permitidos (ej: "owner", "admin", "billing", "member")
-        
+
     Returns:
         Dependencia que valida el rol y retorna AuthResult
     """
+
     def _require_role(
         credentials: HTTPAuthorizationCredentials = Depends(security),
         db: Session = Depends(get_db),
@@ -321,7 +324,7 @@ def require_organization_role(*allowed_roles: str):
 
         # Solo soporta Cognito para verificación de roles organizacionales
         cognito_payload = verify_cognito_token(token)
-        
+
         cognito_sub = cognito_payload.get("sub")
         if not cognito_sub:
             raise HTTPException(
@@ -335,18 +338,18 @@ def require_organization_role(*allowed_roles: str):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Usuario no encontrado",
             )
-        
+
         # Obtener rol usando OrganizationService (única fuente de verdad)
         org_role = OrganizationService.get_user_role(db, user.id, user.organization_id)
         org_role_str = org_role.value if org_role else None
-        
+
         # Validar rol
         if org_role_str not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Se requiere uno de los siguientes roles: {', '.join(allowed_roles)}",
             )
-        
+
         return AuthResult(
             auth_type="cognito",
             payload=cognito_payload,
@@ -354,27 +357,28 @@ def require_organization_role(*allowed_roles: str):
             organization_id=user.organization_id,
             organization_role=org_role_str,
         )
-    
+
     return _require_role
 
 
 def require_capability(capability_code: str):
     """
     Factory para crear una dependencia que requiere una capability habilitada.
-    
+
     Uso:
         @router.post("/ai-analyze")
         def ai_analyze(
             auth: AuthResult = Depends(require_capability("ai_features"))
         ):
             ...
-    
+
     Args:
         capability_code: Código de la capability requerida
-        
+
     Returns:
         Dependencia que valida la capability y retorna AuthResult
     """
+
     def _require_capability(
         credentials: HTTPAuthorizationCredentials = Depends(security),
         db: Session = Depends(get_db),
@@ -384,7 +388,7 @@ def require_capability(capability_code: str):
 
         token = credentials.credentials
         cognito_payload = verify_cognito_token(token)
-        
+
         cognito_sub = cognito_payload.get("sub")
         if not cognito_sub:
             raise HTTPException(
@@ -398,21 +402,23 @@ def require_capability(capability_code: str):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Usuario no encontrado",
             )
-        
+
         # Verificar capability
-        if not CapabilityService.has_capability(db, user.organization_id, capability_code):
+        if not CapabilityService.has_capability(
+            db, user.organization_id, capability_code
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"La organización no tiene acceso a: {capability_code}",
             )
-        
+
         return AuthResult(
             auth_type="cognito",
             payload=cognito_payload,
             user_id=user.id,
             organization_id=user.organization_id,
         )
-    
+
     return _require_capability
 
 

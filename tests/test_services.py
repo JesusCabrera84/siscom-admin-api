@@ -1,6 +1,9 @@
 """
 Tests de servicios de dispositivos.
 Este es el test más importante del sistema.
+
+NOTA: DeviceService está marcado como LEGACY / DEPRECATED.
+Estos tests se mantienen para compatibilidad hasta la migración a subscriptions.
 """
 
 from datetime import datetime
@@ -105,7 +108,7 @@ def test_cannot_activate_two_services_simultaneously(
 
 def test_list_active_services(authenticated_client, test_device_data, test_plan_data):
     """
-    Test que lista servicios activos del cliente.
+    Test que lista servicios activos de la organización.
     """
     # Activar un servicio primero
     service_data = {

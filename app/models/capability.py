@@ -15,17 +15,18 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text, Boolean, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.plan import Plan
     from app.models.organization import Organization
+    from app.models.plan import Plan
 
 
 class CapabilityValueType(str, enum.Enum):
     """Tipos de valor que puede tener una capability."""
+
     INT = "int"
     BOOL = "bool"
     TEXT = "text"
@@ -34,9 +35,10 @@ class CapabilityValueType(str, enum.Enum):
 class Capability(SQLModel, table=True):
     """
     Definición de una capability del sistema.
-    
+
     Ejemplo: max_devices, max_geofences, ai_features_enabled
     """
+
     __tablename__ = "capabilities"
 
     id: UUID = Field(
@@ -46,22 +48,20 @@ class Capability(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    code: str = Field(
-        sa_column=Column(Text, unique=True, nullable=False)
-    )
-    description: str = Field(
-        sa_column=Column(Text, nullable=False)
-    )
-    value_type: str = Field(
-        sa_column=Column(Text, nullable=False)
-    )
+    code: str = Field(sa_column=Column(Text, unique=True, nullable=False))
+    description: str = Field(sa_column=Column(Text, nullable=False))
+    value_type: str = Field(sa_column=Column(Text, nullable=False))
     created_at: Optional[datetime] = Field(
         default=None,
-        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=True)
+        sa_column=Column(
+            DateTime(timezone=True), server_default=text("now()"), nullable=True
+        ),
     )
 
     # Relationships
-    plan_capabilities: list["PlanCapability"] = Relationship(back_populates="capability")
+    plan_capabilities: list["PlanCapability"] = Relationship(
+        back_populates="capability"
+    )
     organization_capabilities: list["OrganizationCapability"] = Relationship(
         back_populates="capability"
     )
@@ -70,9 +70,10 @@ class Capability(SQLModel, table=True):
 class PlanCapability(SQLModel, table=True):
     """
     Valor de una capability para un plan específico.
-    
+
     Define qué capabilities incluye cada plan y con qué valores.
     """
+
     __tablename__ = "plan_capabilities"
 
     plan_id: UUID = Field(
@@ -92,16 +93,13 @@ class PlanCapability(SQLModel, table=True):
         )
     )
     value_int: Optional[int] = Field(
-        default=None,
-        sa_column=Column(Integer, nullable=True)
+        default=None, sa_column=Column(Integer, nullable=True)
     )
     value_bool: Optional[bool] = Field(
-        default=None,
-        sa_column=Column(Boolean, nullable=True)
+        default=None, sa_column=Column(Boolean, nullable=True)
     )
     value_text: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
+        default=None, sa_column=Column(Text, nullable=True)
     )
 
     # Relationships
@@ -122,10 +120,11 @@ class PlanCapability(SQLModel, table=True):
 class OrganizationCapability(SQLModel, table=True):
     """
     Override de capability para una organización específica.
-    
+
     Permite que una organización tenga valores diferentes a los de su plan.
     Por ejemplo: promociones, acuerdos especiales, ajustes temporales.
     """
+
     __tablename__ = "organization_capabilities"
 
     organization_id: UUID = Field(
@@ -145,28 +144,23 @@ class OrganizationCapability(SQLModel, table=True):
         )
     )
     value_int: Optional[int] = Field(
-        default=None,
-        sa_column=Column(Integer, nullable=True)
+        default=None, sa_column=Column(Integer, nullable=True)
     )
     value_bool: Optional[bool] = Field(
-        default=None,
-        sa_column=Column(Boolean, nullable=True)
+        default=None, sa_column=Column(Boolean, nullable=True)
     )
     value_text: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
+        default=None, sa_column=Column(Text, nullable=True)
     )
-    reason: Optional[str] = Field(
-        default=None,
-        sa_column=Column(Text, nullable=True)
-    )
+    reason: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     expires_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime(timezone=True), nullable=True)
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
 
     # Relationships
-    organization: "Organization" = Relationship(back_populates="organization_capabilities")
+    organization: "Organization" = Relationship(
+        back_populates="organization_capabilities"
+    )
     capability: Capability = Relationship(back_populates="organization_capabilities")
 
     # Alias para compatibilidad (DEPRECATED)
@@ -174,7 +168,7 @@ class OrganizationCapability(SQLModel, table=True):
     def client_id(self) -> UUID:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: UUID):
         """DEPRECATED: Usar organization_id"""

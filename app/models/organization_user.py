@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, text, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -24,12 +24,13 @@ if TYPE_CHECKING:
 class OrganizationRole(str, enum.Enum):
     """
     Roles disponibles dentro de una organización.
-    
+
     - owner: Control total, único por organización
     - admin: Gestión de usuarios, configuración
     - billing: Pagos, suscripciones, facturación
     - member: Acceso operativo según permisos asignados
     """
+
     OWNER = "owner"
     ADMIN = "admin"
     BILLING = "billing"
@@ -39,10 +40,11 @@ class OrganizationRole(str, enum.Enum):
 class OrganizationUser(SQLModel, table=True):
     """
     Relación usuario-organización con rol asignado.
-    
+
     Un usuario puede pertenecer a una organización con un rol específico.
     Este modelo es la fuente de verdad para permisos organizacionales.
     """
+
     __tablename__ = "organization_users"
     __table_args__ = (
         UniqueConstraint("organization_id", "user_id", name="uq_org_user"),
@@ -75,15 +77,13 @@ class OrganizationUser(SQLModel, table=True):
             String,
             nullable=False,
             default=OrganizationRole.MEMBER.value,
-        )
+        ),
     )
     created_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(
-            DateTime(timezone=True),
-            server_default=text("now()"),
-            nullable=True
-        )
+            DateTime(timezone=True), server_default=text("now()"), nullable=True
+        ),
     )
 
     # Relationships
@@ -95,7 +95,7 @@ class OrganizationUser(SQLModel, table=True):
     def client_id(self) -> UUID:
         """DEPRECATED: Usar organization_id"""
         return self.organization_id
-    
+
     @client_id.setter
     def client_id(self, value: UUID):
         """DEPRECATED: Usar organization_id"""

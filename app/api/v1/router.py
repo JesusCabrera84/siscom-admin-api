@@ -2,13 +2,25 @@
 Router principal de la API v1.
 
 Organiza todos los endpoints del sistema:
-- API Pública (Cognito): /auth, /clients, /users, /subscriptions, /capabilities, etc.
+- API Pública (Cognito): /auth, /accounts, /clients, /users, /subscriptions, etc.
 - API Interna (PASETO): /internal/*
+
+MODELO CONCEPTUAL:
+==================
+Account = Raíz comercial (billing, facturación)
+Organization = Raíz operativa (permisos, uso diario)
+
+ENDPOINTS PRINCIPALES:
+======================
+- POST /clients: Onboarding rápido (crea Account + Organization + User)
+- PATCH /accounts/{id}: Perfil progresivo del Account
+- GET /clients: Info de la organización del usuario
 """
 
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    accounts,
     auth,
     billing,
     capabilities,
@@ -39,8 +51,11 @@ api_router = APIRouter()
 # Autenticación
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 
-# Organizaciones (conceptualmente = clients)
-api_router.include_router(clients.router, prefix="/clients", tags=["organizations"])
+# Accounts (raíz comercial - perfil progresivo)
+api_router.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
+
+# Onboarding y Organizations (clients es el endpoint de onboarding)
+api_router.include_router(clients.router, prefix="/clients", tags=["onboarding"])
 
 # Usuarios
 api_router.include_router(users.router, prefix="/users", tags=["users"])
@@ -91,7 +106,5 @@ api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
 # ============================================
 
 api_router.include_router(
-    internal_clients.router,
-    prefix="/internal/clients",
-    tags=["internal-organizations"]
+    internal_clients.router, prefix="/internal/clients", tags=["internal-organizations"]
 )

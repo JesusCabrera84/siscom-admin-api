@@ -11,7 +11,7 @@ Las capabilities se resuelven con la regla:
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_organization_id
@@ -34,11 +34,11 @@ def get_capabilities_summary(
 ):
     """
     Obtiene el resumen de capabilities de la organización.
-    
+
     Retorna:
     - limits: Capabilities de tipo límite (max_devices, max_users, etc.)
     - features: Capabilities de tipo feature (ai_features, analytics_tools, etc.)
-    
+
     Cada valor se resuelve aplicando la regla:
     organization_override ?? plan_capability ?? default
     """
@@ -54,7 +54,7 @@ def get_capability(
 ):
     """
     Obtiene el valor de una capability específica.
-    
+
     Retorna:
     - code: Código de la capability
     - value: Valor resuelto
@@ -62,7 +62,7 @@ def get_capability(
     - expires_at: Si es un override temporal, fecha de expiración
     """
     resolved = CapabilityService.get_capability(db, organization_id, capability_code)
-    
+
     return ResolvedCapabilityOut(
         code=resolved.code,
         value=resolved.value,
@@ -80,12 +80,12 @@ def validate_limit(
 ):
     """
     Valida si se puede agregar un elemento más sin exceder el límite.
-    
+
     Útil para validar antes de crear:
     - Dispositivos (max_devices)
     - Geocercas (max_geofences)
     - Usuarios (max_users)
-    
+
     Ejemplo:
     ```json
     {
@@ -93,7 +93,7 @@ def validate_limit(
         "current_count": 8
     }
     ```
-    
+
     Respuesta:
     ```json
     {
@@ -108,13 +108,13 @@ def validate_limit(
     can_add = CapabilityService.validate_limit(
         db, organization_id, request.capability_code, request.current_count
     )
-    
+
     # Si el límite es 0 o negativo, es ilimitado
     if limit <= 0:
         remaining = -1  # Indicador de ilimitado
     else:
         remaining = max(0, limit - request.current_count)
-    
+
     return ValidateLimitResponse(
         can_add=can_add,
         current_count=request.current_count,
@@ -131,11 +131,11 @@ def check_capability(
 ):
     """
     Verifica si una capability booleana está habilitada.
-    
+
     Útil para verificar rápidamente si una feature está disponible.
-    
+
     Ejemplo: GET /capabilities/check/ai_features
-    
+
     Respuesta:
     ```json
     {
@@ -145,7 +145,7 @@ def check_capability(
     ```
     """
     enabled = CapabilityService.has_capability(db, organization_id, capability_code)
-    
+
     return {
         "capability": capability_code,
         "enabled": enabled,

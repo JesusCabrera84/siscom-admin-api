@@ -70,12 +70,12 @@ def validate_device_limit(
 ) -> bool:
     """
     Valida si la organización puede agregar más dispositivos.
-    
+
     USA CapabilityService para respetar:
     - Overrides de organización
     - Valores del plan activo
     - Valores por defecto
-    
+
     Args:
         db: Sesión de base de datos
         client_id: ID de la organización
@@ -94,9 +94,9 @@ def validate_device_limit_legacy(
 ) -> bool:
     """
     LEGACY: Valida límite de dispositivos usando plan.max_devices directamente.
-    
+
     ⚠️  DEPRECATED: Usar validate_device_limit() que usa CapabilityService.
-    
+
     Esta función se mantiene por compatibilidad con código existente.
     NO debe usarse en código nuevo.
 
@@ -112,7 +112,7 @@ def validate_device_limit_legacy(
     plan = get_plan_by_id(db, plan_id)
 
     # Si el plan no tiene límite (max_devices es None), siempre es válido
-    if not hasattr(plan, 'max_devices') or plan.max_devices is None:
+    if not hasattr(plan, "max_devices") or plan.max_devices is None:
         return True
 
     # Contar servicios activos del cliente
