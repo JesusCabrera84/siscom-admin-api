@@ -2,7 +2,65 @@
 
 ## Descripción
 
-Endpoints para gestionar y consultar planes de servicio disponibles. Los planes definen los precios y características de los servicios de rastreo.
+Endpoints **READ-ONLY** para consultar el catálogo de planes de servicio disponibles.
+
+> **IMPORTANTE**: Los planes son **INFORMATIVOS**, no gobiernan la lógica del sistema.
+> - La lógica de qué puede hacer una organización está en **capabilities**
+> - La lógica de qué plan tiene una organización está en **subscriptions**
+
+Ver también:
+- [API de Capabilities](capabilities.md) - para ver qué puede hacer una organización
+- [API de Subscriptions](subscriptions.md) - para ver suscripciones activas
+- [API de Billing](billing.md) - para información de facturación
+
+---
+
+## Sistema de Capabilities
+
+### ¿Qué son las Capabilities?
+
+Las capabilities son atributos configurables que determinan:
+
+- **Límites**: Número máximo de recursos (dispositivos, geocercas, usuarios)
+- **Features**: Funcionalidades habilitadas (IA, analytics, reportes)
+- **Acceso**: Permisos para usar ciertos endpoints o características
+
+### Tipos de Capabilities
+
+| Capability | Tipo | Descripción |
+|------------|------|-------------|
+| `max_devices` | Límite | Número máximo de dispositivos |
+| `max_geofences` | Límite | Número máximo de geocercas |
+| `max_users` | Límite | Número máximo de usuarios |
+| `max_units` | Límite | Número máximo de unidades/vehículos |
+| `history_days` | Límite | Días de historial de ubicaciones |
+| `ai_features` | Feature | Acceso a análisis con IA |
+| `analytics_tools` | Feature | Herramientas de analytics avanzado |
+| `custom_reports` | Feature | Reportes personalizados |
+| `api_access` | Feature | Acceso a API de integración |
+| `priority_support` | Feature | Soporte prioritario |
+| `real_time_alerts` | Feature | Alertas en tiempo real |
+| `export_data` | Feature | Exportación de datos |
+
+### Resolución de Capabilities (Regla de Oro)
+
+Las capabilities efectivas de una organización se resuelven con la siguiente prioridad:
+
+```
+organization_capability_override     (si existe)
+         ??
+plan_capability                      (del plan activo)
+         ??
+default_capability                   (valor por defecto del sistema)
+```
+
+**Ejemplo:**
+```
+Plan Enterprise: max_geofences = 50
+Organización Override: max_geofences = 100
+
+Capability Efectiva: 100 (el override gana)
+```
 
 ---
 
@@ -12,7 +70,7 @@ Endpoints para gestionar y consultar planes de servicio disponibles. Los planes 
 
 **GET** `/api/v1/plans/`
 
-Lista todos los planes de servicio disponibles.
+Lista todos los planes de servicio disponibles con sus capabilities, precios y opciones de facturación.
 
 #### Headers
 
@@ -21,41 +79,165 @@ Lista todos los planes de servicio disponibles.
 #### Response 200 OK
 
 ```json
-[
-  {
-    "id": "223e4567-e89b-12d3-a456-426614174000",
-    "name": "Plan Básico",
-    "description": "Rastreo GPS básico con actualizaciones cada 60 segundos",
-    "monthly_price": 199.0,
-    "yearly_price": 1990.0,
-    "features": {
-      "update_interval": 60,
-      "historical_data": 30,
-      "geofences": 5,
-      "alerts": true
+{
+  "plans": [
+    {
+      "id": "223e4567-e89b-12d3-a456-426614174000",
+      "name": "Plan Básico",
+      "code": "basic",
+      "description": "Ideal para flotas pequeñas",
+      "pricing": {
+        "monthly": "299.00",
+        "yearly": "2990.00",
+        "yearly_savings_percent": 17
+      },
+      "billing_cycles": ["MONTHLY", "YEARLY"],
+      "capabilities": {
+        "max_devices": 10,
+        "max_geofences": 20,
+        "history_days": 30
+      },
+      "highlighted_features": [
+        "Hasta 10 dispositivos",
+        "20 geocercas",
+        "30 días de historial"
+      ],
+      "is_popular": false,
+      "created_at": "2024-01-10T08:00:00Z"
     },
-    "active": true,
-    "created_at": "2024-01-10T08:00:00Z"
-  },
-  {
-    "id": "334e4567-e89b-12d3-a456-426614174000",
-    "name": "Plan Premium",
-    "description": "Rastreo GPS avanzado con actualizaciones cada 30 segundos",
-    "monthly_price": 299.0,
-    "yearly_price": 2990.0,
-    "features": {
-      "update_interval": 30,
-      "historical_data": 90,
-      "geofences": 20,
-      "alerts": true,
-      "priority_support": true,
-      "custom_reports": true
+    {
+      "id": "334e4567-e89b-12d3-a456-426614174000",
+      "name": "Plan Profesional",
+      "code": "pro",
+      "description": "Para flotas medianas con necesidades avanzadas",
+      "pricing": {
+        "monthly": "599.00",
+        "yearly": "5990.00",
+        "yearly_savings_percent": 17
+      },
+      "billing_cycles": ["MONTHLY", "YEARLY"],
+      "capabilities": {
+        "max_devices": 50,
+        "max_geofences": 100,
+        "max_users": 10,
+        "history_days": 90,
+        "ai_features": true,
+        "analytics_tools": true
+      },
+      "highlighted_features": [
+        "Hasta 50 dispositivos",
+        "100 geocercas",
+        "90 días de historial",
+        "Funciones de IA incluidas",
+        "Herramientas de analytics"
+      ],
+      "is_popular": true,
+      "created_at": "2024-01-10T08:00:00Z"
     },
-    "active": true,
-    "created_at": "2024-01-10T08:00:00Z"
-  }
-]
+    {
+      "id": "445e4567-e89b-12d3-a456-426614174000",
+      "name": "Plan Enterprise",
+      "code": "enterprise",
+      "description": "Solución completa para flotas grandes",
+      "pricing": {
+        "monthly": "999.00",
+        "yearly": "9990.00",
+        "yearly_savings_percent": 17
+      },
+      "billing_cycles": ["MONTHLY", "YEARLY"],
+      "capabilities": {
+        "max_devices": 200,
+        "max_geofences": 500,
+        "max_users": 50,
+        "history_days": 365,
+        "ai_features": true,
+        "analytics_tools": true,
+        "api_access": true,
+        "priority_support": true
+      },
+      "highlighted_features": [
+        "Hasta 200 dispositivos",
+        "500 geocercas",
+        "365 días de historial",
+        "Todas las funciones de IA",
+        "Acceso a API",
+        "Soporte prioritario"
+      ],
+      "is_popular": false,
+      "created_at": "2024-01-10T08:00:00Z"
+    }
+  ],
+  "total": 3
+}
 ```
+
+---
+
+### 2. Obtener Plan por ID o Código
+
+**GET** `/api/v1/plans/{plan_identifier}`
+
+Obtiene información detallada de un plan específico por su UUID o código.
+
+#### Headers
+
+**No requiere autenticación** (endpoint público)
+
+#### Path Parameters
+
+| Parámetro | Descripción |
+|-----------|-------------|
+| `plan_identifier` | UUID del plan o código (ej: `pro`, `enterprise`) |
+
+#### Ejemplos de Uso
+
+```bash
+# Por UUID
+GET /api/v1/plans/334e4567-e89b-12d3-a456-426614174000
+
+# Por código
+GET /api/v1/plans/pro
+```
+
+#### Response 200 OK
+
+```json
+{
+  "id": "334e4567-e89b-12d3-a456-426614174000",
+  "name": "Plan Profesional",
+  "code": "pro",
+  "description": "Para flotas medianas con necesidades avanzadas",
+  "pricing": {
+    "monthly": "599.00",
+    "yearly": "5990.00",
+    "yearly_savings_percent": 17
+  },
+  "billing_cycles": ["MONTHLY", "YEARLY"],
+  "capabilities": {
+    "max_devices": 50,
+    "max_geofences": 100,
+    "max_users": 10,
+    "history_days": 90,
+    "ai_features": true,
+    "analytics_tools": true
+  },
+  "highlighted_features": [
+    "Hasta 50 dispositivos",
+    "100 geocercas",
+    "90 días de historial",
+    "Funciones de IA incluidas"
+  ],
+  "is_popular": true,
+  "created_at": "2024-01-10T08:00:00Z",
+  "updated_at": "2024-01-10T08:00:00Z"
+}
+```
+
+#### Errores Posibles
+
+| Código | Detalle |
+|--------|---------|
+| 404 | `"Plan 'xyz' no encontrado"` |
 
 ---
 
@@ -63,77 +245,165 @@ Lista todos los planes de servicio disponibles.
 
 ### Campos Principales
 
-- **id**: UUID único del plan
-- **name**: Nombre comercial del plan
-- **description**: Descripción de características
-- **monthly_price**: Precio mensual (decimal)
-- **yearly_price**: Precio anual (decimal)
-- **features**: JSON con características específicas
-- **active**: Indica si el plan está disponible para nuevas suscripciones
-- **created_at**: Fecha de creación
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | UUID | Identificador único del plan |
+| `name` | string | Nombre comercial del plan |
+| `description` | string | Descripción de características |
+| `price_monthly` | decimal | Precio mensual |
+| `price_yearly` | decimal | Precio anual |
+| `capabilities` | object | Capabilities del plan |
+| `features_description` | array | Lista legible de características |
+| `active` | boolean | Si está disponible para nuevas suscripciones |
 
-### Campo `features` (JSON)
-
-Características típicas incluidas:
+### Campo `capabilities` (Estructura)
 
 ```json
 {
-  "update_interval": 30, // Intervalo de actualización en segundos
-  "historical_data": 90, // Días de historial disponible
-  "geofences": 20, // Número máximo de geocercas
-  "alerts": true, // Alertas por email/SMS
-  "priority_support": true, // Soporte prioritario
-  "custom_reports": true, // Reportes personalizados
-  "api_access": false // Acceso a API para integración
+  "max_devices": 50,        // Límite numérico
+  "max_geofences": 20,      // Límite numérico
+  "max_users": 10,          // Límite numérico
+  "max_units": 50,          // Límite numérico
+  "history_days": 90,       // Límite numérico
+  "ai_features": false,     // Feature booleano
+  "analytics_tools": true,  // Feature booleano
+  "custom_reports": false,  // Feature booleano
+  "api_access": false,      // Feature booleano
+  "priority_support": false,// Feature booleano
+  "real_time_alerts": true, // Feature booleano
+  "export_data": true       // Feature booleano
 }
 ```
 
 ---
 
-## Tipos de Planes Comunes
+## Comparación de Planes
 
-### Plan Básico
-
-- **Precio**: ~$199 MXN/mes
-- **Actualización**: 60 segundos
-- **Historial**: 30 días
-- **Ideal para**: Flotas pequeñas, uso básico
-
-### Plan Estándar
-
-- **Precio**: ~$249 MXN/mes
-- **Actualización**: 45 segundos
-- **Historial**: 60 días
-- **Ideal para**: Flotas medianas, uso regular
-
-### Plan Premium
-
-- **Precio**: ~$299 MXN/mes
-- **Actualización**: 30 segundos
-- **Historial**: 90 días
-- **Ideal para**: Flotas grandes, uso intensivo
-
-### Plan Empresarial
-
-- **Precio**: Personalizado
-- **Actualización**: 10-15 segundos
-- **Historial**: Ilimitado
-- **Ideal para**: Empresas grandes con requerimientos especiales
+| Capability | Básico | Pro | Enterprise |
+|------------|:------:|:---:|:----------:|
+| **Precio Mensual** | $199 | $349 | $599 |
+| **Precio Anual** | $1,990 | $3,490 | $5,990 |
+| **max_devices** | 10 | 50 | 200 |
+| **max_geofences** | 5 | 20 | 100 |
+| **max_users** | 3 | 10 | 50 |
+| **history_days** | 30 | 90 | 365 |
+| **ai_features** | ❌ | ❌ | ✅ |
+| **analytics_tools** | ❌ | ✅ | ✅ |
+| **custom_reports** | ❌ | ❌ | ✅ |
+| **api_access** | ❌ | ❌ | ✅ |
+| **priority_support** | ❌ | ❌ | ✅ |
+| **real_time_alerts** | ✅ | ✅ | ✅ |
+| **export_data** | ❌ | ✅ | ✅ |
 
 ---
 
-## Precios Anuales
+## Validación de Capabilities
 
-Los planes anuales típicamente ofrecen descuento:
+### Antes de Operaciones con Límites
+
+El sistema debe validar capabilities antes de permitir operaciones que puedan exceder límites:
 
 ```
-Descuento = ((monthly_price * 12) - yearly_price) / (monthly_price * 12) * 100
+Ejemplo: Usuario intenta crear geocerca #21
 
-Ejemplo:
-Monthly: $199 * 12 = $2,388
-Yearly:  $1,990
+1. GET effective_capabilities(org_id)
+   → max_geofences = 20
+
+2. COUNT geocercas actuales
+   → current = 20
+
+3. VALIDAR: 20 >= 20
+   → RECHAZAR operación
+
+4. RESPUESTA:
+   HTTP 403 Forbidden
+   {
+     "detail": "Has alcanzado el límite de geocercas de tu plan",
+     "capability": "max_geofences",
+     "current": 20,
+     "limit": 20,
+     "upgrade_available": true
+   }
+```
+
+### Endpoints que Deben Validar Capabilities
+
+| Endpoint | Capability a Validar |
+|----------|---------------------|
+| `POST /api/v1/devices/` | `max_devices` |
+| `POST /api/v1/units/` | `max_units` |
+| `POST /api/v1/users/invite` | `max_users` |
+| `POST /api/v1/geofences/` | `max_geofences` |
+| `GET /api/v1/locations/history` | `history_days` |
+| `GET /api/v1/analytics/...` | `analytics_tools` |
+| `POST /api/v1/reports/custom` | `custom_reports` |
+| `GET /api/v1/external/...` | `api_access` |
+
+---
+
+## Capability Overrides
+
+### ¿Qué son los Overrides?
+
+Los overrides son ajustes específicos para una organización que sobreescriben los valores del plan.
+
+**Casos de uso:**
+- Cliente negoció más dispositivos
+- Promoción temporal
+- Prueba de features premium
+- Acuerdo enterprise personalizado
+
+### Estructura de Override
+
+```json
+{
+  "organization_id": "org-uuid",
+  "capability": "max_geofences",
+  "value": 100,
+  "reason": "Upgrade especial por contrato enterprise",
+  "applied_at": "2024-06-01T00:00:00Z",
+  "expires_at": null,
+  "applied_by": "admin@gac-web.internal"
+}
+```
+
+### Ejemplo de Resolución con Override
+
+```
+Organización: Transportes XYZ
+Plan Activo: Pro (max_geofences = 20)
+Override: max_geofences = 50
+
+GET effective_capabilities(org_id):
+{
+  "max_devices": 50,      // Del plan
+  "max_geofences": 50,    // Override ✓
+  "max_users": 10,        // Del plan
+  "history_days": 90,     // Del plan
+  ...
+}
+```
+
+---
+
+## Precios y Descuentos
+
+### Descuento Anual
+
+```
+Descuento = ((price_monthly * 12) - price_yearly) / (price_monthly * 12) * 100
+
+Ejemplo (Plan Pro):
+Monthly: $349 * 12 = $4,188
+Yearly:  $3,490
 Descuento: 16.7%
 ```
+
+### Estrategia de Precios
+
+- **Precio Base**: Costo del hardware + margen
+- **Precio Servicio**: Costo operativo + margen + utilidad
+- **Descuento Anual**: 15-20% para incentivar compromiso largo plazo
 
 ---
 
@@ -141,8 +411,10 @@ Descuento: 16.7%
 
 ### Campo `active`
 
-- **`true`**: Plan disponible para nuevas suscripciones
-- **`false`**: Plan descontinuado (servicios existentes continúan)
+| Valor | Descripción |
+|-------|-------------|
+| `true` | Plan disponible para nuevas suscripciones |
+| `false` | Plan descontinuado (servicios existentes continúan) |
 
 ### Planes Descontinuados
 
@@ -151,9 +423,11 @@ Plan descontinuado → active = false
                    ↓
   No aparece en listado público
                    ↓
-  Servicios existentes continúan funcionando
+  Suscripciones existentes continúan funcionando
                    ↓
-  No se pueden crear nuevos servicios con este plan
+  No se pueden crear nuevas suscripciones con este plan
+                   ↓
+  Se puede ofrecer migración a plan sucesor
 ```
 
 ---
@@ -166,87 +440,18 @@ Al activar un servicio, se usa el plan seleccionado:
 POST /api/v1/services/activate
 {
   "device_id": "...",
-  "plan_id": "223e4567-e89b-12d3-a456-426614174000",  # Plan Básico
+  "plan_id": "334e4567-e89b-12d3-a456-426614174000",
   "subscription_type": "MONTHLY"
 }
 ```
 
 El sistema:
-
 1. Busca el plan por `plan_id`
-2. Toma el precio según `subscription_type` (MONTHLY o YEARLY)
-3. Crea el pago con ese monto
-4. Activa el servicio con las características del plan
-
----
-
-## Comparación de Planes
-
-| Característica | Básico   | Premium     | Empresarial    |
-| -------------- | -------- | ----------- | -------------- |
-| Precio Mensual | $199     | $299        | Personalizado  |
-| Actualización  | 60s      | 30s         | 10s            |
-| Historial      | 30 días  | 90 días     | Ilimitado      |
-| Geocercas      | 5        | 20          | Ilimitadas     |
-| Soporte        | Estándar | Prioritario | Dedicado       |
-| Reportes       | Básicos  | Avanzados   | Personalizados |
-
----
-
-## Gestión de Planes (Admin)
-
-**Nota**: Actualmente no hay endpoints para crear/actualizar planes. Se gestionan directamente en la base de datos.
-
-### Crear Plan (SQL)
-
-```sql
-INSERT INTO plans (id, name, description, monthly_price, yearly_price, features, active)
-VALUES (
-  gen_random_uuid(),
-  'Plan Básico',
-  'Rastreo GPS básico',
-  199.00,
-  1990.00,
-  '{"update_interval": 60, "historical_data": 30, "geofences": 5, "alerts": true}',
-  true
-);
-```
-
-### Descontinuar Plan (SQL)
-
-```sql
-UPDATE plans
-SET active = false
-WHERE id = '...';
-```
-
----
-
-## Consideraciones de Negocio
-
-### Estrategia de Precios
-
-- **Precio Base**: Costo del hardware + margen
-- **Precio Servicio**: Costo operativo + margen + utilidad
-- **Descuento Anual**: 10-20% para incentivar compromiso largo plazo
-
-### Upselling
-
-- Ofrecer plan superior cuando se alcancen límites
-- Notificar características disponibles en planes superiores
-- Trial de características premium por tiempo limitado
-
-### Características como Límites
-
-```python
-# Ejemplo: Validar límite de geocercas
-plan = get_plan(service.plan_id)
-max_geofences = plan.features.get('geofences', 0)
-current_geofences = count_geofences(client_id)
-
-if current_geofences >= max_geofences:
-    raise Exception("Has alcanzado el límite de geocercas de tu plan")
-```
+2. Verifica que `plan.active = true`
+3. Toma el precio según `subscription_type`
+4. Crea el pago con ese monto
+5. Crea la suscripción con las capabilities del plan
+6. Activa el servicio
 
 ---
 
@@ -255,69 +460,62 @@ if current_geofences >= max_geofences:
 ### Upgrade (subir de plan)
 
 ```
-Cliente → Cancela servicio actual
-        ↓
-  Activa nuevo servicio con plan superior
-        ↓
-  Se cobra diferencia prorrateada (opcional)
+Organización → Selecciona plan superior
+             ↓
+  Sistema calcula diferencia prorrateada
+             ↓
+  Crea nueva suscripción con plan superior
+             ↓
+  Suscripción anterior marcada como UPGRADED
+             ↓
+  Nuevas capabilities efectivas inmediatamente
 ```
 
 ### Downgrade (bajar de plan)
 
 ```
-Cliente → Cancela servicio actual
-        ↓
-  Activa nuevo servicio con plan inferior
-        ↓
-  Sin reembolso por período restante
-        ↓
-  Nuevo precio aplica en siguiente ciclo
+Organización → Selecciona plan inferior
+             ↓
+  Sistema valida que uso actual no exceda nuevos límites
+             ↓
+  Si excede → Advertencia con recursos a eliminar
+             ↓
+  Crea nueva suscripción con plan inferior
+             ↓
+  Suscripción anterior se mantiene hasta expiración
+             ↓
+  Nuevas capabilities en siguiente ciclo de facturación
 ```
 
-**Nota**: La lógica de migración con prorrateo debe implementarse según reglas de negocio.
-
----
-
-## Ejemplo de Flujo Completo
-
-### 1. Cliente Consulta Planes Disponibles
-
-```bash
-curl http://localhost:8000/api/v1/plans/
-```
-
-### 2. Cliente Selecciona Plan Premium
+### Validación Pre-Downgrade
 
 ```json
 {
-  "id": "334e4567-e89b-12d3-a456-426614174000",
-  "name": "Plan Premium",
-  "monthly_price": 299.0,
-  "yearly_price": 2990.0
-}
-```
-
-### 3. Cliente Activa Servicio Mensual
-
-```bash
-curl -X POST http://localhost:8000/api/v1/services/activate \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "device_id": "...",
-    "plan_id": "334e4567-e89b-12d3-a456-426614174000",
-    "subscription_type": "MONTHLY"
-  }'
-```
-
-### 4. Se Cobra $299.00 MXN Mensual
-
-```json
-{
-  "payment": {
-    "amount": 299.0,
-    "description": "Plan Premium - Suscripción Mensual"
-  }
+  "current_usage": {
+    "devices": 45,
+    "geofences": 18,
+    "users": 8
+  },
+  "new_plan_limits": {
+    "max_devices": 10,
+    "max_geofences": 5,
+    "max_users": 3
+  },
+  "conflicts": [
+    {
+      "capability": "max_devices",
+      "current": 45,
+      "new_limit": 10,
+      "action_required": "Eliminar 35 dispositivos"
+    },
+    {
+      "capability": "max_geofences",
+      "current": 18,
+      "new_limit": 5,
+      "action_required": "Eliminar 13 geocercas"
+    }
+  ],
+  "can_downgrade": false
 }
 ```
 
@@ -327,20 +525,62 @@ curl -X POST http://localhost:8000/api/v1/services/activate \
 
 ### Para Desarrolladores
 
-- Siempre validar que `plan.active = true` antes de crear servicio
-- Cachear lista de planes (cambian raramente)
-- Validar límites de características según plan del cliente
+- Siempre validar `plan.active = true` antes de crear suscripción
+- Usar función centralizada para resolver capabilities efectivas
+- Cachear capabilities por sesión (no por request)
+- Validar límites antes de operaciones de creación
 
 ### Para Administradores
 
 - No eliminar planes, marcarlos como `active = false`
-- Mantener precios competitivos con el mercado
-- Actualizar características según feedback de clientes
-- Documentar cambios en características de planes
+- Documentar razones de capability overrides
+- Revisar overrides periódicamente
+- Ofrecer migración a planes sucesores
 
-### Para Cliente Final
+### Para Frontend
 
 - Mostrar comparación clara entre planes
-- Destacar plan recomendado según uso
-- Permitir cambio de plan fácilmente
-- Ofrecer trial o demo de características premium
+- Destacar plan recomendado según uso actual
+- Mostrar uso actual vs límites del plan
+- Advertir cuando se acercan a límites
+- Ofrecer upgrade cuando se alcanzan límites
+
+---
+
+## Ejemplo Completo
+
+### 1. Consultar Planes
+
+```bash
+GET /api/v1/plans/
+```
+
+### 2. Seleccionar Plan y Activar
+
+```bash
+POST /api/v1/services/activate
+{
+  "device_id": "...",
+  "plan_id": "334e4567-...",
+  "subscription_type": "YEARLY"
+}
+```
+
+### 3. Verificar Capabilities Efectivas
+
+```bash
+GET /api/v1/accounts/organization
+# Respuesta incluye effective_capabilities
+```
+
+### 4. Intentar Operación que Excede Límite
+
+```bash
+POST /api/v1/geofences/
+# Si excede max_geofences → HTTP 403
+```
+
+---
+
+**Última actualización**: Diciembre 2025  
+**Referencia**: [Modelo Organizacional](../guides/organizational-model.md)

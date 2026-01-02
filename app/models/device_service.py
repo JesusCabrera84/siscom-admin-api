@@ -1,4 +1,24 @@
+"""
+⚠️ MODELO LEGACY - NO USAR EN CÓDIGO NUEVO ⚠️
+
+Este modelo fue diseñado para un sistema de servicios por dispositivo.
+El modelo actual de negocio usa Subscriptions a nivel de organización.
+
+MIGRACIÓN FUTURA:
+- Los device_services activos deberán convertirse en Subscriptions
+- Este modelo será eliminado cuando se complete la migración
+- Los endpoints /services/* se mantienen por compatibilidad temporal
+
+Para código nuevo, usar:
+- app.models.subscription.Subscription
+- app.services.subscription_query
+
+NOTA: La tabla device_services puede no existir en la BD.
+Este modelo se mantiene solo por compatibilidad con endpoints legacy.
+"""
+
 import enum
+import warnings
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
@@ -11,13 +31,25 @@ if TYPE_CHECKING:
     from app.models.device import Device
     from app.models.plan import Plan
 
+# Emitir warning al importar este módulo
+warnings.warn(
+    "DeviceService es un modelo LEGACY. "
+    "Para código nuevo, usar Subscription y subscription_query.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 class SubscriptionType(str, enum.Enum):
+    """LEGACY: Tipos de suscripción por dispositivo."""
+
     MONTHLY = "MONTHLY"
     YEARLY = "YEARLY"
 
 
 class DeviceServiceStatus(str, enum.Enum):
+    """LEGACY: Estados de servicio por dispositivo."""
+
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
     CANCELLED = "CANCELLED"
@@ -25,6 +57,17 @@ class DeviceServiceStatus(str, enum.Enum):
 
 
 class DeviceService(SQLModel, table=True):
+    """
+    ⚠️ LEGACY MODEL ⚠️
+
+    Servicio de rastreo por dispositivo.
+
+    DEPRECATED: El modelo actual usa Subscriptions a nivel de Organization.
+    Este modelo se mantiene solo por compatibilidad con endpoints /services/*.
+
+    NO USAR EN CÓDIGO NUEVO.
+    """
+
     __tablename__ = "device_services"
     __table_args__ = (
         Index("idx_device_services_device", "device_id"),
@@ -39,7 +82,7 @@ class DeviceService(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    # device_id ahora referencia a devices.device_id (TEXT) en lugar de devices.id (UUID)
+    # device_id referencia a devices.device_id (TEXT)
     device_id: str = Field(
         sa_column=Column(
             Text,
@@ -47,10 +90,11 @@ class DeviceService(SQLModel, table=True):
             nullable=False,
         ),
     )
+    # LEGACY: Mantiene client_id por compatibilidad con esquema existente
     client_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
-            ForeignKey("clients.id"),
+            ForeignKey("organizations.id"),  # Apunta a organizations ahora
             nullable=False,
         ),
     )

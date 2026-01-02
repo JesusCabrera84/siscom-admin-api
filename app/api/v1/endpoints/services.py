@@ -1,10 +1,26 @@
+"""
+⚠️ ENDPOINTS LEGACY - NO USAR EN CÓDIGO NUEVO ⚠️
+
+Estos endpoints dependen del modelo DeviceService que es LEGACY.
+El modelo actual de negocio usa Subscriptions a nivel de organización.
+
+MIGRACIÓN FUTURA:
+- Los device_services activos deberán convertirse en Subscriptions
+- Estos endpoints serán eliminados cuando se complete la migración
+
+Para código nuevo, usar:
+- /subscriptions endpoints
+- app.services.subscription_query
+"""
+
+import warnings
 from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_client_id
+from app.api.deps import get_current_organization_id
 from app.db.session import get_db
 from app.models.device import Device
 from app.models.device_service import DeviceService, DeviceServiceStatus
@@ -19,17 +35,24 @@ from app.services.device_activation import activate_device_service
 
 router = APIRouter()
 
+# Emitir warning al importar este módulo
+warnings.warn(
+    "Los endpoints /services son LEGACY. " "Para código nuevo, usar /subscriptions.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 @router.post(
     "/activate", response_model=DeviceServiceOut, status_code=status.HTTP_201_CREATED
 )
 def activate_service(
     service_in: DeviceServiceCreate,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
-    Activa un servicio para un dispositivo.
+    ⚠️ LEGACY ⚠️ - Activa un servicio para un dispositivo.
 
     - Valida ownership del dispositivo
     - Verifica que no exista otro servicio ACTIVE
@@ -38,7 +61,7 @@ def activate_service(
     """
     device_service = activate_device_service(
         db=db,
-        client_id=client_id,
+        client_id=organization_id,  # Mantiene nombre de parámetro por compatibilidad con servicio
         device_id=service_in.device_id,
         plan_id=service_in.plan_id,
         subscription_type=service_in.subscription_type.value,
@@ -51,19 +74,20 @@ def activate_service(
 @router.post("/confirm-payment", response_model=dict)
 def confirm_service_payment(
     payment_confirm: DeviceServiceConfirmPayment,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
-    Confirma el pago de un servicio de dispositivo.
+    ⚠️ LEGACY ⚠️ - Confirma el pago de un servicio de dispositivo.
     Actualiza el payment a SUCCESS y activa el servicio si estaba pendiente.
     """
-    # Verificar que el servicio pertenece al cliente
+    # Verificar que el servicio pertenece a la organización
     device_service = (
         db.query(DeviceService)
         .filter(
             DeviceService.id == payment_confirm.device_service_id,
-            DeviceService.client_id == client_id,
+            DeviceService.client_id
+            == organization_id,  # Mantiene client_id en DeviceService por ser LEGACY
         )
         .first()
     )
@@ -71,7 +95,7 @@ def confirm_service_payment(
     if not device_service:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Servicio no encontrado o no pertenece al cliente",
+            detail="Servicio no encontrado o no pertenece a la organización",
         )
 
     payment = confirm_payment(
@@ -89,11 +113,11 @@ def confirm_service_payment(
 
 @router.get("/active", response_model=List[dict])
 def list_active_services(
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
-    Lista todos los servicios activos del cliente autenticado.
+    ⚠️ LEGACY ⚠️ - Lista todos los servicios activos de la organización.
     Incluye información del dispositivo y plan asociados.
     """
     services = (
@@ -104,10 +128,11 @@ def list_active_services(
             Device.model,
             Plan.name.label("plan_name"),
         )
-        .join(Device, DeviceService.device_id == Device.id)
+        .join(Device, DeviceService.device_id == Device.device_id)
         .join(Plan, DeviceService.plan_id == Plan.id)
         .filter(
-            DeviceService.client_id == client_id,
+            DeviceService.client_id
+            == organization_id,  # Mantiene client_id en DeviceService por ser LEGACY
             DeviceService.status == DeviceServiceStatus.ACTIVE.value,
         )
         .all()
@@ -141,17 +166,17 @@ def list_active_services(
 @router.patch("/{service_id}/cancel", response_model=DeviceServiceOut)
 def cancel_service(
     service_id: UUID,
-    client_id: UUID = Depends(get_current_client_id),
+    organization_id: UUID = Depends(get_current_organization_id),
     db: Session = Depends(get_db),
 ):
     """
-    Cancela un servicio de dispositivo.
+    ⚠️ LEGACY ⚠️ - Cancela un servicio de dispositivo.
     Marca el servicio como CANCELLED y actualiza device.active si no hay otros activos.
     """
     device_service = cancel_device_service(
         db=db,
         device_service_id=service_id,
-        client_id=client_id,
+        client_id=organization_id,  # Mantiene nombre de parámetro por compatibilidad con servicio
     )
 
     return device_service

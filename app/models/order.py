@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, text
@@ -9,8 +9,8 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.client import Client
     from app.models.order_item import OrderItem
+    from app.models.organization import Organization
     from app.models.payment import Payment
 
 
@@ -25,7 +25,7 @@ class OrderStatus(str, enum.Enum):
 class Order(SQLModel, table=True):
     __tablename__ = "orders"
     __table_args__ = (
-        Index("idx_orders_client", "client_id"),
+        Index("idx_orders_organization", "organization_id"),
         Index("idx_orders_status", "status"),
     )
 
@@ -36,10 +36,10 @@ class Order(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    client_id: UUID = Field(
+    organization_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
-            ForeignKey("clients.id"),
+            ForeignKey("organizations.id"),
             nullable=False,
         ),
     )
@@ -62,6 +62,22 @@ class Order(SQLModel, table=True):
     )
 
     # Relationships
-    client: "Client" = Relationship(back_populates="orders")
+    organization: "Organization" = Relationship(back_populates="orders")
     payment: Optional["Payment"] = Relationship(back_populates="orders")
-    order_items: list["OrderItem"] = Relationship(back_populates="order")
+    order_items: List["OrderItem"] = Relationship(back_populates="order")
+
+    # Alias para compatibilidad (DEPRECATED)
+    @property
+    def client_id(self) -> UUID:
+        """DEPRECATED: Usar organization_id"""
+        return self.organization_id
+
+    @client_id.setter
+    def client_id(self, value: UUID):
+        """DEPRECATED: Usar organization_id"""
+        self.organization_id = value
+
+    @property
+    def client(self) -> "Organization":
+        """DEPRECATED: Usar organization"""
+        return self.organization

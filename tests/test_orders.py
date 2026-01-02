@@ -5,7 +5,7 @@ Tests de órdenes.
 from fastapi import status
 
 
-def test_create_order(authenticated_client, test_client_data):
+def test_create_order(authenticated_client, test_organization_data):
     """
     Test que crea una orden con order_items.
     """
@@ -36,9 +36,9 @@ def test_create_order(authenticated_client, test_client_data):
     assert len(data["order_items"]) == 2
 
 
-def test_list_orders(authenticated_client, test_client_data):
+def test_list_orders(authenticated_client, test_organization_data):
     """
-    Test que lista órdenes del cliente.
+    Test que lista órdenes de la organización.
     """
     # Crear una orden primero
     order_data = {
@@ -62,7 +62,7 @@ def test_list_orders(authenticated_client, test_client_data):
     assert len(data) >= 1
 
 
-def test_get_order_detail(authenticated_client, test_client_data):
+def test_get_order_detail(authenticated_client, test_organization_data):
     """
     Test que obtiene el detalle de una orden específica.
     """

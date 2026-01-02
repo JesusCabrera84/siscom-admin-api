@@ -2,15 +2,184 @@
 
 ## Descripción
 
-Endpoints para gestionar autenticación de usuarios con AWS Cognito, incluyendo login, renovación de tokens, recuperación de contraseña, cambio de contraseña y verificación de email.
+Endpoints para gestionar autenticación en SISCOM Admin API. El sistema soporta **autenticación dual**:
 
-También soporta generación de tokens PASETO para autenticación de servicios internos.
+| Tipo | Tecnología | Caso de Uso |
+|------|------------|-------------|
+| **Usuarios** | AWS Cognito (JWT) | Aplicaciones cliente, usuarios finales |
+| **Servicios** | PASETO | API interna, panel administrativo (gac-web) |
+
+> **Referencia**: Ver [Modelo Organizacional](../guides/organizational-model.md) para entender roles y permisos.
+
+### Sistema de Roles
+
+Los usuarios tienen roles dentro de su organización que determinan sus permisos:
+
+| Rol | Descripción |
+|-----|-------------|
+| `owner` | Propietario - permisos totales |
+| `admin` | Administrador - gestión de usuarios y config |
+| `billing` | Facturación - pagos y suscripciones |
+| `member` | Miembro - acceso operativo |
 
 ---
 
 ## Endpoints
 
-### 1. Login
+### 1. Registro (Onboarding)
+
+**POST** `/api/v1/auth/register`
+
+Registra una nueva cuenta creando Account + Organization + User en una sola operación.
+
+#### Request Body
+
+**Campos obligatorios:**
+
+```json
+{
+  "account_name": "Mi Empresa S.A.",
+  "email": "admin@miempresa.com",
+  "password": "SecureP@ss123!"
+}
+```
+
+**Campos opcionales:**
+
+```json
+{
+  "account_name": "Mi Empresa S.A.",
+  "email": "admin@miempresa.com",
+  "password": "SecureP@ss123!",
+  "name": "Juan Pérez López",
+  "organization_name": "Flota Norte",
+  "billing_email": "facturacion@miempresa.com",
+  "country": "MX",
+  "timezone": "America/Mexico_City"
+}
+```
+
+| Campo | Tipo | Obligatorio | Descripción |
+|-------|------|-------------|-------------|
+| `account_name` | string | ✅ | Nombre de la cuenta (puede repetirse) |
+| `email` | string | ✅ | Email del usuario master (debe ser único) |
+| `password` | string | ✅ | Contraseña (min 8 caracteres) |
+| `name` | string | ❌ | Nombre completo del usuario (default: account_name) |
+| `organization_name` | string | ❌ | Nombre de la organización (default: "ORG " + account_name) |
+| `billing_email` | string | ❌ | Email de facturación (default: email) |
+| `country` | string | ❌ | Código ISO 3166-1 alpha-2 (ej: "MX") |
+| `timezone` | string | ❌ | Zona horaria IANA (ej: "America/Mexico_City") |
+
+#### Response 201 Created
+
+```json
+{
+  "account_id": "123e4567-e89b-12d3-a456-426614174000",
+  "organization_id": "223e4567-e89b-12d3-a456-426614174001",
+  "user_id": "323e4567-e89b-12d3-a456-426614174002"
+}
+```
+
+#### Errores Posibles
+
+| Código | Detalle |
+|--------|---------|
+| 400 | `"Ya existe un usuario con este correo electrónico."` |
+| 409 | `"El usuario con email ... ya existe."` (en Cognito) |
+| 422 | Error de validación (contraseña débil, email inválido) |
+| 500 | `"No se pudo completar el registro..."` |
+
+#### Flujo Interno
+
+```
+POST /api/v1/auth/register
+        │
+        ▼
+┌───────────────────────────────────────┐
+│ 1. Validar email único                │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 2. Crear Account (raíz comercial)     │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 3. Crear Organization (raíz operativa)│
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 4. Crear User master                  │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 5. Crear OrganizationUser (OWNER)     │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 6. Registrar en Cognito               │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────┐
+│ 7. Enviar email de verificación       │
+└───────────────────┬───────────────────┘
+                    │
+                    ▼
+           Response: IDs creados
+```
+
+---
+
+### 2. Obtener Mi Cuenta
+
+**GET** `/api/v1/auth/me`
+
+Obtiene el Account del usuario autenticado junto con su rol en la organización actual.
+
+#### Headers
+
+```
+Authorization: Bearer <access_token>
+```
+
+#### Response 200 OK
+
+```json
+{
+  "account": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "account_name": "Mi Empresa S.A.",
+    "status": "ACTIVE",
+    "billing_email": "facturacion@miempresa.com",
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": "2024-01-20T15:45:00Z"
+  },
+  "role": "owner",
+  "organization_id": "223e4567-e89b-12d3-a456-426614174001"
+}
+```
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `account` | object | Información del Account |
+| `role` | string | Rol del usuario: `owner`, `admin`, `billing`, `member` |
+| `organization_id` | UUID | ID de la organización actual del usuario |
+
+#### Errores Posibles
+
+| Código | Detalle |
+|--------|---------|
+| 401 | Token no proporcionado o inválido |
+| 404 | `"Organización no encontrada"` / `"Account no encontrado"` |
+
+---
+
+### 3. Login
 
 **POST** `/api/v1/auth/login`
 
@@ -48,7 +217,7 @@ Autentica un usuario y devuelve tokens de acceso.
 
 ---
 
-### 2. Recuperación de Contraseña - Solicitar Código
+### 4. Recuperación de Contraseña - Solicitar Código
 
 **POST** `/api/v1/auth/forgot-password`
 
@@ -79,7 +248,7 @@ Inicia el proceso de recuperación de contraseña. El sistema genera un código 
 
 ---
 
-### 3. Recuperación de Contraseña - Restablecer
+### 5. Recuperación de Contraseña - Restablecer
 
 **POST** `/api/v1/auth/reset-password`
 
@@ -112,7 +281,7 @@ Restablece la contraseña usando el código de 6 dígitos enviado por email.
 
 ---
 
-### 4. Cambiar Contraseña
+### 6. Cambiar Contraseña
 
 **PATCH** `/api/v1/auth/password`
 
@@ -145,12 +314,13 @@ Authorization: Bearer <access_token>
 #### Errores Comunes
 
 - **401 Unauthorized**: Token inválido o expirado
+- **403 Forbidden**: Email no verificado
 - **400 Bad Request**: Contraseña actual incorrecta
 - **400 Bad Request**: Nueva contraseña no cumple requisitos
 
 ---
 
-### 5. Cerrar Sesión (Logout)
+### 7. Cerrar Sesión (Logout)
 
 **POST** `/api/v1/auth/logout`
 
@@ -186,7 +356,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 6. Renovar Tokens (Refresh)
+### 8. Renovar Tokens (Refresh)
 
 **POST** `/api/v1/auth/refresh`
 
@@ -227,7 +397,7 @@ Renueva el access token y el id token usando un refresh token válido.
 
 ---
 
-### 7. Generar Token Interno (PASETO)
+### 9. Generar Token Interno (PASETO)
 
 **POST** `/api/v1/auth/internal`
 
@@ -348,11 +518,11 @@ Los siguientes endpoints aceptan autenticación dual (Cognito o PASETO):
 | `GET /api/v1/commands/device/{id}`              | gac                | NEXUS_ADMIN   |
 | `POST /api/v1/devices`                          | gac                | NEXUS_ADMIN   |
 | `PATCH /api/v1/devices/{device_id}`             | gac                | NEXUS_ADMIN   |
-| `GET /api/v1/internal/clients`                  | gac                | NEXUS_ADMIN   |
-| `GET /api/v1/internal/clients/stats`            | gac                | NEXUS_ADMIN   |
-| `GET /api/v1/internal/clients/{client_id}`      | gac                | NEXUS_ADMIN   |
-| `GET /api/v1/internal/clients/{client_id}/users`| gac                | NEXUS_ADMIN   |
-| `PATCH /api/v1/internal/clients/{client_id}/status` | gac            | NEXUS_ADMIN   |
+| `GET /api/v1/internal/organizations`                  | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/organizations/stats`            | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/organizations/{org_id}`         | gac                | NEXUS_ADMIN   |
+| `GET /api/v1/internal/organizations/{org_id}/users`   | gac                | NEXUS_ADMIN   |
+| `PATCH /api/v1/internal/organizations/{org_id}/status`| gac                | NEXUS_ADMIN   |
 
 #### Notas de Seguridad
 
@@ -366,7 +536,7 @@ Los siguientes endpoints aceptan autenticación dual (Cognito o PASETO):
 
 ---
 
-### 9. Reenviar Verificación de Email
+### 10. Reenviar Verificación de Email
 
 **POST** `/api/v1/auth/resend-verification`
 
@@ -407,7 +577,7 @@ Reenvía el correo de verificación de email a un usuario no verificado. Este en
 
 ---
 
-### 10. Verificar Email
+### 11. Verificar Email
 
 **POST** `/api/v1/auth/verify-email`
 
@@ -539,7 +709,7 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 
 ### Para Usuarios Master (Creación de Cliente)
 
-1. Usuario se registra con `POST /api/v1/clients/` (nombre, email, password)
+1. Usuario se registra con `POST /api/v1/auth/register` (nombre, email, password)
 2. Sistema crea:
    - Cliente en estado `PENDING`
    - Usuario master con `email_verified=False`
@@ -598,9 +768,20 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 
 | Tipo | Endpoints |
 |------|-----------|
-| **Públicos** (sin autenticación) | login, forgot-password, reset-password, resend-verification, verify-email, refresh, internal |
+| **Públicos** (sin autenticación) | login, forgot-password, reset-password, resend-verification, verify-email, refresh, internal, accept-invitation |
 | **Protegidos** (requieren Cognito) | password (cambiar contraseña), logout |
-| **Duales** (Cognito o PASETO) | commands, devices (crear/actualizar) |
+| **Duales** (Cognito o PASETO) | commands, devices (crear/actualizar), internal/organizations |
+
+### Permisos por Rol en Endpoints Protegidos
+
+| Endpoint | owner | admin | billing | member |
+|----------|:-----:|:-----:|:-------:|:------:|
+| `GET /users/` | ✅ | ✅ | ❌ | ❌ |
+| `POST /users/invite` | ✅ | ✅ | ❌ | ❌ |
+| `GET /payments/` | ✅ | ❌ | ✅ | ❌ |
+| `GET /subscriptions/` | ✅ | ✅ | ✅ | ❌ |
+| `GET /devices/` (todos) | ✅ | ✅ | ❌ | ❌ |
+| `GET /units/` (asignadas) | ✅ | ✅ | ❌ | ✅ |
 
 ### Mejores Prácticas
 
@@ -608,3 +789,64 @@ El refresh token permite mantener al usuario autenticado sin que tenga que volve
 - El endpoint `/internal` debe protegerse a nivel de infraestructura (no exponer públicamente)
 - Los tokens PASETO deben almacenarse de forma segura en los servicios que los usen
 - Usar tiempos de expiración cortos para tokens PASETO en ambientes de producción
+- Validar el rol del usuario antes de permitir operaciones sensibles
+- Los usuarios `member` solo deben ver recursos que les han sido asignados explícitamente
+
+---
+
+## Información del Token y Organización
+
+### Contenido del Token Cognito
+
+El token JWT de Cognito contiene:
+
+```json
+{
+  "sub": "cognito-sub-uuid",
+  "email": "usuario@ejemplo.com",
+  "email_verified": true,
+  "custom:client_id": "organization-uuid"
+}
+```
+
+### Resolución de Permisos
+
+```
+Token JWT
+    ↓
+Extraer cognito_sub
+    ↓
+Buscar User por cognito_sub
+    ↓
+Obtener organization_id (client_id)
+    ↓
+Obtener rol de organization_users
+    ↓
+Validar permiso según rol
+    ↓
+Filtrar datos por organization_id
+```
+
+### Información Disponible en /users/me
+
+```json
+{
+  "id": "user-uuid",
+  "email": "usuario@ejemplo.com",
+  "full_name": "Nombre Usuario",
+  "role": "admin",
+  "is_master": true,
+  "organization_id": "org-uuid",
+  "permissions": {
+    "can_invite_users": true,
+    "can_manage_billing": false,
+    "can_view_all_devices": true,
+    "can_manage_organization": true
+  }
+}
+```
+
+---
+
+**Última actualización**: Diciembre 2025  
+**Referencia**: [Modelo Organizacional](../guides/organizational-model.md)

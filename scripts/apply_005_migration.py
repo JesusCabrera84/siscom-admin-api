@@ -2,7 +2,7 @@
 """
 Script para aplicar la migración 005: Renombrar imei a device_id
 
-Este script aplica la migración de Alembic que renombra la columna 'imei' 
+Este script aplica la migración de Alembic que renombra la columna 'imei'
 a 'device_id' en la tabla devices.
 
 Uso:

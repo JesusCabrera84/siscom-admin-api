@@ -57,7 +57,10 @@ def list_user_units(
     query = (
         db.query(UserUnit)
         .join(Unit, UserUnit.unit_id == Unit.id)
-        .filter(Unit.client_id == current_user.client_id, Unit.deleted_at.is_(None))
+        .filter(
+            Unit.organization_id == current_user.organization_id,
+            Unit.deleted_at.is_(None),
+        )
     )
 
     # Filtros opcionales
@@ -122,7 +125,10 @@ def create_user_unit(
     # Verificar que el usuario existe y pertenece al cliente
     target_user = (
         db.query(User)
-        .filter(User.id == assignment.user_id, User.client_id == current_user.client_id)
+        .filter(
+            User.id == assignment.user_id,
+            User.organization_id == current_user.organization_id,
+        )
         .first()
     )
 
@@ -144,7 +150,7 @@ def create_user_unit(
         db.query(Unit)
         .filter(
             Unit.id == assignment.unit_id,
-            Unit.client_id == current_user.client_id,
+            Unit.organization_id == current_user.organization_id,
             Unit.deleted_at.is_(None),
         )
         .first()
@@ -213,7 +219,10 @@ def delete_user_unit(
     assignment = (
         db.query(UserUnit)
         .join(Unit, UserUnit.unit_id == Unit.id)
-        .filter(UserUnit.id == assignment_id, Unit.client_id == current_user.client_id)
+        .filter(
+            UserUnit.id == assignment_id,
+            Unit.organization_id == current_user.organization_id,
+        )
         .first()
     )
 

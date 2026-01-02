@@ -1,51 +1,47 @@
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
+"""
+Schemas de compatibilidad para Clients.
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+DEPRECATED: Este módulo existe solo para compatibilidad hacia atrás.
+Usar los schemas de app.schemas.account en su lugar.
 
-from app.models.client import ClientStatus
-from app.utils.validators import validate_name, validate_password
+MIGRACIÓN:
+==========
+- OnboardingRequest -> app.schemas.account.OnboardingRequest
+- OnboardingResponse -> app.schemas.account.OnboardingResponse
+- ClientOut -> app.schemas.account.OrganizationOut
+"""
+
+from pydantic import BaseModel
+
+from app.models.organization import OrganizationStatus
+
+# Re-exportar schemas para compatibilidad
+from app.schemas.account import (
+    OnboardingRequest,
+    OnboardingResponse,
+)
+from app.schemas.organization import OrganizationOut
 
 
+# Schema legacy para compatibilidad (DEPRECATED)
 class ClientBase(BaseModel):
+    """Base para un cliente/organización. DEPRECATED: Usar OrganizationOut."""
+
     name: str
-    status: ClientStatus = ClientStatus.ACTIVE
+    status: OrganizationStatus = OrganizationStatus.ACTIVE
 
 
-class ClientOut(ClientBase):
-    id: UUID
-    active_subscription_id: Optional[UUID] = None
-    created_at: datetime
-    updated_at: datetime
+# Aliases de compatibilidad (DEPRECATED)
+ClientOut = OrganizationOut
+ClientCreate = OnboardingRequest
+OrganizationCreate = OnboardingRequest
 
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "id": "123e4567-e89b-12d3-a456-426614174000",
-                "name": "Transportes García",
-                "status": "PENDING",
-                "active_subscription_id": None,
-                "created_at": "2024-01-15T10:30:00Z",
-                "updated_at": "2024-01-15T10:30:00Z",
-            }
-        }
-
-
-class ClientCreate(BaseModel):
-    name: str = Field(..., min_length=1, description="Nombre del cliente")
-    email: EmailStr = Field(..., description="Correo electrónico del cliente")
-    password: str = Field(..., min_length=8, description="Contraseña del cliente")
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_field(cls, v: str) -> str:
-        """Valida la contraseña usando el validador reutilizable."""
-        return validate_password(v)
-
-    @field_validator("name")
-    @classmethod
-    def validate_name_field(cls, v: str) -> str:
-        """Valida el nombre usando el validador reutilizable."""
-        return validate_name(v)
+__all__ = [
+    "OnboardingRequest",
+    "OnboardingResponse",
+    "OrganizationOut",
+    "ClientBase",
+    "ClientOut",
+    "ClientCreate",
+    "OrganizationCreate",
+]

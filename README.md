@@ -1,17 +1,21 @@
 # SISCOM Admin API
 
-API administrativa para sistema de rastreo GPS/IoT con arquitectura multi-tenant.
+Plataforma **SaaS B2B multi-tenant** para gestión de flotas GPS/IoT.
 
 ## Descripción
 
-Esta API proporciona funcionalidad completa para gestionar un sistema de rastreo GPS/IoT con las siguientes características:
+SISCOM Admin API es una API REST que implementa un sistema completo de gestión de flotas con las siguientes características:
 
-- **Multi-tenant**: Cada cliente tiene sus propios datos aislados
-- **Autenticación AWS Cognito**: Validación de tokens JWT
+- **Multi-tenant**: Cada organización tiene sus datos completamente aislados
+- **Autenticación Dual**: AWS Cognito (usuarios) + PASETO (servicios internos)
+- **Roles Organizacionales**: owner, admin, billing, member
+- **Suscripciones Múltiples**: Una organización puede tener varias suscripciones
+- **Sistema de Capabilities**: Límites y features configurables por plan y organización
 - **Gestión de Dispositivos**: Registro y seguimiento de dispositivos GPS
-- **Servicios por Dispositivo**: Activación y gestión de servicios mensuales/anuales
-- **Planes Flexibles**: Catálogo de planes con diferentes características
+- **Planes Flexibles**: Catálogo de planes con capabilities específicas
 - **Órdenes y Pagos**: Gestión completa de compras y facturación
+
+> **Documentación de Arquitectura**: Ver [docs/guides/organizational-model.md](docs/guides/organizational-model.md) para entender el modelo de negocio completo.
 
 ## Tecnologías
 
@@ -22,12 +26,26 @@ Esta API proporciona funcionalidad completa para gestionar un sistema de rastreo
 - **Alembic**: Migraciones de base de datos
 - **Docker & Docker Compose**: Contenedorización
 
-## Flujo de Negocio
+## Modelo de Negocio
 
-1. **Compra de Hardware**: El cliente realiza pedidos de dispositivos físicos (`orders`, `payments`)
-2. **Instalación**: Los dispositivos se instalan en unidades/vehículos (`device_installations`, `units`)
-3. **Activación de Servicio**: Se activa el servicio mensual/anual por dispositivo (`device_services`)
-4. **Rastreo Activo**: El dispositivo comienza a enviar datos de ubicación
+### Conceptos Clave
+
+| Concepto | Descripción |
+|----------|-------------|
+| **Account** | Raíz comercial (billing, facturación) |
+| **Organización** | Raíz operativa (permisos, uso diario) |
+| **Suscripciones** | Una organización puede tener **múltiples** suscripciones |
+| **Capabilities** | Límites y features que gobiernan el acceso |
+| **Roles** | owner, admin, billing, member |
+
+### Flujo de Negocio
+
+1. **Registro**: La organización se registra y verifica su email
+2. **Compra de Hardware**: Realiza pedidos de dispositivos físicos (`orders`, `payments`)
+3. **Instalación**: Los dispositivos se instalan en unidades/vehículos (`units`)
+4. **Activación de Servicio**: Se activa el servicio según plan seleccionado (`device_services`)
+5. **Capabilities**: Los límites se validan según el plan y overrides de la organización
+6. **Rastreo Activo**: El dispositivo comienza a enviar datos de ubicación
 
 ## Requisitos
 
@@ -140,45 +158,47 @@ La API estará disponible en http://localhost:8000
 
 ## Documentación de la API
 
-### 📘 Documentación Completa para Compartir
+### 📘 Documentación Principal
 
-**[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - Guía exhaustiva de la API para desarrolladores:
-
-- 📋 Todos los endpoints explicados con ejemplos
-- 🔐 Sistema de autenticación y permisos
-- 🔄 Flujos de negocio completos
-- 🚨 Códigos de error y troubleshooting
-- 🎯 Mejores prácticas de integración
+| Documento | Descripción |
+|-----------|-------------|
+| **[Modelo Organizacional](docs/guides/organizational-model.md)** | 📌 **LECTURA OBLIGATORIA** - Modelo conceptual de negocio |
+| **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** | Guía exhaustiva de endpoints |
+| **[docs/README.md](docs/README.md)** | Índice completo de documentación |
 
 ### Documentación Interactiva
 
-Una vez que la API esté corriendo, puedes acceder a:
+Una vez que la API esté corriendo:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
-- **📚 Documentación Técnica**: [docs/README.md](docs/README.md)
 
-## Guías Rápidas
+### Guías de Arquitectura
 
-- **[Inicio Rápido](docs/guides/quickstart.md)** - Configuración y primeros pasos
+- **[Modelo Organizacional](docs/guides/organizational-model.md)** - Conceptos de negocio
+- **[Arquitectura del Sistema](docs/guides/architecture.md)** - Diseño técnico
+- **[Inicio Rápido](docs/guides/quickstart.md)** - Configuración inicial
 - **[Configuración de Cognito](docs/guides/cognito-setup.md)** - Setup de AWS Cognito
 
-## Documentación por Endpoint
+### Documentación por Endpoint
 
-- **[Autenticación](docs/api/auth.md)** - Login, recuperación de contraseña
-- **[Clientes](docs/api/clients.md)** - Registro de organizaciones
-- **[Usuarios](docs/api/users.md)** - Invitaciones y gestión
-- **[Dispositivos](docs/api/devices.md)** - Registro de GPS
-- **[Servicios](docs/api/services.md)** - Activación de suscripciones
-- **[Planes](docs/api/plans.md)** - Catálogo de planes
-- **[Órdenes](docs/api/orders.md)** - Compra de dispositivos
-- **[Pagos](docs/api/payments.md)** - Historial de pagos
+| Endpoint | Descripción |
+|----------|-------------|
+| **[Autenticación](docs/api/auth.md)** | Login, tokens (Cognito + PASETO) |
+| **[Cuentas (Accounts)](docs/api/accounts.md)** | Onboarding y gestión de cuentas |
+| **[API Interna](docs/api/internal-organizations.md)** | Endpoints administrativos (PASETO) |
+| **[Usuarios](docs/api/users.md)** | Invitaciones y roles organizacionales |
+| **[Planes](docs/api/plans.md)** | Catálogo de planes y capabilities |
+| **[Dispositivos](docs/api/devices.md)** | Registro de GPS |
+| **[Servicios](docs/api/services.md)** | Activación de suscripciones |
+| **[Órdenes](docs/api/orders.md)** | Compra de dispositivos |
+| **[Pagos](docs/api/payments.md)** | Historial de pagos |
 
 ## Ejemplo Rápido
 
 ```bash
-# 1. Crear cliente
-POST /api/v1/clients/
+# 1. Crear cuenta (onboarding)
+POST /api/v1/auth/register
 
 # 2. Login
 POST /api/v1/auth/login
@@ -219,7 +239,7 @@ siscom-admin-api/
 │   ├── README.md               # Índice de documentación
 │   ├── api/                    # Docs de endpoints
 │   │   ├── auth.md
-│   │   ├── clients.md
+│   │   ├── accounts.md
 │   │   ├── users.md
 │   │   ├── devices.md
 │   │   ├── services.md
@@ -262,6 +282,22 @@ pytest --cov=app --cov-report=html
 
 ## Notas Importantes
 
+### Modelo Organizacional
+
+- **Account = Raíz comercial, Organization = Raíz operativa**: El modelo sigue esta jerarquía
+- **Suscripciones Múltiples**: Una organización puede tener varias suscripciones simultáneamente
+- **`active_subscription_id` es DEPRECADO**: Las suscripciones activas se calculan dinámicamente
+- **Capabilities**: Los límites se resuelven: `org_override ?? plan_capability ?? default`
+
+### Roles Organizacionales
+
+| Rol | Descripción |
+|-----|-------------|
+| `owner` | Propietario con permisos totales |
+| `admin` | Gestión de usuarios y configuración |
+| `billing` | Gestión de pagos y facturación |
+| `member` | Acceso operativo según asignaciones |
+
 ### Índice Único en device_services
 
 Existe un índice único parcial que garantiza que **solo puede haber UN servicio ACTIVE por dispositivo**:
@@ -274,9 +310,15 @@ WHERE status = 'ACTIVE';
 
 ### Multi-tenancy
 
-- Todos los datos están aislados por `client_id`
-- El `client_id` se extrae del token de Cognito mediante `cognito_sub`
+- Todos los datos están aislados por `organization_id` (`client_id`)
+- El `organization_id` se extrae del token de Cognito mediante `cognito_sub`
 - Todos los endpoints validan automáticamente el ownership
+
+### Sistema de Capabilities
+
+- Los límites se validan antes de operaciones de creación
+- Si se excede un límite → HTTP 403 con detalle del límite
+- Los overrides por organización tienen prioridad sobre el plan
 
 ### Expiración de Servicios
 
@@ -284,12 +326,6 @@ WHERE status = 'ACTIVE';
 - **YEARLY**: 365 días de duración
 - El campo `expires_at` se calcula automáticamente al activar
 - El campo `auto_renew` indica si se renovará automáticamente
-
-### Device Active Status
-
-- `device.active` se actualiza automáticamente:
-  - `True` cuando se activa un servicio
-  - `False` cuando se cancela el último servicio activo
 
 ## Migraciones de Base de Datos
 

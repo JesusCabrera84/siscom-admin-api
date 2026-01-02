@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Text, text
@@ -8,8 +8,8 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from app.models.client import Client
     from app.models.device_service import DeviceService
+    from app.models.organization import Organization
     from app.models.sim_card import SimCard
     from app.models.unit_device import UnitDevice
     from app.models.user import User
@@ -32,7 +32,7 @@ class Device(SQLModel, table=True):
     __tablename__ = "devices"
     __table_args__ = (
         Index("idx_devices_status", "status"),
-        Index("idx_devices_client_id", "client_id"),
+        Index("idx_devices_organization_id", "organization_id"),
         Index("idx_devices_brand_model", "brand", "model"),
         CheckConstraint(
             "status IN ('nuevo', 'preparado', 'enviado', 'entregado', 'asignado', 'devuelto', 'inactivo')",
@@ -49,12 +49,12 @@ class Device(SQLModel, table=True):
         default=None, sa_column=Column(Text, nullable=True)
     )
 
-    # client_id ahora es nullable (se asigna al enviar)
-    client_id: Optional[UUID] = Field(
+    # organization_id ahora es nullable (se asigna al enviar)
+    organization_id: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
             PGUUID(as_uuid=True),
-            ForeignKey("clients.id", ondelete="SET NULL"),
+            ForeignKey("organizations.id", ondelete="SET NULL"),
             nullable=True,
         ),
     )
@@ -87,13 +87,13 @@ class Device(SQLModel, table=True):
     notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
 
     # Relationships
-    client: Optional["Client"] = Relationship(back_populates="devices")
-    device_services: list["DeviceService"] = Relationship(back_populates="device")
-    device_events: list["DeviceEvent"] = Relationship(
+    organization: Optional["Organization"] = Relationship(back_populates="devices")
+    device_services: List["DeviceService"] = Relationship(back_populates="device")
+    device_events: List["DeviceEvent"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    unit_devices: list["UnitDevice"] = Relationship(
+    unit_devices: List["UnitDevice"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
@@ -101,6 +101,22 @@ class Device(SQLModel, table=True):
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": False},
     )
+
+    # Alias para compatibilidad (DEPRECATED)
+    @property
+    def client_id(self) -> Optional[UUID]:
+        """DEPRECATED: Usar organization_id"""
+        return self.organization_id
+
+    @client_id.setter
+    def client_id(self, value: Optional[UUID]):
+        """DEPRECATED: Usar organization_id"""
+        self.organization_id = value
+
+    @property
+    def client(self) -> Optional["Organization"]:
+        """DEPRECATED: Usar organization"""
+        return self.organization
 
 
 class DeviceEvent(SQLModel, table=True):

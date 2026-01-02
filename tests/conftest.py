@@ -7,14 +7,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 
 from app.api.deps import (
-    get_current_client_id,
+    get_current_organization_id,
     get_current_user_full,
     get_current_user_id,
 )
 from app.db.session import get_db
 from app.main import app
-from app.models.client import Client
+from app.models.account import Account
 from app.models.device import Device
+from app.models.organization import Organization
 from app.models.plan import Plan
 from app.models.unit import Unit
 from app.models.user import User
@@ -65,29 +66,56 @@ def client(db_session):
 
 
 @pytest.fixture(scope="function")
-def test_client_data(db_session):
+def test_account_data(db_session):
     """
-    Crea un cliente de prueba en la base de datos.
+    Crea una cuenta de prueba en la base de datos.
     """
-    client = Client(
+    account = Account(
         id=uuid4(),
-        name="Test Client",
+        name="Test Account",
         status="ACTIVE",
     )
-    db_session.add(client)
+    db_session.add(account)
     db_session.commit()
-    db_session.refresh(client)
-    return client
+    db_session.refresh(account)
+    return account
 
 
 @pytest.fixture(scope="function")
-def test_user_data(db_session, test_client_data):
+def test_organization_data(db_session, test_account_data):
     """
-    Crea un usuario de prueba vinculado al cliente de prueba.
+    Crea una organización de prueba vinculada a la cuenta.
+    """
+    organization = Organization(
+        id=uuid4(),
+        name="Test Organization",
+        status="ACTIVE",
+        account_id=test_account_data.id,
+    )
+    db_session.add(organization)
+    db_session.commit()
+    db_session.refresh(organization)
+    return organization
+
+
+# Alias de compatibilidad para tests existentes
+@pytest.fixture(scope="function")
+def test_client_data(test_organization_data):
+    """
+    DEPRECATED: Usar test_organization_data.
+    Alias para compatibilidad con tests existentes.
+    """
+    return test_organization_data
+
+
+@pytest.fixture(scope="function")
+def test_user_data(db_session, test_organization_data):
+    """
+    Crea un usuario de prueba vinculado a la organización de prueba.
     """
     user = User(
         id=uuid4(),
-        client_id=test_client_data.id,
+        organization_id=test_organization_data.id,
         cognito_sub="test-cognito-sub-123",
         email="test@example.com",
         full_name="Test User",
@@ -102,7 +130,7 @@ def test_user_data(db_session, test_client_data):
 @pytest.fixture(scope="function")
 def test_device_data(db_session):
     """
-    Crea un dispositivo de prueba en estado 'nuevo' sin cliente asignado.
+    Crea un dispositivo de prueba en estado 'nuevo' sin organización asignada.
     """
     device = Device(
         device_id="123456789012345",
@@ -110,7 +138,7 @@ def test_device_data(db_session):
         model="GV300",
         firmware_version="1.0.0",
         status="nuevo",
-        client_id=None,  # Sin cliente asignado inicialmente
+        organization_id=None,  # Sin organización asignada inicialmente
         notes="Dispositivo de prueba",
     )
     db_session.add(device)
@@ -120,13 +148,13 @@ def test_device_data(db_session):
 
 
 @pytest.fixture(scope="function")
-def test_unit_data(db_session, test_client_data):
+def test_unit_data(db_session, test_organization_data):
     """
     Crea una unidad (vehículo) de prueba.
     """
     unit = Unit(
         id=uuid4(),
-        client_id=test_client_data.id,
+        organization_id=test_organization_data.id,
         name="Camión Test",
         plate="ABC-123",
         type="Camión",
@@ -161,13 +189,13 @@ def test_plan_data(db_session):
 
 
 @pytest.fixture(scope="function")
-def authenticated_client(client, test_client_data, test_user_data):
+def authenticated_client(client, test_organization_data, test_user_data):
     """
     Cliente autenticado que bypasea la validación de Cognito.
     """
 
-    def override_get_current_client_id():
-        return test_client_data.id
+    def override_get_current_organization_id():
+        return test_organization_data.id
 
     def override_get_current_user_full():
         return test_user_data
@@ -175,7 +203,9 @@ def authenticated_client(client, test_client_data, test_user_data):
     def override_get_current_user_id():
         return test_user_data.id
 
-    app.dependency_overrides[get_current_client_id] = override_get_current_client_id
+    app.dependency_overrides[get_current_organization_id] = (
+        override_get_current_organization_id
+    )
     app.dependency_overrides[get_current_user_full] = override_get_current_user_full
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
 

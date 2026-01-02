@@ -17,7 +17,12 @@ jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
 
 # Cliente de AWS SES
 ses_region = settings.SES_REGION or settings.COGNITO_REGION
-ses_client = boto3.client("ses", region_name=ses_region)
+ses_client = boto3.client(
+    "ses",
+    region_name=ses_region,
+    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+)
 
 
 def _send_email(to: str, subject: str, html_body: str) -> bool:

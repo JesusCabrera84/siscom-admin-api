@@ -481,13 +481,71 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 6. Actualizar Información del Dispositivo
+### 6. Obtener Estados de Dispositivos
+
+**GET** `/api/v1/devices/status`
+
+Obtiene la colección de estados posibles para dispositivos. Esta es una lista estática (hardcoded) de todos los estados que un dispositivo puede tener en su ciclo de vida.
+
+> **Nota**: Este endpoint no requiere autenticación y devuelve una lista fija.
+
+#### Response 200 OK
+
+```json
+[
+  {
+    "status": "nuevo",
+    "description": "Recién ingresado al inventario"
+  },
+  {
+    "status": "preparado",
+    "description": "Asignado a cliente y listo para envío"
+  },
+  {
+    "status": "enviado",
+    "description": "En tránsito al cliente"
+  },
+  {
+    "status": "entregado",
+    "description": "Recibido por el cliente"
+  },
+  {
+    "status": "asignado",
+    "description": "Vinculado a una unidad (vehículo)"
+  },
+  {
+    "status": "devuelto",
+    "description": "Devuelto al inventario"
+  },
+  {
+    "status": "inactivo",
+    "description": "Fuera de uso o dado de baja (baja definitiva)"
+  }
+]
+```
+
+#### Descripción de Estados
+
+| Estado | Descripción | Siguiente Estado Típico |
+|--------|-------------|------------------------|
+| `nuevo` | Recién ingresado al inventario | `preparado` |
+| `preparado` | Asignado a cliente y listo para envío | `enviado` |
+| `enviado` | En tránsito al cliente | `entregado` |
+| `entregado` | Recibido por el cliente | `asignado` |
+| `asignado` | Vinculado a una unidad (vehículo) | `devuelto` |
+| `devuelto` | Devuelto al inventario | `nuevo` o `inactivo` |
+| `inactivo` | Fuera de uso o dado de baja (baja definitiva) | (estado final) |
+
+---
+
+### 7. Actualizar Información del Dispositivo
 
 **PATCH** `/api/v1/devices/{device_id}`
 
-Actualiza información básica del dispositivo (marca, modelo, firmware, notas, ICCID, carrier, perfil SIM).
+Actualiza información básica del dispositivo (marca, modelo, firmware, notas, ICCID, carrier, perfil SIM, organization_id).
 
-**Comportamiento SIM:**
+**Comportamiento:**
+- Si se proporciona `organization_id`, se asigna el dispositivo a esa organización
 - Si se proporciona `iccid` y no existe SIM, se crea una nueva
 - Si se proporciona `iccid` y ya existe SIM, se actualiza
 - Si se proporciona `carrier`, se actualiza el carrier de la SIM
@@ -502,6 +560,28 @@ Authorization: Bearer <access_token>
 #### Path Parameters
 
 - `device_id`: Identificador único del dispositivo
+
+#### Request Body
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `organization_id` | UUID | ID de la organización a la que se asigna el dispositivo |
+| `status` | string | Estado del dispositivo (nuevo, preparado, enviado, entregado, asignado, devuelto, inactivo) |
+| `brand` | string | Marca del dispositivo |
+| `model` | string | Modelo del dispositivo |
+| `firmware_version` | string | Versión del firmware |
+| `notes` | string | Notas adicionales |
+| `iccid` | string | ICCID de la tarjeta SIM (18-22 caracteres) |
+| `carrier` | string | Proveedor de SIM ("KORE" o "other") |
+| `sim_profile` | object | Perfil específico de la SIM (para KORE) |
+
+#### Request Body (Asignar a Organización)
+
+```json
+{
+  "organization_id": "456e4567-e89b-12d3-a456-426614174000"
+}
+```
 
 #### Request Body (Básico)
 
@@ -582,7 +662,7 @@ Todos los campos son opcionales. Solo se actualizan los campos proporcionados.
 
 ---
 
-### 7. Cambiar Estado del Dispositivo
+### 8. Cambiar Estado del Dispositivo
 
 **PATCH** `/api/v1/devices/{device_id}/status`
 
@@ -714,7 +794,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 8. Obtener Historial de Eventos
+### 9. Obtener Historial de Eventos
 
 **GET** `/api/v1/devices/{device_id}/events`
 
@@ -779,7 +859,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 9. Agregar Nota al Dispositivo
+### 10. Agregar Nota al Dispositivo
 
 **POST** `/api/v1/devices/{device_id}/notes`
 
