@@ -32,7 +32,8 @@ SISCOM Admin API es una API REST que implementa un sistema completo de gestión 
 
 | Concepto | Descripción |
 |----------|-------------|
-| **Organización** | Entidad de negocio (tabla `clients`) |
+| **Account** | Raíz comercial (billing, facturación) |
+| **Organización** | Raíz operativa (permisos, uso diario) |
 | **Suscripciones** | Una organización puede tener **múltiples** suscripciones |
 | **Capabilities** | Límites y features que gobiernan el acceso |
 | **Roles** | owner, admin, billing, member |
@@ -184,8 +185,8 @@ Una vez que la API esté corriendo:
 | Endpoint | Descripción |
 |----------|-------------|
 | **[Autenticación](docs/api/auth.md)** | Login, tokens (Cognito + PASETO) |
-| **[Organizaciones](docs/api/clients.md)** | Registro y gestión de organizaciones |
-| **[API Interna](docs/api/internal-clients.md)** | Endpoints administrativos (PASETO) |
+| **[Cuentas (Accounts)](docs/api/accounts.md)** | Onboarding y gestión de cuentas |
+| **[API Interna](docs/api/internal-organizations.md)** | Endpoints administrativos (PASETO) |
 | **[Usuarios](docs/api/users.md)** | Invitaciones y roles organizacionales |
 | **[Planes](docs/api/plans.md)** | Catálogo de planes y capabilities |
 | **[Dispositivos](docs/api/devices.md)** | Registro de GPS |
@@ -196,8 +197,8 @@ Una vez que la API esté corriendo:
 ## Ejemplo Rápido
 
 ```bash
-# 1. Crear cliente
-POST /api/v1/clients/
+# 1. Crear cuenta (onboarding)
+POST /api/v1/auth/register
 
 # 2. Login
 POST /api/v1/auth/login
@@ -238,7 +239,7 @@ siscom-admin-api/
 │   ├── README.md               # Índice de documentación
 │   ├── api/                    # Docs de endpoints
 │   │   ├── auth.md
-│   │   ├── clients.md
+│   │   ├── accounts.md
 │   │   ├── users.md
 │   │   ├── devices.md
 │   │   ├── services.md
@@ -283,7 +284,7 @@ pytest --cov=app --cov-report=html
 
 ### Modelo Organizacional
 
-- **Organización = Cliente**: La tabla `clients` representa organizaciones a nivel de negocio
+- **Account = Raíz comercial, Organization = Raíz operativa**: El modelo sigue esta jerarquía
 - **Suscripciones Múltiples**: Una organización puede tener varias suscripciones simultáneamente
 - **`active_subscription_id` es DEPRECADO**: Las suscripciones activas se calculan dinámicamente
 - **Capabilities**: Los límites se resuelven: `org_override ?? plan_capability ?? default`

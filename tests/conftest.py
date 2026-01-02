@@ -14,8 +14,8 @@ from app.api.deps import (
 from app.db.session import get_db
 from app.main import app
 from app.models.account import Account
-from app.models.organization import Organization
 from app.models.device import Device
+from app.models.organization import Organization
 from app.models.plan import Plan
 from app.models.unit import Unit
 from app.models.user import User

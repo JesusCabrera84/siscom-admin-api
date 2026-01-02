@@ -2,7 +2,7 @@
 Router principal de la API v1.
 
 Organiza todos los endpoints del sistema:
-- API Pública (Cognito): /auth, /accounts, /clients, /users, /subscriptions, etc.
+- API Pública (Cognito): /auth, /accounts, /organizations, /users, /subscriptions, etc.
 - API Interna (PASETO): /internal/*
 
 MODELO CONCEPTUAL:
@@ -12,9 +12,10 @@ Organization = Raíz operativa (permisos, uso diario)
 
 ENDPOINTS PRINCIPALES:
 ======================
-- POST /clients: Onboarding rápido (crea Account + Organization + User)
-- PATCH /accounts/{id}: Perfil progresivo del Account
-- GET /clients: Info de la organización del usuario
+- POST /auth/register: Registro (crea Account + Organization + User)
+- GET /auth/me: Mi Account
+- POST /organizations: Crear nueva organización
+- GET /organizations: Listar organizaciones del Account
 """
 
 from fastapi import APIRouter
@@ -24,12 +25,12 @@ from app.api.v1.endpoints import (
     auth,
     billing,
     capabilities,
-    clients,
     commands,
     contact,
     device_events,
     devices,
     orders,
+    organizations,
     payments,
     plans,
     services,
@@ -40,7 +41,8 @@ from app.api.v1.endpoints import (
     user_units,
     users,
 )
-from app.api.v1.endpoints.internal import clients as internal_clients
+from app.api.v1.endpoints.internal import accounts as internal_accounts
+from app.api.v1.endpoints.internal import organizations as internal_organizations
 
 api_router = APIRouter()
 
@@ -51,11 +53,13 @@ api_router = APIRouter()
 # Autenticación
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 
-# Accounts (raíz comercial - perfil progresivo)
+# Accounts (raíz comercial - onboarding + perfil progresivo)
 api_router.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
 
-# Onboarding y Organizations (clients es el endpoint de onboarding)
-api_router.include_router(clients.router, prefix="/clients", tags=["onboarding"])
+# Organizations (raíz operativa - múltiples por account)
+api_router.include_router(
+    organizations.router, prefix="/organizations", tags=["organizations"]
+)
 
 # Usuarios
 api_router.include_router(users.router, prefix="/users", tags=["users"])
@@ -106,5 +110,10 @@ api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
 # ============================================
 
 api_router.include_router(
-    internal_clients.router, prefix="/internal/clients", tags=["internal-organizations"]
+    internal_accounts.router, prefix="/internal/accounts", tags=["internal-accounts"]
+)
+api_router.include_router(
+    internal_organizations.router,
+    prefix="/internal/organizations",
+    tags=["internal-organizations"],
 )

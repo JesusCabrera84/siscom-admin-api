@@ -91,10 +91,11 @@ Abre en tu navegador:
 ### Crear Cliente
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/clients/ \
+curl -X POST http://localhost:8000/api/v1/accounts \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Mi Empresa",
+    "account_name": "Mi Empresa",
+    "name": "Juan Pérez",
     "email": "admin@miempresa.com",
     "password": "MiPassword123!"
   }'
@@ -104,11 +105,13 @@ curl -X POST http://localhost:8000/api/v1/clients/ \
 
 ```json
 {
-  "id": "...",
-  "name": "Mi Empresa",
-  "status": "PENDING"
+  "account_id": "...",
+  "organization_id": "...",
+  "user_id": "..."
 }
 ```
+
+> **Nota:** Si no proporcionas `organization_name`, la organización se crea con el prefijo "ORG " + account_name.
 
 ### Verificar Email
 
@@ -230,7 +233,7 @@ Ver [Documentación de Pagos](../api/payments.md)
 ## Documentación Completa por Endpoint
 
 - [Autenticación](../api/auth.md)
-- [Clientes](../api/clients.md)
+- [Cuentas (Accounts)](../api/accounts.md)
 - [Usuarios](../api/users.md)
 - [Dispositivos](../api/devices.md)
 - [Servicios](../api/services.md)

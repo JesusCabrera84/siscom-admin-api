@@ -25,6 +25,9 @@ Los nombres pueden repetirse; la unicidad está en los UUIDs.
 # Account (raíz comercial)
 from app.models.account import Account, AccountStatus
 
+# Account Users (roles a nivel account)
+from app.models.account_user import AccountRole, AccountUser
+
 # Capabilities
 from app.models.capability import (
     Capability,
@@ -85,6 +88,8 @@ __all__ = [
     # Account (raíz comercial)
     "Account",
     "AccountStatus",
+    "AccountUser",
+    "AccountRole",
     # Organization (raíz operativa)
     "Organization",
     "OrganizationStatus",

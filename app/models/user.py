@@ -9,7 +9,7 @@ Usar organization_users.role para permisos.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Text, text
@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Index, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from app.models.account_user import AccountUser
     from app.models.organization import Organization
     from app.models.organization_user import OrganizationUser
     from app.models.token_confirmacion import TokenConfirmacion
@@ -83,10 +84,11 @@ class User(SQLModel, table=True):
 
     # Relationships
     organization: "Organization" = Relationship(back_populates="users")
-    tokens: list["TokenConfirmacion"] = Relationship(back_populates="user")
-    organization_memberships: list["OrganizationUser"] = Relationship(
+    tokens: List["TokenConfirmacion"] = Relationship(back_populates="user")
+    organization_memberships: List["OrganizationUser"] = Relationship(
         back_populates="user"
     )
+    account_memberships: List["AccountUser"] = Relationship(back_populates="user")
 
     # Alias para compatibilidad (DEPRECATED)
     @property

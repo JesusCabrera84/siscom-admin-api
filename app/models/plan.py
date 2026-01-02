@@ -10,7 +10,7 @@ están DEPRECADOS. Usar el sistema de capabilities (plan_capabilities).
 
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, DateTime, Numeric, Text, text
@@ -65,6 +65,6 @@ class Plan(SQLModel, table=True):
     )
 
     # Relationships
-    subscriptions: list["Subscription"] = Relationship(back_populates="plan")
-    device_services: list["DeviceService"] = Relationship(back_populates="plan")
-    plan_capabilities: list["PlanCapability"] = Relationship(back_populates="plan")
+    subscriptions: List["Subscription"] = Relationship(back_populates="plan")
+    device_services: List["DeviceService"] = Relationship(back_populates="plan")
+    plan_capabilities: List["PlanCapability"] = Relationship(back_populates="plan")

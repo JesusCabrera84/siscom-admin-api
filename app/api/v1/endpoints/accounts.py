@@ -7,16 +7,21 @@ Account = Raíz comercial (billing, facturación)
 - Puede tener múltiples Organizations
 - Controla la información comercial y de facturación
 
+Organization = Raíz operativa (permisos, uso diario)
+
 ENDPOINTS:
 ==========
+- GET /accounts/organization: Obtiene la organización del usuario autenticado
 - GET /accounts/{account_id}: Obtiene información del account
 - PATCH /accounts/{account_id}: Actualiza perfil progresivo del account
+
+NOTA:
+- El registro se realiza en POST /auth/register
+- Mi cuenta se obtiene en GET /auth/me
 
 REGLA DE ORO:
 =============
 Los nombres NO son identidad. Los UUID sí.
-❌ NO validar unicidad por account_name
-✅ Solo usuarios master/owner pueden modificar
 """
 
 import logging
@@ -36,59 +41,44 @@ from app.db.session import get_db
 from app.models.account import Account
 from app.models.organization import Organization
 from app.models.user import User
-from app.schemas.account import AccountOut, AccountUpdate, AccountUpdateResponse
-from app.services.organization import OrganizationService
+from app.schemas.account import (
+    AccountOut,
+    AccountUpdate,
+    AccountUpdateResponse,
+)
+from app.schemas.organization import OrganizationOut
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _get_account_for_user(db: Session, user: User) -> Account:
+@router.get("/organization", response_model=OrganizationOut)
+def get_current_organization(
+    organization_id: UUID = Depends(get_current_organization_id),
+    db: Session = Depends(get_db),
+):
     """
-    Obtiene el Account asociado al usuario a través de su organización.
+    Obtiene la información de la organización del usuario autenticado.
 
-    Args:
-        db: Sesión de base de datos
-        user: Usuario autenticado
-
-    Returns:
-        Account asociado al usuario
-
-    Raises:
-        HTTPException: Si no se encuentra la organización o el account
+    Requiere autenticación con token de Cognito.
     """
     organization = (
-        db.query(Organization).filter(Organization.id == user.organization_id).first()
+        db.query(Organization).filter(Organization.id == organization_id).first()
     )
+
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organización no encontrada",
         )
 
-    account = db.query(Account).filter(Account.id == organization.account_id).first()
-    if not account:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account no encontrado",
-        )
-
-    return account
+    return organization
 
 
-@router.get("/me", response_model=AccountOut)
-def get_my_account(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_full),
-):
-    """
-    Obtiene el Account del usuario autenticado.
-
-    Resuelve el Account a través de la organización del usuario.
-    """
-    account = _get_account_for_user(db, current_user)
-    return account
+# ============================================
+# Account Management - Endpoints Protegidos
+# ============================================
 
 
 @router.get("/{account_id}", response_model=AccountOut)
@@ -170,9 +160,7 @@ def update_account(
 
     # Verificar que el usuario pertenece a una organización de este account
     user_org = (
-        db.query(Organization)
-        .filter(Organization.id == auth.organization_id)
-        .first()
+        db.query(Organization).filter(Organization.id == auth.organization_id).first()
     )
 
     if not user_org or user_org.account_id != account_id:
@@ -195,24 +183,6 @@ def update_account(
         # Propagar a la organización
         user_org.billing_email = update_data["billing_email"]
 
-    if "country" in update_data:
-        account.country = update_data["country"]
-        user_org.country = update_data["country"]
-
-    if "timezone" in update_data:
-        account.timezone = update_data["timezone"]
-        user_org.timezone = update_data["timezone"]
-
-    if "metadata" in update_data:
-        # Merge de metadata existente con nueva
-        if account.account_metadata is None:
-            account.account_metadata = {}
-        if update_data["metadata"] is not None:
-            account.account_metadata = {
-                **account.account_metadata,
-                **update_data["metadata"],
-            }
-
     # Actualizar timestamp
     account.updated_at = datetime.utcnow()
     user_org.updated_at = datetime.utcnow()
@@ -220,14 +190,13 @@ def update_account(
     db.commit()
     db.refresh(account)
 
-    logger.info(f"[ACCOUNT UPDATE] Account {account_id} actualizado por user {auth.user_id}")
+    logger.info(
+        f"[ACCOUNT UPDATE] Account {account_id} actualizado por user {auth.user_id}"
+    )
 
     return AccountUpdateResponse(
         id=account.id,
         account_name=account.name,
         billing_email=account.billing_email,
-        country=account.country,
-        timezone=account.timezone or "UTC",
         updated_at=account.updated_at,
     )
-

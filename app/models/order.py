@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, text
@@ -64,7 +64,7 @@ class Order(SQLModel, table=True):
     # Relationships
     organization: "Organization" = Relationship(back_populates="orders")
     payment: Optional["Payment"] = Relationship(back_populates="orders")
-    order_items: list["OrderItem"] = Relationship(back_populates="order")
+    order_items: List["OrderItem"] = Relationship(back_populates="order")
 
     # Alias para compatibilidad (DEPRECATED)
     @property

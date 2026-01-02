@@ -21,7 +21,7 @@ Las suscripciones activas se calculan dinámicamente.
 
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, DateTime, ForeignKey, Text, text
@@ -119,18 +119,18 @@ class Organization(SQLModel, table=True):
 
     # Relationships
     account: "Account" = Relationship(back_populates="organizations")
-    users: list["User"] = Relationship(back_populates="organization")
-    devices: list["Device"] = Relationship(back_populates="organization")
-    units: list["Unit"] = Relationship(back_populates="organization")
-    subscriptions: list["Subscription"] = Relationship(
+    users: List["User"] = Relationship(back_populates="organization")
+    devices: List["Device"] = Relationship(back_populates="organization")
+    units: List["Unit"] = Relationship(back_populates="organization")
+    subscriptions: List["Subscription"] = Relationship(
         back_populates="organization",
         sa_relationship_kwargs={"foreign_keys": "[Subscription.organization_id]"},
     )
-    orders: list["Order"] = Relationship(back_populates="organization")
-    organization_users: list["OrganizationUser"] = Relationship(
+    orders: List["Order"] = Relationship(back_populates="organization")
+    organization_users: List["OrganizationUser"] = Relationship(
         back_populates="organization"
     )
-    organization_capabilities: list["OrganizationCapability"] = Relationship(
+    organization_capabilities: List["OrganizationCapability"] = Relationship(
         back_populates="organization"
     )
 

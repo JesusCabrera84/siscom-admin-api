@@ -99,6 +99,14 @@ class DeviceCreate(BaseModel):
 class DeviceUpdate(BaseModel):
     """Schema para actualizar información básica del dispositivo"""
 
+    organization_id: Optional[UUID] = Field(
+        None,
+        description="ID de la organización a la que se asigna el dispositivo",
+    )
+    status: Optional[DeviceStatus] = Field(
+        None,
+        description="Estado del dispositivo (nuevo, preparado, enviado, entregado, asignado, devuelto, inactivo)",
+    )
     brand: Optional[str] = Field(None, max_length=100)
     model: Optional[str] = Field(None, max_length=100)
     firmware_version: Optional[str] = Field(None)

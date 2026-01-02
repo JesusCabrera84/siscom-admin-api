@@ -60,7 +60,7 @@ Esta regla fundamental elimina validaciones innecesarias:
 
 ### Onboarding en dos fases
 
-#### Fase 1: Onboarding rápido (POST /api/v1/clients)
+#### Fase 1: Onboarding rápido (POST /api/v1/auth/register)
 
 **Request mínimo obligatorio:**
 ```json
@@ -243,7 +243,7 @@ app/schemas/
 
 app/api/v1/endpoints/
 ├── accounts.py         # NUEVO: GET/PATCH accounts
-├── clients.py          # Reescrito: onboarding rápido
+├── accounts.py         # Onboarding rápido + gestión de accounts
 ├── auth.py             # Client → Organization
 ├── billing.py          # Actualizado
 ├── orders.py           # Actualizado
@@ -258,9 +258,9 @@ app/api/v1/
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| POST | `/api/v1/clients` | Onboarding rápido |
-| GET | `/api/v1/clients` | Info organización actual |
-| GET | `/api/v1/accounts/me` | Account del usuario |
+| POST | `/api/v1/accounts` | Onboarding rápido |
+| GET | `/api/v1/accounts/organization` | Info organización actual |
+| GET | `/api/v1/auth/me` | Account del usuario |
 | GET | `/api/v1/accounts/{id}` | Account específico |
 | PATCH | `/api/v1/accounts/{id}` | Perfil progresivo |
 
@@ -268,7 +268,7 @@ app/api/v1/
 
 - [Modelo organizacional](../guides/organizational-model.md)
 - [Guía de migración V1](../MIGRATION_GUIDE_V1.md)
-- [Documentación de API - Clients](../api/clients.md)
+- [Documentación de API - Accounts](../api/accounts.md)
 - [Documentación de API - Accounts](../api/accounts.md)
 
 ## Registro de cambios

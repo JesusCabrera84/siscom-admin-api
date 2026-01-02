@@ -204,7 +204,7 @@ Para operaciones administrativas internas (API interna):
 │      │                            │                             │
 │      │◄── {token} ────────────────│                             │
 │      │                            │                             │
-│      │─── GET /internal/clients ─►│                             │
+│      │─── GET /internal/organizations ─►│                             │
 │      │    Auth: Bearer <paseto>   │── Verify PASETO ───►        │
 │      │                            │                             │
 │      │                            │── Query ALL orgs ───► DB    │
@@ -220,7 +220,7 @@ Para operaciones administrativas internas (API interna):
 ### 1. Registro de Organización
 
 ```
-POST /api/v1/clients/
+POST /api/v1/auth/register
   ↓
 Crear Organization (status=PENDING)
   ↓

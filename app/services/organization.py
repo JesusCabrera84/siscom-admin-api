@@ -16,11 +16,9 @@ Los pagos pertenecen a Account.
 
 USO:
     from app.services.organization import OrganizationService
-    
     # Verificar si puede gestionar usuarios
     if not OrganizationService.can_manage_users(db, user_id, org_id):
         raise HTTPException(403, "Sin permisos")
-    
     # Obtener rol del usuario
     role = OrganizationService.get_user_role(db, user_id, org_id)
 """

@@ -62,7 +62,9 @@ def list_unit_devices(
     Requiere: Usuario de la organización autenticado.
     """
     # Subconsulta para obtener units de la organización
-    org_units = db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
+    org_units = (
+        db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
+    )
 
     query = db.query(UnitDevice).filter(UnitDevice.unit_id.in_(org_units))
 
@@ -111,7 +113,10 @@ def create_unit_device(
     # Verificar que el dispositivo existe y pertenece a la organización
     device = (
         db.query(Device)
-        .filter(Device.device_id == assignment.device_id, Device.client_id == organization_id)
+        .filter(
+            Device.device_id == assignment.device_id,
+            Device.client_id == organization_id,
+        )
         .first()
     )
 
@@ -187,7 +192,9 @@ def get_unit_device(
     Incluye información adicional de la unidad y el dispositivo.
     """
     # Subconsulta para obtener units de la organización
-    org_units = db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
+    org_units = (
+        db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
+    )
 
     assignment = (
         db.query(UnitDevice)
@@ -238,7 +245,9 @@ def delete_unit_device(
     - Crea evento en device_events
     """
     # Subconsulta para obtener units de la organización
-    org_units = db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
+    org_units = (
+        db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
+    )
 
     assignment = (
         db.query(UnitDevice)

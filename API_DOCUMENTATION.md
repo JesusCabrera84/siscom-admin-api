@@ -10,7 +10,7 @@
 
 | Concepto | Descripción |
 |----------|-------------|
-| **Organización** | Entidad de negocio principal (tabla `clients`) |
+| **Organización** | Entidad de negocio (raíz operativa) |
 | **Suscripciones** | Contratos de servicio - una organización puede tener **múltiples** |
 | **Capabilities** | Límites y features que gobiernan el acceso |
 | **Roles** | Permisos de usuarios: owner, admin, billing, member |
@@ -108,7 +108,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 ### 📋 Índice de Endpoints
 
 1. [**Autenticación** (`/auth`)](#1-autenticación-auth) - Login, logout, recuperación de contraseña
-2. [**Organizaciones** (`/clients`)](#2-organizaciones-clients) - Registro y gestión de organizaciones
+2. [**Cuentas** (`/accounts`)](#2-cuentas-accounts) - Registro (onboarding) y gestión de cuentas
 3. [**Usuarios** (`/users`)](#3-usuarios-users) - Invitaciones y gestión de usuarios
 4. [**Suscripciones** (`/subscriptions`)](#4-suscripciones-subscriptions) - Gestión de suscripciones múltiples
 5. [**Capabilities** (`/capabilities`)](#5-capabilities-capabilities) - Límites y features de la organización
@@ -304,70 +304,65 @@ Permite al usuario cambiar su contraseña proporcionando la actual.
 
 ---
 
-## 2. Organizaciones (`/clients`)
+## 2. Cuentas (`/accounts`)
 
-> **Nota Conceptual**: En el código, la tabla se llama `clients`, pero conceptualmente representa una **Organización**. Una organización puede tener múltiples suscripciones y capabilities específicas. Ver [docs/api/clients.md](docs/api/clients.md) para detalles completos.
+> **Nota Conceptual**: El endpoint `/accounts` maneja la gestión de cuentas. El registro se realiza en `POST /api/v1/auth/register`. Ver [docs/api/accounts.md](docs/api/accounts.md) para detalles completos.
 
-### 🔓 Público
-
-#### `POST /api/v1/clients/`
-
-**Registrar nueva organización**
-
-Crea una nueva organización con su usuario propietario (owner). Envía email de verificación.
-
-**Request:**
+**Request (campos obligatorios):**
 
 ```json
 {
-  "name": "Mi Empresa S.A.",
+  "account_name": "Mi Empresa S.A.",
   "email": "admin@miempresa.com",
   "password": "Password123!"
 }
 ```
 
+**Request (con campos opcionales):**
+
+```json
+{
+  "account_name": "Mi Empresa S.A.",
+  "name": "Juan Pérez López",
+  "organization_name": "Flota Norte",
+  "email": "admin@miempresa.com",
+  "password": "Password123!",
+  "billing_email": "facturacion@miempresa.com",
+  "country": "MX",
+  "timezone": "America/Mexico_City"
+}
+```
+
+| Campo | Obligatorio | Descripción |
+|-------|-------------|-------------|
+| `account_name` | ✅ | Nombre de la cuenta comercial |
+| `email` | ✅ | Email del usuario master (único global) |
+| `password` | ✅ | Contraseña (min 8 caracteres) |
+| `name` | ❌ | Nombre del usuario (default: account_name) |
+| `organization_name` | ❌ | Nombre de la organización (default: "ORG " + account_name) |
+| `billing_email` | ❌ | Email de facturación (default: email) |
+| `country` | ❌ | Código ISO país |
+| `timezone` | ❌ | Zona horaria IANA |
+
 **Response:** `201 Created`
 
 ```json
 {
-  "id": "uuid",
-  "name": "Mi Empresa S.A.",
-  "status": "PENDING",
-  "created_at": "2024-11-08T10:00:00Z"
+  "account_id": "uuid",
+  "organization_id": "uuid",
+  "user_id": "uuid"
 }
 ```
 
 **Email enviado:** Link a `{FRONTEND_URL}/verify-email?token={token}`
 
-**Nota:** La organización y el usuario owner quedan en estado `PENDING` hasta verificar el email.
-
----
-
-#### `POST /api/v1/clients/verify-email`
-
-**Verificar email de la organización**
-
-Verifica el email y activa la organización y usuario propietario.
-
-**Query Parameters:**
-
-- `token` (string): Token de verificación recibido por email
-
-**Response:** `200 OK`
-
-```json
-{
-  "message": "Email verificado exitosamente. Tu cuenta ha sido activada.",
-  "email": "admin@miempresa.com",
-  "client_id": "uuid"
-}
-```
+**Nota:** Se envía email de verificación. El usuario debe verificar antes de poder iniciar sesión.
 
 ---
 
 ### 🔒 Autenticados
 
-#### `GET /api/v1/clients/`
+#### `GET /api/v1/accounts/organization`
 
 **Obtener información de la organización autenticada**
 
@@ -378,14 +373,18 @@ Verifica el email y activa la organización y usuario propietario.
 ```json
 {
   "id": "uuid",
+  "account_id": "uuid",
   "name": "Mi Empresa S.A.",
   "status": "ACTIVE",
+  "billing_email": "facturacion@miempresa.com",
+  "country": "MX",
+  "timezone": "America/Mexico_City",
   "created_at": "2024-11-08T10:00:00Z",
   "updated_at": "2024-11-08T10:05:00Z"
 }
 ```
 
-> **Nota de Evolución**: Este endpoint debería expandirse para incluir `subscriptions` (activas e históricas) y `effective_capabilities`. Ver [docs/api/clients.md](docs/api/clients.md) para la estructura esperada.
+> **Nota**: Ver [docs/api/accounts.md](docs/api/accounts.md) para la documentación completa de todos los endpoints de accounts.
 
 ---
 
@@ -1911,7 +1910,7 @@ Gestión de pagos del cliente.
 ### Flujo 1: Onboarding de Nueva Organización
 
 ```
-1. POST /clients/              → Registrar organización
+1. POST /accounts              → Registrar cuenta (onboarding)
    ↓
 2. Sistema crea Organization (PENDING) + User (owner)
    ↓
@@ -1930,10 +1929,11 @@ Gestión de pagos del cliente.
 
 ```bash
 # 1. Registrar organización
-curl -X POST http://localhost:8100/api/v1/clients/ \
+curl -X POST http://localhost:8100/api/v1/accounts \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Mi Empresa S.A.",
+    "account_name": "Mi Empresa S.A.",
+    "name": "Carlos García",
     "email": "admin@miempresa.com",
     "password": "Password123!"
   }'

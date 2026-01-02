@@ -8,13 +8,10 @@ Implementa la regla de oro:
 
 USO:
     from app.services.capabilities import CapabilityService
-    
     # Obtener una capability específica
     max_devices = CapabilityService.get_capability(db, org_id, "max_devices")
-    
     # Verificar si tiene una feature
     has_ai = CapabilityService.has_capability(db, org_id, "ai_features")
-    
     # Validar límite antes de crear
     if not CapabilityService.validate_limit(db, org_id, "max_geofences", current_count):
         raise HTTPException(403, "Límite de geocercas alcanzado")
@@ -126,7 +123,7 @@ class CapabilityService:
         Returns:
             ResolvedCapability con el valor y metadatos
         """
-        now = datetime.utcnow()
+        _now = datetime.utcnow()
 
         # 1. Buscar la definición de la capability
         capability = (

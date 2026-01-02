@@ -423,6 +423,53 @@ def list_unassigned_devices(
     return devices
 
 
+# Colección de estados de dispositivos (hardcoded)
+DEVICE_STATUS_COLLECTION = [
+    {
+        "status": "nuevo",
+        "description": "Recién ingresado al inventario",
+    },
+    {
+        "status": "preparado",
+        "description": "Asignado a cliente y listo para envío",
+    },
+    {
+        "status": "enviado",
+        "description": "En tránsito al cliente",
+    },
+    {
+        "status": "entregado",
+        "description": "Recibido por el cliente",
+    },
+    {
+        "status": "asignado",
+        "description": "Vinculado a una unidad (vehículo)",
+    },
+    {
+        "status": "devuelto",
+        "description": "Devuelto al inventario",
+    },
+    {
+        "status": "inactivo",
+        "description": "Fuera de uso o dado de baja (baja definitiva)",
+    },
+]
+
+
+@router.get("/status")
+def get_device_statuses():
+    """
+    Obtiene la colección de estados posibles para dispositivos.
+
+    Esta es una lista estática (hardcoded) de todos los estados
+    que un dispositivo puede tener en su ciclo de vida.
+
+    Returns:
+        Lista de objetos con status y description
+    """
+    return DEVICE_STATUS_COLLECTION
+
+
 @router.get("/{device_id}", response_model=DeviceOut)
 def get_device(
     device_id: str,

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Text, text
@@ -88,12 +88,12 @@ class Device(SQLModel, table=True):
 
     # Relationships
     organization: Optional["Organization"] = Relationship(back_populates="devices")
-    device_services: list["DeviceService"] = Relationship(back_populates="device")
-    device_events: list["DeviceEvent"] = Relationship(
+    device_services: List["DeviceService"] = Relationship(back_populates="device")
+    device_events: List["DeviceEvent"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    unit_devices: list["UnitDevice"] = Relationship(
+    unit_devices: List["UnitDevice"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )

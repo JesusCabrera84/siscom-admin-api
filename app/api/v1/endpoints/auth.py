@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 import random
 from datetime import datetime, timedelta
 
@@ -13,9 +14,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user_full
 from app.core.config import settings
 from app.db.session import get_db
+from app.models.account import Account, AccountStatus
+from app.models.account_user import AccountRole, AccountUser
 from app.models.organization import Organization, OrganizationStatus
+from app.models.organization_user import OrganizationRole, OrganizationUser
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 from app.models.user import User
+from app.schemas.account import (
+    AccountOut,
+    AuthMeResponse,
+    OnboardingRequest,
+    OnboardingResponse,
+)
 from app.schemas.user import (
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -41,12 +51,19 @@ from app.services.notifications import (
 from app.utils.paseto_token import generate_service_token
 from app.utils.security import generate_temporary_password, generate_verification_token
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 # ------------------------------------------
 # Cognito client
 # ------------------------------------------
-cognito = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
+cognito = boto3.client(
+    "cognito-idp",
+    region_name=settings.COGNITO_REGION,
+    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+)
 
 # Security bearer para obtener el token
 security = HTTPBearer()
@@ -60,6 +77,256 @@ def get_secret_hash(username: str) -> str:
     secret = bytes(settings.COGNITO_CLIENT_SECRET, "utf-8")
     dig = hmac.new(secret, msg=message, digestmod=hashlib.sha256).digest()
     return base64.b64encode(dig).decode()
+
+
+# ------------------------------------------
+# Registro de usuario (Onboarding)
+# ------------------------------------------
+@router.post(
+    "/register", response_model=OnboardingResponse, status_code=status.HTTP_201_CREATED
+)
+def register_user(data: OnboardingRequest, db: Session = Depends(get_db)):
+    """
+    Registro rápido - Crea Account + Organization + User.
+
+    Este endpoint representa el alta inicial de una cuenta, NO el perfil completo.
+    Soporta onboarding progresivo para personas, familias y empresas.
+
+    FLUJO:
+    ======
+    1. Validar que el email NO exista en users
+    2. Crear Account (raíz comercial)
+    3. Crear Organization default (raíz operativa)
+    4. Crear User master
+    5. Crear membership OWNER en organization_users
+    6. Crear membership OWNER en account_users
+    7. Registrar usuario en Cognito
+    8. Enviar email de verificación
+
+    Returns:
+        OnboardingResponse con account_id, organization_id, user_id
+    """
+
+    # 1️⃣ ÚNICA VALIDACIÓN: Email debe ser único
+    existing_user = db.query(User).filter(User.email == data.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe un usuario con este correo electrónico.",
+        )
+
+    # 2️⃣ Crear Account (raíz comercial)
+    account = Account(
+        name=data.account_name,
+        billing_email=data.billing_email or data.email,
+        country=data.country,
+        timezone=data.timezone or "UTC",
+        status=AccountStatus.ACTIVE,
+    )
+    db.add(account)
+    db.flush()
+
+    # 3️⃣ Crear Organization default
+    org_name = (
+        data.organization_name if data.organization_name else f"ORG {data.account_name}"
+    )
+
+    organization = Organization(
+        account_id=account.id,
+        name=org_name,
+        billing_email=data.billing_email or data.email,
+        country=data.country,
+        timezone=data.timezone or "UTC",
+        status=OrganizationStatus.ACTIVE,
+    )
+    db.add(organization)
+    db.flush()
+
+    # 4️⃣ Crear User master
+    user_full_name = data.name if data.name else data.account_name
+
+    user = User(
+        organization_id=organization.id,
+        email=data.email,
+        full_name=user_full_name,
+        is_master=True,
+        email_verified=False,
+    )
+    db.add(user)
+    db.flush()
+
+    # 5️⃣ Crear membership OWNER en organization_users
+    membership = OrganizationUser(
+        organization_id=organization.id,
+        user_id=user.id,
+        role=OrganizationRole.OWNER,
+    )
+    db.add(membership)
+    db.flush()
+
+    # 6️⃣ Crear membership OWNER en account_users
+    account_membership = AccountUser(
+        account_id=account.id,
+        user_id=user.id,
+        role=AccountRole.OWNER.value,
+    )
+    db.add(account_membership)
+    db.flush()
+
+    # 8️⃣ Registrar usuario en Cognito
+    cognito_sub = None
+    try:
+        cognito_response = cognito.admin_create_user(
+            UserPoolId=settings.COGNITO_USER_POOL_ID,
+            Username=data.email,
+            UserAttributes=[
+                {"Name": "email", "Value": data.email},
+                {"Name": "email_verified", "Value": "false"},
+                {"Name": "name", "Value": user_full_name},
+            ],
+            MessageAction="SUPPRESS",
+        )
+
+        cognito_sub = next(
+            (
+                attr["Value"]
+                for attr in cognito_response["User"]["Attributes"]
+                if attr["Name"] == "sub"
+            ),
+            None,
+        )
+
+        cognito.admin_set_user_password(
+            UserPoolId=settings.COGNITO_USER_POOL_ID,
+            Username=data.email,
+            Password=data.password,
+            Permanent=True,
+        )
+
+        if cognito_sub:
+            user.cognito_sub = cognito_sub
+
+        logger.info(f"[REGISTER] Usuario registrado en Cognito: {data.email}")
+
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"].get("Message", str(e))
+
+        logger.error(
+            f"[REGISTER ERROR] Cognito: {error_code} - {error_message} - Email: {data.email}"
+        )
+
+        if error_code == "UsernameExistsException":
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"El usuario con email {data.email} ya existe. Si es tu cuenta y no puedes acceder, contacta soporte.",
+            )
+        else:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo completar el registro. Por favor, intenta nuevamente o contacta soporte.",
+            )
+
+    # 9️⃣ Generar token y enviar email de verificación
+    verification_token_str = generate_verification_token()
+    token = TokenConfirmacion(
+        token=verification_token_str,
+        user_id=user.id,
+        type=TokenType.EMAIL_VERIFICATION,
+        password_temp=data.password,
+    )
+    db.add(token)
+
+    db.commit()
+    db.refresh(account)
+    db.refresh(organization)
+    db.refresh(user)
+
+    # Enviar email de verificación (NO falla el endpoint si falla)
+    try:
+        email_sent = send_verification_email(data.email, verification_token_str)
+        if email_sent:
+            logger.info(f"[REGISTER] Email de verificación enviado a: {data.email}")
+        else:
+            logger.warning(
+                f"[REGISTER] No se pudo enviar email de verificación a: {data.email}"
+            )
+    except Exception as e:
+        logger.warning(f"[REGISTER] Error enviando email de verificación: {e}")
+
+    return OnboardingResponse(
+        account_id=account.id,
+        organization_id=organization.id,
+        user_id=user.id,
+    )
+
+
+# ------------------------------------------
+# Obtener mi cuenta (Account)
+# ------------------------------------------
+def _get_account_for_user(db: Session, user: User) -> Account:
+    """
+    Obtiene el Account asociado al usuario a través de su organización.
+    """
+    organization = (
+        db.query(Organization).filter(Organization.id == user.organization_id).first()
+    )
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organización no encontrada",
+        )
+
+    account = db.query(Account).filter(Account.id == organization.account_id).first()
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account no encontrado",
+        )
+
+    return account
+
+
+@router.get("/me", response_model=AuthMeResponse)
+def get_my_account(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+):
+    """
+    Obtiene el Account del usuario autenticado junto con su rol.
+
+    Resuelve el Account a través de la organización del usuario.
+    Incluye el rol del usuario en su organización actual.
+    """
+    account = _get_account_for_user(db, current_user)
+
+    # Obtener el rol del usuario en su organización
+    membership = (
+        db.query(OrganizationUser)
+        .filter(
+            OrganizationUser.user_id == current_user.id,
+            OrganizationUser.organization_id == current_user.organization_id,
+        )
+        .first()
+    )
+
+    # El rol puede ser un enum o un string dependiendo de cómo se guardó
+    if membership:
+        role = (
+            membership.role.value
+            if hasattr(membership.role, "value")
+            else membership.role
+        )
+    else:
+        role = "member"
+
+    return AuthMeResponse(
+        account=AccountOut.model_validate(account),
+        role=role,
+        organization_id=current_user.organization_id,
+    )
 
 
 # ------------------------------------------
@@ -381,17 +648,26 @@ def change_password(
 
     Proceso:
     1. Verifica que el usuario esté autenticado
-    2. Obtiene el access_token del usuario (necesario para ChangePassword)
-    3. Llama a change_password de Cognito con la contraseña actual y la nueva
-    4. Retorna mensaje de éxito
+    2. Verifica que el email esté verificado
+    3. Valida la contraseña actual con Cognito
+    4. Cambia la contraseña usando AdminSetUserPassword
+    5. Retorna mensaje de éxito
 
     Códigos de error:
     - 400: Contraseña actual incorrecta o nueva contraseña inválida
     - 401: Token de acceso inválido o expirado
+    - 403: Email no verificado
     - 500: Error al cambiar la contraseña en Cognito
 
     Nota: Este endpoint requiere autenticación (Bearer token en el header Authorization)
     """
+
+    # 0️⃣ Verificar que el email esté verificado
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email no verificado. Debe verificar su email antes de cambiar la contraseña.",
+        )
 
     # Para usar ChangePassword necesitamos el AccessToken del usuario
     # El access token debe venir en el header Authorization
@@ -708,7 +984,9 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     # ========================================
 
     # Buscar la organización asociada
-    organization = db.query(Organization).filter(Organization.id == user.organization_id).first()
+    organization = (
+        db.query(Organization).filter(Organization.id == user.organization_id).first()
+    )
 
     if not organization:
         raise HTTPException(
@@ -842,7 +1120,9 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
     db.commit()
 
-    print(f"[VERIFY EMAIL - FLUJO A] Organización activada exitosamente: {organization.name}")
+    print(
+        f"[VERIFY EMAIL - FLUJO A] Organización activada exitosamente: {organization.name}"
+    )
 
     return ConfirmEmailResponse(
         message="Email verificado exitosamente. Tu cuenta ha sido activada y ahora puedes iniciar sesión."

@@ -22,10 +22,45 @@ class OrganizationBase(BaseModel):
     name: str = Field(..., description="Nombre de la organización")
 
 
+class OrganizationCreate(BaseModel):
+    """Schema para crear una nueva organización."""
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Nombre de la organización",
+    )
+    billing_email: Optional[EmailStr] = Field(
+        None,
+        description="Email de facturación (opcional)",
+    )
+    country: Optional[str] = Field(
+        default="MX",
+        max_length=2,
+        description="Código de país ISO 3166-1 alpha-2",
+    )
+    timezone: Optional[str] = Field(
+        default="America/Mexico_City",
+        description="Zona horaria IANA",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Flota Norte",
+                "billing_email": "flotanorte@empresa.com",
+                "country": "MX",
+                "timezone": "America/Mexico_City",
+            }
+        }
+
+
 class OrganizationOut(OrganizationBase):
     """Organización en respuestas."""
 
     id: UUID
+    account_id: Optional[UUID] = None
     status: str
     billing_email: Optional[str] = None
     country: Optional[str] = None
@@ -38,6 +73,7 @@ class OrganizationOut(OrganizationBase):
         json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
+                "account_id": "223e4567-e89b-12d3-a456-426614174000",
                 "name": "Transportes García",
                 "status": "ACTIVE",
                 "billing_email": "facturacion@transportesgarcia.com",

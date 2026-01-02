@@ -155,7 +155,7 @@ def list_units(
     query = (
         db.query(
             Unit.id,
-            Unit.client_id,
+            Unit.organization_id,
             Unit.name,
             Unit.description,
             Unit.deleted_at,
@@ -195,7 +195,7 @@ def list_units(
     for row in results:
         unit = UnitWithDevice(
             id=row.id,
-            client_id=row.client_id,
+            client_id=row.organization_id,
             name=row.name,
             description=row.description,
             deleted_at=row.deleted_at,
@@ -1067,7 +1067,9 @@ def remove_user_from_unit(
     # Verificar que la unidad pertenece al cliente
     unit = (
         db.query(Unit)
-        .filter(Unit.id == unit_id, Unit.organization_id == current_user.organization_id)
+        .filter(
+            Unit.id == unit_id, Unit.organization_id == current_user.organization_id
+        )
         .first()
     )
 

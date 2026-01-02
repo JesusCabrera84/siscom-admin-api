@@ -6,7 +6,7 @@ La API interna proporciona endpoints administrativos para gestión global del si
 
 > **Rol**: Panel de administración interno para operaciones que trascienden el contexto de una sola organización.
 
-**Base URL**: `/api/v1/internal/clients`
+**Base URL**: `/api/v1/internal/organizations`
 
 ---
 
@@ -99,26 +99,26 @@ curl -X POST https://api.example.com/api/v1/auth/internal \
 ### Paso 2: Usar el Token en las Peticiones
 
 ```bash
-curl -X GET https://api.example.com/api/v1/internal/clients \
+curl -X GET https://api.example.com/api/v1/internal/organizations \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4uLi4..."
 ```
 
 ### Diagrama de Flujo
 
 ```
-┌─────────────┐     1. POST /auth/internal      ┌─────────────┐
-│   gac-web   │ ──────────────────────────────► │   API       │
-│ (Admin App) │                                  │             │
-│             │ ◄────────────────────────────── │             │
-└─────────────┘     Token PASETO                └─────────────┘
+┌─────────────┐     1. POST /auth/internal          ┌─────────────┐
+│   gac-web   │ ───────────────────────────────────► │   API       │
+│ (Admin App) │                                      │             │
+│             │ ◄─────────────────────────────────── │             │
+└─────────────┘     Token PASETO                     └─────────────┘
       │
       │ Almacenar token
       ▼
-┌─────────────┐     2. GET /internal/clients    ┌─────────────┐
-│   gac-web   │ ──────────────────────────────► │   API       │
-│             │     Authorization: Bearer ...    │             │
-│             │ ◄────────────────────────────── │             │
-└─────────────┘     Lista de organizaciones     └─────────────┘
+┌─────────────┐     2. GET /internal/organizations  ┌─────────────┐
+│   gac-web   │ ───────────────────────────────────► │   API       │
+│             │     Authorization: Bearer ...        │             │
+│             │ ◄─────────────────────────────────── │             │
+└─────────────┘     Lista de organizaciones          └─────────────┘
 ```
 
 ---
@@ -127,7 +127,7 @@ curl -X GET https://api.example.com/api/v1/internal/clients \
 
 ### 1. Listar Todas las Organizaciones
 
-**GET** `/api/v1/internal/clients`
+**GET** `/api/v1/internal/organizations`
 
 Lista todas las organizaciones del sistema con opciones de filtrado y paginación.
 
@@ -150,11 +150,11 @@ Authorization: Bearer <token_paseto>
 
 ```bash
 # Listar todas las organizaciones activas
-curl -X GET "https://api.example.com/api/v1/internal/clients?status=ACTIVE&limit=20" \
+curl -X GET "https://api.example.com/api/v1/internal/organizations?status=ACTIVE&limit=20" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 
 # Buscar organizaciones por nombre
-curl -X GET "https://api.example.com/api/v1/internal/clients?search=transportes" \
+curl -X GET "https://api.example.com/api/v1/internal/organizations?search=transportes" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 ```
 
@@ -164,34 +164,34 @@ curl -X GET "https://api.example.com/api/v1/internal/clients?search=transportes"
 [
   {
     "id": "456e4567-e89b-12d3-a456-426614174000",
+    "account_id": "123e4567-e89b-12d3-a456-426614174000",
     "name": "Transportes XYZ",
     "status": "ACTIVE",
+    "billing_email": "facturacion@transportesxyz.com",
+    "country": "MX",
+    "timezone": "America/Mexico_City",
     "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-20T15:45:00Z",
-    "subscriptions_count": 2,
-    "users_count": 5,
-    "devices_count": 45
+    "updated_at": "2024-01-20T15:45:00Z"
   },
   {
     "id": "567e4567-e89b-12d3-a456-426614174001",
+    "account_id": "234e4567-e89b-12d3-a456-426614174001",
     "name": "Logística ABC",
     "status": "ACTIVE",
+    "billing_email": "admin@logisticaabc.com",
+    "country": "MX",
+    "timezone": "America/Mexico_City",
     "created_at": "2024-01-10T08:00:00Z",
-    "updated_at": "2024-01-10T08:00:00Z",
-    "subscriptions_count": 1,
-    "users_count": 3,
-    "devices_count": 12
+    "updated_at": "2024-01-10T08:00:00Z"
   }
 ]
 ```
-
-> **Nota**: El campo `active_subscription_id` NO se incluye en la respuesta porque es deprecado. En su lugar, se incluye `subscriptions_count` para indicar suscripciones activas.
 
 ---
 
 ### 2. Obtener Estadísticas de Organizaciones
 
-**GET** `/api/v1/internal/clients/stats`
+**GET** `/api/v1/internal/organizations/stats`
 
 Obtiene estadísticas generales del sistema.
 
@@ -211,18 +211,6 @@ Authorization: Bearer <token_paseto>
     "active": 125,
     "suspended": 8,
     "deleted": 5
-  },
-  "subscriptions": {
-    "total_active": 180,
-    "by_plan": {
-      "Plan Básico": 45,
-      "Plan Pro": 80,
-      "Plan Enterprise": 55
-    }
-  },
-  "devices": {
-    "total": 2500,
-    "active": 2100
   }
 }
 ```
@@ -231,9 +219,9 @@ Authorization: Bearer <token_paseto>
 
 ### 3. Obtener Organización por ID
 
-**GET** `/api/v1/internal/clients/{client_id}`
+**GET** `/api/v1/internal/organizations/{organization_id}`
 
-Obtiene información detallada de una organización específica, incluyendo sus suscripciones y capabilities.
+Obtiene información detallada de una organización específica.
 
 #### Headers
 
@@ -243,69 +231,23 @@ Authorization: Bearer <token_paseto>
 
 #### Path Parameters
 
-| Parámetro   | Tipo | Descripción |
-|-------------|------|-------------|
-| `client_id` | UUID | ID de la organización |
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `organization_id` | UUID | ID de la organización |
 
 #### Response 200 OK
 
 ```json
 {
-  "organization": {
-    "id": "456e4567-e89b-12d3-a456-426614174000",
-    "name": "Transportes XYZ",
-    "status": "ACTIVE",
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-20T15:45:00Z"
-  },
-  "subscriptions": {
-    "active": [
-      {
-        "id": "sub-uuid-1",
-        "plan": {
-          "id": "plan-uuid",
-          "name": "Plan Enterprise"
-        },
-        "status": "ACTIVE",
-        "started_at": "2024-01-01T00:00:00Z",
-        "expires_at": "2025-01-01T00:00:00Z",
-        "auto_renew": true
-      }
-    ],
-    "history": [
-      {
-        "id": "sub-uuid-old",
-        "plan": {
-          "id": "plan-uuid-old",
-          "name": "Plan Básico"
-        },
-        "status": "EXPIRED",
-        "started_at": "2023-01-01T00:00:00Z",
-        "expires_at": "2024-01-01T00:00:00Z"
-      }
-    ]
-  },
-  "effective_capabilities": {
-    "max_devices": 100,
-    "max_geofences": 50,
-    "max_users": 25,
-    "history_days": 365,
-    "ai_features": true,
-    "analytics_tools": true
-  },
-  "capability_overrides": [
-    {
-      "capability": "max_geofences",
-      "value": 100,
-      "reason": "Upgrade especial por volumen",
-      "applied_at": "2024-06-01T00:00:00Z"
-    }
-  ],
-  "stats": {
-    "users_count": 5,
-    "devices_count": 45,
-    "units_count": 40
-  }
+  "id": "456e4567-e89b-12d3-a456-426614174000",
+  "account_id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Transportes XYZ",
+  "status": "ACTIVE",
+  "billing_email": "facturacion@transportesxyz.com",
+  "country": "MX",
+  "timezone": "America/Mexico_City",
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-20T15:45:00Z"
 }
 ```
 
@@ -313,7 +255,7 @@ Authorization: Bearer <token_paseto>
 
 ```json
 {
-  "detail": "Cliente no encontrado"
+  "detail": "Organización no encontrada"
 }
 ```
 
@@ -321,7 +263,7 @@ Authorization: Bearer <token_paseto>
 
 ### 4. Listar Usuarios de una Organización
 
-**GET** `/api/v1/internal/clients/{client_id}/users`
+**GET** `/api/v1/internal/organizations/{organization_id}/users`
 
 Lista todos los usuarios de una organización con sus roles.
 
@@ -339,33 +281,19 @@ Authorization: Bearer <token_paseto>
     "id": "123e4567-e89b-12d3-a456-426614174000",
     "email": "admin@transportesxyz.com",
     "full_name": "Juan Pérez",
-    "role": "owner",
     "is_master": true,
     "email_verified": true,
     "has_cognito": true,
-    "last_login_at": "2024-01-20T10:00:00Z",
     "created_at": "2024-01-15T10:30:00Z"
   },
   {
     "id": "234e4567-e89b-12d3-a456-426614174001",
     "email": "operador@transportesxyz.com",
     "full_name": "María García",
-    "role": "admin",
     "is_master": true,
     "email_verified": true,
     "has_cognito": true,
-    "last_login_at": "2024-01-19T15:30:00Z",
     "created_at": "2024-01-20T14:00:00Z"
-  },
-  {
-    "id": "345e4567-e89b-12d3-a456-426614174002",
-    "email": "contador@transportesxyz.com",
-    "full_name": "Carlos López",
-    "role": "billing",
-    "is_master": false,
-    "email_verified": true,
-    "has_cognito": true,
-    "created_at": "2024-02-01T09:00:00Z"
   }
 ]
 ```
@@ -374,7 +302,7 @@ Authorization: Bearer <token_paseto>
 
 ### 5. Actualizar Estado de Organización
 
-**PATCH** `/api/v1/internal/clients/{client_id}/status`
+**PATCH** `/api/v1/internal/organizations/{organization_id}/status`
 
 Actualiza el estado de una organización. Útil para suspender, activar o eliminar organizaciones.
 
@@ -403,11 +331,11 @@ Authorization: Bearer <token_paseto>
 
 ```bash
 # Suspender una organización
-curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-.../status?new_status=SUSPENDED" \
+curl -X PATCH "https://api.example.com/api/v1/internal/organizations/456e4567-.../status?new_status=SUSPENDED" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 
 # Reactivar una organización
-curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-.../status?new_status=ACTIVE" \
+curl -X PATCH "https://api.example.com/api/v1/internal/organizations/456e4567-.../status?new_status=ACTIVE" \
   -H "Authorization: Bearer v4.local.VGhpcyBpcyBhIHRlc3QgdG9rZW4..."
 ```
 
@@ -419,93 +347,10 @@ curl -X PATCH "https://api.example.com/api/v1/internal/clients/456e4567-.../stat
   "organization": {
     "id": "456e4567-e89b-12d3-a456-426614174000",
     "name": "Transportes XYZ",
-    "status": "SUSPENDED",
-    "previous_status": "ACTIVE",
-    "updated_at": "2024-01-20T16:00:00Z"
-  },
-  "affected": {
-    "users_blocked": 5,
-    "devices_suspended": 45
+    "status": "SUSPENDED"
   }
 }
 ```
-
----
-
-### 6. Listar Suscripciones de una Organización
-
-**GET** `/api/v1/internal/clients/{client_id}/subscriptions`
-
-> **Estado**: Endpoint esperado para implementación
-
-Lista todas las suscripciones de una organización (activas e históricas).
-
-#### Response Esperado
-
-```json
-{
-  "organization_id": "456e4567-e89b-12d3-a456-426614174000",
-  "subscriptions": [
-    {
-      "id": "sub-uuid-1",
-      "plan": {
-        "id": "plan-uuid",
-        "name": "Plan Enterprise",
-        "capabilities": {
-          "max_devices": 100,
-          "max_geofences": 50
-        }
-      },
-      "status": "ACTIVE",
-      "started_at": "2024-01-01T00:00:00Z",
-      "expires_at": "2025-01-01T00:00:00Z",
-      "auto_renew": true,
-      "payment_status": "CURRENT"
-    }
-  ],
-  "total_active": 1,
-  "total_expired": 2
-}
-```
-
----
-
-### 7. Gestionar Capability Overrides
-
-**POST** `/api/v1/internal/clients/{client_id}/capability-overrides`
-
-> **Estado**: Endpoint esperado para implementación
-
-Aplica un override de capability a una organización.
-
-#### Request Body
-
-```json
-{
-  "capability": "max_geofences",
-  "value": 100,
-  "reason": "Upgrade especial por contrato enterprise"
-}
-```
-
-#### Response Esperado
-
-```json
-{
-  "message": "Override aplicado exitosamente",
-  "override": {
-    "capability": "max_geofences",
-    "previous_effective": 50,
-    "new_effective": 100,
-    "source": "organization_override",
-    "applied_at": "2024-01-20T16:00:00Z"
-  }
-}
-```
-
-**DELETE** `/api/v1/internal/clients/{client_id}/capability-overrides/{capability}`
-
-Elimina un override y vuelve al valor del plan.
 
 ---
 
@@ -515,45 +360,19 @@ Elimina un override y vuelve al valor del plan.
 
 ```bash
 # 1. Verificar estado actual
-GET /api/v1/internal/clients/{org_id}
+GET /api/v1/internal/organizations/{org_id}
 
 # 2. Suspender organización
-PATCH /api/v1/internal/clients/{org_id}/status?new_status=SUSPENDED
-
-# 3. (Opcional) Notificar por email externo
+PATCH /api/v1/internal/organizations/{org_id}/status?new_status=SUSPENDED
 ```
 
-### 2. Inspeccionar Capabilities de una Organización
+### 2. Auditar Usuarios de una Organización
 
 ```bash
-# Obtener detalle completo
-GET /api/v1/internal/clients/{org_id}
+# Listar usuarios
+GET /api/v1/internal/organizations/{org_id}/users
 
-# Respuesta incluye effective_capabilities y capability_overrides
-```
-
-### 3. Aplicar Upgrade Especial a Organización
-
-```bash
-# 1. Verificar capabilities actuales
-GET /api/v1/internal/clients/{org_id}
-
-# 2. Aplicar override
-POST /api/v1/internal/clients/{org_id}/capability-overrides
-{
-  "capability": "max_devices",
-  "value": 200,
-  "reason": "Contrato enterprise 2024"
-}
-```
-
-### 4. Auditar Usuarios de una Organización
-
-```bash
-# Listar usuarios con roles
-GET /api/v1/internal/clients/{org_id}/users
-
-# Verificar quién tiene rol de billing
+# Verificar quién es master
 # Verificar último login de usuarios
 ```
 
@@ -582,17 +401,7 @@ La organización solicitada no existe.
 
 ```json
 {
-  "detail": "Cliente no encontrado"
-}
-```
-
-### 400 Bad Request
-
-Transición de estado inválida.
-
-```json
-{
-  "detail": "No se puede cambiar de DELETED a ACTIVE"
+  "detail": "Organización no encontrada"
 }
 ```
 
@@ -600,11 +409,11 @@ Transición de estado inválida.
 
 ## Comparación: API Pública vs API Interna
 
-| Aspecto | API Pública (`/clients`) | API Interna (`/internal/clients`) |
-|---------|--------------------------|-----------------------------------|
+| Aspecto | API Pública (`/accounts`) | API Interna (`/internal/organizations`) |
+|---------|---------------------------|----------------------------------------|
 | **Autenticación** | Cognito (usuarios externos) | PASETO (servicios internos) |
 | **Acceso a datos** | Solo su propia organización | Todas las organizaciones |
-| **Operaciones** | Lectura de su organización | CRUD completo + capabilities |
+| **Operaciones** | CRUD de su account/org | CRUD completo + capabilities |
 | **Caso de uso** | App de clientes finales | Panel administrativo (gac-web) |
 | **Usuarios** | Clientes del sistema | Administradores internos |
 | **Visibilidad** | Pública | Solo red interna |
@@ -645,7 +454,7 @@ const API_CONFIG = {
 ### Servicio de Cliente
 
 ```javascript
-class InternalClientsService {
+class InternalOrganizationsService {
   constructor() {
     this.token = null;
     this.tokenExpiry = null;
@@ -679,7 +488,7 @@ class InternalClientsService {
     const queryString = new URLSearchParams(params).toString();
     
     const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients?${queryString}`,
+      `${API_CONFIG.baseUrl}/internal/organizations?${queryString}`,
       { headers: { 'Authorization': `Bearer ${token}` } }
     );
     
@@ -690,7 +499,7 @@ class InternalClientsService {
     const token = await this.getToken();
     
     const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients/${orgId}`,
+      `${API_CONFIG.baseUrl}/internal/organizations/${orgId}`,
       { headers: { 'Authorization': `Bearer ${token}` } }
     );
     
@@ -701,7 +510,7 @@ class InternalClientsService {
     const token = await this.getToken();
     
     const response = await fetch(
-      `${API_CONFIG.baseUrl}/internal/clients/${orgId}/status?new_status=${newStatus}`,
+      `${API_CONFIG.baseUrl}/internal/organizations/${orgId}/status?new_status=${newStatus}`,
       {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -712,10 +521,23 @@ class InternalClientsService {
   }
 }
 
-export const internalClientsService = new InternalClientsService();
+export const internalOrganizationsService = new InternalOrganizationsService();
 ```
 
 ---
 
-**Última actualización**: Diciembre 2025  
-**Referencia**: [Modelo Organizacional](../guides/organizational-model.md)
+---
+
+## Relación con Otros Endpoints
+
+| Endpoint | Propósito |
+|----------|-----------|
+| `GET /internal/accounts/stats` | Estadísticas globales (accounts, devices, users) |
+| `GET /internal/organizations` | Lista todas las organizaciones (este endpoint) |
+| `GET /internal/organizations/stats` | Estadísticas de organizaciones por estado |
+
+---
+
+**Última actualización**: Enero 2026  
+**Referencia**: [Modelo Organizacional](../guides/organizational-model.md) | [API Interna - Accounts](internal-accounts.md)
+

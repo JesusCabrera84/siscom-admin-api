@@ -8,7 +8,6 @@ Esta es lógica LEGACY que se mantiene por compatibilidad.
 
 La forma CORRECTA de validar límites es usando CapabilityService:
     from app.services.capabilities import CapabilityService
-    
     if not CapabilityService.validate_limit(db, client_id, "max_devices", current_count):
         raise HTTPException(403, "Límite de dispositivos alcanzado")
 

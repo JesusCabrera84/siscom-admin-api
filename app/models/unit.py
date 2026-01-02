@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import TIMESTAMP, Column, ForeignKey, Text, text
@@ -45,10 +45,10 @@ class Unit(SQLModel, table=True):
 
     # Relationships
     organization: "Organization" = Relationship(back_populates="units")
-    unit_devices: list["UnitDevice"] = Relationship(
+    unit_devices: List["UnitDevice"] = Relationship(
         back_populates="unit", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    user_units: list["UserUnit"] = Relationship(
+    user_units: List["UserUnit"] = Relationship(
         back_populates="unit", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
     unit_profile: Optional["UnitProfile"] = Relationship(

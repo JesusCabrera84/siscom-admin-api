@@ -12,7 +12,7 @@ Basado en DDL:
 
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text, text
@@ -59,10 +59,10 @@ class Capability(SQLModel, table=True):
     )
 
     # Relationships
-    plan_capabilities: list["PlanCapability"] = Relationship(
+    plan_capabilities: List["PlanCapability"] = Relationship(
         back_populates="capability"
     )
-    organization_capabilities: list["OrganizationCapability"] = Relationship(
+    organization_capabilities: List["OrganizationCapability"] = Relationship(
         back_populates="capability"
     )
 

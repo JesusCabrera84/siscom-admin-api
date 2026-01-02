@@ -107,14 +107,14 @@
 
 | Archivo | Cambios |
 |---------|---------|
-| `app/api/v1/endpoints/clients.py` | Crea Account + Organization en registro |
+| `app/api/v1/endpoints/accounts.py` | Crea Account + Organization en registro (onboarding) |
 | `app/api/v1/endpoints/subscriptions.py` | `client_id` → `organization_id` |
 | `app/api/v1/endpoints/capabilities.py` | `client_id` → `organization_id` |
 | `app/api/v1/endpoints/devices.py` | `client_id` → `organization_id` |
 | `app/api/v1/endpoints/units.py` | `client_id` → `organization_id` |
 | `app/api/v1/endpoints/users.py` | `client_id` → `organization_id` |
 | `app/api/v1/endpoints/services.py` | `client_id` → `organization_id` |
-| `app/api/v1/endpoints/internal/clients.py` | `Organization`, `OrganizationStatus` |
+| `app/api/v1/endpoints/internal/organizations.py` | `Organization`, `OrganizationStatus` |
 
 ### Schemas Actualizados
 
@@ -126,7 +126,7 @@
 ### Flujo de Onboarding Actualizado
 
 ```python
-# POST /api/v1/clients/
+# POST /api/v1/auth/register
 # 1. Crear Account
 new_account = Account(name=..., status=AccountStatus.ACTIVE)
 
@@ -173,7 +173,7 @@ org_user = OrganizationUser(
 
 | Archivo | Cambios |
 |---------|---------|
-| `docs/api/clients.md` | Modelo Account/Organization, flujo de registro |
+| `docs/api/accounts.md` | Modelo Account/Organization, flujo de registro |
 | `docs/api/subscriptions.md` | `client_id` → `organization_id` |
 | `docs/api/accounts.md` | **NUEVO** - Documentación de Account |
 
@@ -365,7 +365,7 @@ def get_current_client_id():  # DEPRECATED
 2. **Ejecutar `alembic upgrade head`** en cada ambiente
 3. **Deprecar `is_master`** con warnings en logs
 4. **Preparar para Stripe** - Account tendrá `stripe_customer_id`
-5. **Implementar endpoint `/api/v1/accounts/me`**
+5. **Implementar endpoint `/api/v1/auth/me`**
 6. **Eliminar aliases de compatibilidad** en próxima versión mayor
 
 ---

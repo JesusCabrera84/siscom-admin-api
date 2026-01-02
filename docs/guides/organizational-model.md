@@ -277,12 +277,12 @@ La API interna con autenticación PASETO funciona como **panel de administració
 
 1. **Suspender organización por falta de pago**
    ```
-   PATCH /api/v1/internal/clients/{org_id}/status?new_status=SUSPENDED
+   PATCH /api/v1/internal/organizations/{org_id}/status?new_status=SUSPENDED
    ```
 
 2. **Inspeccionar capabilities de una organización**
    ```
-   GET /api/v1/internal/clients/{org_id}/capabilities
+   GET /api/v1/internal/organizations/{org_id}/capabilities
    ```
 
 3. **Ver todas las suscripciones activas en el sistema**
@@ -292,7 +292,7 @@ La API interna con autenticación PASETO funciona como **panel de administració
 
 4. **Aplicar override de capability a organización**
    ```
-   POST /api/v1/internal/clients/{org_id}/capability-overrides
+   POST /api/v1/internal/organizations/{org_id}/capability-overrides
    ```
 
 ---
@@ -339,8 +339,8 @@ La API interna con autenticación PASETO funciona como **panel de administració
 ### Flujo 1: Registro de Nueva Organización
 
 ```
-1. POST /api/v1/clients/
-   ├── Crear Organization (status=PENDING)
+1. POST /api/v1/auth/register
+   ├── Crear Account + Organization (status=ACTIVE)
    ├── Crear User (email_verified=false)
    ├── Crear Organization_User (role=owner)
    ├── Asignar capabilities del plan FREE/TRIAL
@@ -355,7 +355,7 @@ La API interna con autenticación PASETO funciona como **panel de administració
 ### Flujo 2: Consultar Información de Organización
 
 ```
-GET /api/v1/clients/me
+GET /api/v1/accounts/organization
 
 Respuesta:
 {
@@ -470,8 +470,8 @@ if not membership and user.is_master:  # ← NO duplicar esta lógica
 Cuando se crea una nueva organización, el usuario creador se registra automáticamente en `organization_users` con rol `owner`:
 
 ```python
-# En POST /api/v1/clients/ se ejecuta:
-1. Crear Organization (clients)
+# En POST /api/v1/auth/register se ejecuta:
+1. Crear Account + Organization
 2. Crear User (is_master=True para compatibilidad)
 3. Crear OrganizationUser (role=owner)  # ← FUENTE DE VERDAD
 ```

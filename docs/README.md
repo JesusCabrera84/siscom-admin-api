@@ -8,11 +8,12 @@ Bienvenido a la documentación completa de la API administrativa de SISCOM - una
 
 ### Conceptos Fundamentales
 
-> **Importante**: En este sistema, **"cliente" = "organización"** a nivel de negocio. La tabla `clients` representa organizaciones/empresas que contratan nuestros servicios.
+> **Modelo conceptual**: Account = raíz comercial (billing), Organization = raíz operativa (permisos).
 
 | Concepto | Descripción |
 |----------|-------------|
-| **Organización** | Entidad de negocio principal (tabla `clients`) |
+| **Account** | Entidad comercial (billing, facturación) |
+| **Organización** | Entidad operativa (permisos, uso diario) |
 | **Suscripciones** | Contratos de servicio - una organización puede tener **múltiples** |
 | **Capabilities** | Fuente de verdad para límites y features |
 | **Roles** | Permisos de usuarios dentro de la organización |
@@ -40,15 +41,17 @@ Comienza aquí si eres nuevo en el proyecto:
 
 | Documento | Descripción |
 |-----------|-------------|
-| **[Autenticación](api/auth.md)** | Login, tokens (Cognito y PASETO), verificación de email |
-| **[Organizaciones](api/clients.md)** | Registro y gestión de organizaciones (antes "clientes") |
+| **[Autenticación](api/auth.md)** | Login, registro, tokens, verificación de email |
+| **[Cuentas (Accounts)](api/accounts.md)** | Gestión de cuentas (raíz comercial) |
+| **[Organizaciones](api/organizations.md)** | Gestión de organizaciones (raíz operativa) |
 | **[Usuarios](api/users.md)** | Invitaciones, roles y gestión de usuarios |
 
 ### API Interna (Administrativa)
 
 | Documento | Descripción |
 |-----------|-------------|
-| **[API Interna](api/internal-clients.md)** | Endpoints administrativos con PASETO (orquestador) |
+| **[API Interna - Accounts](api/internal-accounts.md)** | Estadísticas globales del sistema (PASETO) |
+| **[API Interna - Organizations](api/internal-organizations.md)** | Gestión de organizaciones (PASETO) |
 
 ### Gestión de Dispositivos y Flotas
 
@@ -98,12 +101,15 @@ Comienza aquí si eres nuevo en el proyecto:
 | `POST` | `/logout` | Cerrar sesión | 🔐 Cognito |
 | `POST` | `/refresh` | Renovar tokens de acceso | 🌐 Público |
 
-### Organizaciones (`/api/v1/clients`)
+### Cuentas (`/api/v1/accounts`)
 
 | Método | Endpoint | Descripción | Auth |
 |--------|----------|-------------|------|
-| `POST` | `/` | Registrar nueva organización | 🌐 Público |
-| `GET` | `/` | Obtener información de mi organización | 🔐 Cognito |
+| `POST` | `/` | Onboarding rápido (crear cuenta) | 🌐 Público |
+| `GET` | `/organization` | Obtener información de mi organización | 🔐 Cognito |
+| `GET` | `/me` | Obtener información de mi account | 🔐 Cognito |
+| `GET` | `/{account_id}` | Obtener account por ID | 🔐 Cognito |
+| `PATCH` | `/{account_id}` | Actualizar perfil del account | 🔐 Cognito (Owner) |
 
 ### Usuarios (`/api/v1/users`)
 
@@ -157,8 +163,9 @@ Comienza aquí si eres nuevo en el proyecto:
 | `GET` | `/` | Listar dispositivos del inventario | 🔐 Cognito / 🔑 PASETO |
 | `GET` | `/my-devices` | Dispositivos asignados al usuario | 🔐 Cognito |
 | `GET` | `/unassigned` | Dispositivos sin asignar | 🔐 Cognito / 🔑 PASETO |
+| `GET` | `/status` | Obtener colección de estados posibles | 🌐 Público |
 | `GET` | `/{device_id}` | Obtener dispositivo por ID | 🔐 Cognito / 🔑 PASETO |
-| `PATCH` | `/{device_id}` | Actualizar dispositivo | 🔐 Cognito / 🔑 PASETO |
+| `PATCH` | `/{device_id}` | Actualizar dispositivo (incluye status) | 🔐 Cognito / 🔑 PASETO |
 | `PATCH` | `/{device_id}/status` | Cambiar estado del dispositivo | 🔐 Cognito / 🔑 PASETO |
 | `POST` | `/{device_id}/notes` | Agregar nota al dispositivo | 🔐 Cognito / 🔑 PASETO |
 | `GET` | `/{device_id}/trips` | Viajes del dispositivo | 🔐 Cognito / 🔑 PASETO |
@@ -250,15 +257,24 @@ Comienza aquí si eres nuevo en el proyecto:
 |--------|----------|-------------|------|
 | `POST` | `/send-message` | Enviar mensaje de contacto | 🌐 Público |
 
-### API Interna (`/api/v1/internal/clients`) - 🔑 PASETO Only
+### API Interna - Accounts (`/api/v1/internal/accounts`) - 🔑 PASETO Only
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar todos los accounts con estadísticas | 🔑 PASETO |
+| `GET` | `/stats` | Estadísticas globales (accounts, devices, users) | 🔑 PASETO |
+| `GET` | `/{account_id}` | Obtener account por ID | 🔑 PASETO |
+| `GET` | `/{account_id}/organizations` | Listar organizaciones del account | 🔑 PASETO |
+
+### API Interna - Organizations (`/api/v1/internal/organizations`) - 🔑 PASETO Only
 
 | Método | Endpoint | Descripción | Auth |
 |--------|----------|-------------|------|
 | `GET` | `/` | Listar todas las organizaciones | 🔑 PASETO |
-| `GET` | `/stats` | Estadísticas de organizaciones | 🔑 PASETO |
-| `GET` | `/{client_id}` | Obtener organización por ID | 🔑 PASETO |
-| `GET` | `/{client_id}/users` | Usuarios de una organización | 🔑 PASETO |
-| `PATCH` | `/{client_id}/status` | Cambiar estado de organización | 🔑 PASETO |
+| `GET` | `/stats` | Estadísticas de organizaciones por estado | 🔑 PASETO |
+| `GET` | `/{organization_id}` | Obtener organización por ID | 🔑 PASETO |
+| `GET` | `/{organization_id}/users` | Usuarios de una organización | 🔑 PASETO |
+| `PATCH` | `/{organization_id}/status` | Cambiar estado de organización | 🔑 PASETO |
 
 ### Leyenda de Autenticación
 
@@ -354,7 +370,7 @@ Estos endpoints **NO** requieren autenticación:
 |----------|-------------|
 | `GET /` | Health check |
 | `GET /api/v1/plans/` | Listar planes disponibles |
-| `POST /api/v1/clients/` | Registrar nueva organización |
+| `POST /api/v1/auth/register` | Registrar nueva cuenta (onboarding) |
 | `POST /api/v1/auth/verify-email?token=...` | Verificar email |
 | `POST /api/v1/auth/resend-verification` | Reenviar verificación |
 | `POST /api/v1/auth/login` | Login |
@@ -372,7 +388,7 @@ Estos endpoints **NO** requieren autenticación:
 
 ```
 1. Registro de Organización
-   POST /api/v1/clients/
+   POST /api/v1/auth/register
    ↓
 2. Verificación de Email
    POST /api/v1/auth/verify-email?token=...
@@ -420,7 +436,7 @@ Estos endpoints **NO** requieren autenticación:
 
 ## 🗂️ Modelos de Datos Principales
 
-### Organization (tabla `clients`)
+### Organization (tabla `organizations`)
 
 ```python
 id: UUID

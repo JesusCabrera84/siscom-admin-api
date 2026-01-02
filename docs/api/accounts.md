@@ -2,7 +2,9 @@
 
 ## Descripción
 
-Endpoints para gestionar la **raíz comercial** del cliente. Una cuenta (`Account`) representa la entidad de facturación y billing que puede contener una o más organizaciones.
+Endpoints para gestión de la **raíz comercial** del cliente. Una cuenta (`Account`) representa la entidad de facturación y billing que puede contener una o más organizaciones.
+
+> **Nota**: El registro de nuevas cuentas se realiza en `POST /api/v1/auth/register`. Ver [API de Auth](./auth.md).
 
 > **Referencia**: [ADR-001: Modelo Account/Organization/User](../architecture/adr/001-account-organization-user-model.md)
 
@@ -16,47 +18,37 @@ Endpoints para gestionar la **raíz comercial** del cliente. Una cuenta (`Accoun
 │  - Raíz comercial (billing, facturación)                    │
 │  - name: puede repetirse                                    │
 │  - billing_email, country, timezone, metadata               │
-│  - Relación con: payments, organizations                    │
 └─────────────────────────┬───────────────────────────────────┘
                           │ 1:N
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    ORGANIZATION                              │
 │  - Raíz operativa (permisos, uso diario)                    │
+│  - name: puede repetirse globalmente                        │
 │  - Pertenece a Account                                      │
-│  - users, devices, units, subscriptions                     │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ 1:N
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        USER                                  │
+│  - email: DEBE ser único globalmente                        │
+│  - Roles via OrganizationUser                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 🎯 Regla de Oro
+### Regla de Oro
 
 > **Los nombres NO son identidad. Los UUID sí.**
 
 ---
 
-## Campos del Modelo
-
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `id` | UUID | Identificador único |
-| `name` | string | Nombre de la cuenta (puede repetirse) |
-| `status` | enum | Estado: ACTIVE, SUSPENDED, DELETED |
-| `billing_email` | string | Email de facturación |
-| `country` | string | Código ISO 3166-1 alpha-2 |
-| `timezone` | string | Zona horaria IANA |
-| `metadata` | JSONB | Metadatos adicionales (RFC, industry, etc.) |
-| `created_at` | datetime | Fecha de creación |
-| `updated_at` | datetime | Fecha de última actualización |
-
----
-
 ## Endpoints
 
-### 1. Obtener Mi Account
+### 1. Obtener Organización Actual
 
-**GET** `/api/v1/accounts/me`
+**GET** `/api/v1/accounts/organization`
 
-Obtiene el Account del usuario autenticado a través de su organización.
+Obtiene la información de la organización del usuario autenticado.
 
 #### Headers
 
@@ -68,16 +60,13 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "id": "123e4567-e89b-12d3-a456-426614174000",
-  "account_name": "Mi Empresa S.A.",
+  "id": "223e4567-e89b-12d3-a456-426614174001",
+  "account_id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Mi Empresa S.A.",
   "status": "ACTIVE",
   "billing_email": "facturacion@miempresa.com",
   "country": "MX",
   "timezone": "America/Mexico_City",
-  "metadata": {
-    "rfc": "XAXX010101000",
-    "industry": "transport"
-  },
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-20T15:45:00Z"
 }
@@ -88,7 +77,7 @@ Authorization: Bearer <access_token>
 | Código | Detalle |
 |--------|---------|
 | 401 | Token no proporcionado o inválido |
-| 404 | `"Organización no encontrada"` / `"Account no encontrado"` |
+| 404 | `"Organización no encontrada"` |
 
 ---
 
@@ -261,7 +250,9 @@ Algunos campos se propagan automáticamente a la Organization default:
 
 ---
 
-## Estados de la Cuenta
+## Estados
+
+### Estados de la Cuenta
 
 | Estado | Descripción |
 |--------|-------------|
@@ -269,11 +260,81 @@ Algunos campos se propagan automáticamente a la Organization default:
 | `SUSPENDED` | Suspendida (falta de pago, violación TOS) |
 | `DELETED` | Eliminación lógica |
 
+### Estados de la Organización
+
+| Estado | Descripción |
+|--------|-------------|
+| `ACTIVE` | Organización activa y operativa |
+| `PENDING` | Pendiente de verificación (legacy) |
+| `SUSPENDED` | Suspendida administrativamente |
+| `DELETED` | Eliminación lógica |
+
+> **Nota**: En el nuevo flujo, las organizaciones se crean directamente en estado `ACTIVE`.
+
 ---
 
 ## Casos de Uso
 
-### Completar información fiscal
+### Persona Individual
+
+```json
+POST /api/v1/auth/register
+
+{
+  "account_name": "García Personal",
+  "name": "Juan García",
+  "email": "juan@gmail.com",
+  "password": "MiContraseña123!"
+}
+```
+
+> **Resultado:**
+> - Usuario: `full_name = "Juan García"`
+> - Account: `name = "García Personal"`
+> - Organization: `name = "ORG García Personal"` (se agrega prefijo automático)
+
+### Familia
+
+```json
+POST /api/v1/auth/register
+
+{
+  "account_name": "Familia García López",
+  "name": "María García",
+  "organization_name": "Casa García",
+  "email": "familia@gmail.com",
+  "password": "FamiliaSegura123!"
+}
+```
+
+> **Resultado:**
+> - Usuario: `full_name = "María García"`
+> - Account: `name = "Familia García López"`
+> - Organization: `name = "Casa García"` (nombre personalizado)
+
+### Empresa
+
+```json
+POST /api/v1/auth/register
+
+{
+  "account_name": "Transportes García S.A. de C.V.",
+  "name": "Carlos García López",
+  "organization_name": "Flota Norte",
+  "email": "admin@transportesgarcia.com",
+  "password": "EmpresaSegura123!",
+  "billing_email": "facturacion@transportesgarcia.com",
+  "country": "MX",
+  "timezone": "America/Mexico_City"
+}
+```
+
+> **Resultado:**
+> - Usuario: `full_name = "Carlos García López"`
+> - Account: `name = "Transportes García S.A. de C.V."`
+> - Organization: `name = "Flota Norte"` (nombre personalizado)
+
+### Completar información fiscal (después del registro)
 
 ```json
 PATCH /api/v1/accounts/123e4567-...
@@ -289,66 +350,21 @@ PATCH /api/v1/accounts/123e4567-...
 }
 ```
 
-### Cambiar zona horaria
-
-```json
-PATCH /api/v1/accounts/123e4567-...
-
-{
-  "timezone": "America/Monterrey"
-}
-```
-
-### Actualizar nombre de empresa
-
-```json
-PATCH /api/v1/accounts/123e4567-...
-
-{
-  "account_name": "Nuevo Nombre de Empresa S.A."
-}
-```
-
----
-
-## Relaciones
-
-### Con Organizations
-
-```python
-account.organizations  # List[Organization]
-
-# En el futuro, una cuenta podrá tener múltiples organizaciones
-Account "Grupo Corporativo"
-├── Organization "Transportes Norte"
-├── Organization "Transportes Sur"
-└── Organization "Logística Central"
-```
-
-### Con Payments
-
-```python
-account.payments  # List[Payment]
-
-# Los pagos pertenecen a la cuenta (billing centralizado)
-payment.account_id  # UUID
-```
-
 ---
 
 ## Flujo de Onboarding Progresivo
 
 ```
-1. Registro Rápido (POST /clients)
+1. Registro Rápido (POST /api/v1/auth/register)
    ├── account_name: "Mi Empresa"
    ├── email: "admin@empresa.com"
    └── password: "****"
    
-   → Account creado con datos mínimos
+   → Account + Organization + User creados
 
 2. Usuario verifica email y usa el sistema
 
-3. Perfil Progresivo (PATCH /accounts/{id})
+3. Perfil Progresivo (PATCH /api/v1/accounts/{id})
    ├── billing_email: "facturacion@empresa.com"
    ├── country: "MX"
    ├── timezone: "America/Mexico_City"
@@ -359,9 +375,29 @@ payment.account_id  # UUID
 
 ---
 
+## Notas de Seguridad
+
+### Endpoint de Onboarding (Público)
+
+- **No requiere autenticación**
+- Se recomienda rate limiting en producción
+- Validación de formato de email
+- Contraseña almacenada seguramente en Cognito
+
+### Proceso de Verificación
+
+1. Usuario recibe email de verificación
+2. Clic en link de verificación
+3. `POST /api/v1/auth/verify-email?token=...`
+4. Usuario marcado como `email_verified = true`
+5. Puede iniciar sesión normalmente
+
+---
+
 ## Referencias
 
-- [API de Onboarding (Clients)](./clients.md) - Registro inicial
+- [API de Auth](./auth.md) - Verificación de email y login
+- [API de Organizaciones (Interna)](./internal-organizations.md) - Gestión administrativa
 - [ADR-001](../architecture/adr/001-account-organization-user-model.md) - Decisión arquitectónica
 - [Modelo Organizacional](../guides/organizational-model.md)
 

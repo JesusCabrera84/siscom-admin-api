@@ -22,15 +22,15 @@ Los nombres pueden repetirse; la unicidad está en los UUIDs.
 
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, DateTime, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from app.models.account_user import AccountUser
     from app.models.organization import Organization
     from app.models.payment import Payment
 
@@ -79,25 +79,13 @@ class Account(SQLModel, table=True):
             server_default=text("gen_random_uuid()"),
         )
     )
-    name: str = Field(sa_column=Column(Text, nullable=False))
+    name: str = Field(sa_column=Column("account_name", Text, nullable=False))
     status: AccountStatus = Field(
         default=AccountStatus.ACTIVE,
         sa_column=Column(Text, default=AccountStatus.ACTIVE.value, nullable=False),
     )
     billing_email: Optional[str] = Field(
         default=None, sa_column=Column(Text, nullable=True)
-    )
-    country: Optional[str] = Field(
-        default=None, sa_column=Column(Text, nullable=True)
-    )
-    timezone: str = Field(
-        default="UTC", sa_column=Column(Text, default="UTC", nullable=True)
-    )
-    account_metadata: Optional[dict] = Field(
-        default=None,
-        sa_column=Column(
-            "metadata", JSONB, server_default=text("'{}'::jsonb"), nullable=True
-        ),
     )
     created_at: datetime = Field(
         sa_column=Column(
@@ -111,8 +99,9 @@ class Account(SQLModel, table=True):
     )
 
     # Relationships
-    organizations: list["Organization"] = Relationship(back_populates="account")
-    payments: list["Payment"] = Relationship(back_populates="account")
+    organizations: List["Organization"] = Relationship(back_populates="account")
+    payments: List["Payment"] = Relationship(back_populates="account")
+    account_users: List["AccountUser"] = Relationship(back_populates="account")
 
     def get_default_organization(self) -> Optional["Organization"]:
         """

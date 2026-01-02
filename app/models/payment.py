@@ -13,7 +13,7 @@ facturación consolidada de múltiples organizaciones.
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, text
@@ -77,7 +77,7 @@ class Payment(SQLModel, table=True):
 
     # Relationships
     account: "Account" = Relationship(back_populates="payments")
-    orders: list["Order"] = Relationship(back_populates="payment")
+    orders: List["Order"] = Relationship(back_populates="payment")
 
     # Alias para compatibilidad (DEPRECATED)
     # NOTA: client_id no aplica a Payment - usa account_id

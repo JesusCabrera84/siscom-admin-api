@@ -569,7 +569,7 @@ POST /api/v1/services/activate
 ### 3. Verificar Capabilities Efectivas
 
 ```bash
-GET /api/v1/clients/me
+GET /api/v1/accounts/organization
 # Respuesta incluye effective_capabilities
 ```
 

@@ -300,6 +300,12 @@ def require_organization_role(*allowed_roles: str):
     DELEGACIÓN: Usa OrganizationService.get_user_role() como única fuente
     de verdad para roles. El fallback a is_master se maneja internamente.
 
+    JERARQUÍA DE ROLES:
+    - owner: Tiene todos los permisos
+    - admin: Tiene permisos de admin, billing y member
+    - billing: Tiene permisos de billing y member
+    - member: Solo permisos de member
+
     Uso:
         @router.post("/admin-action")
         def admin_action(
@@ -308,11 +314,18 @@ def require_organization_role(*allowed_roles: str):
             ...
 
     Args:
-        allowed_roles: Roles permitidos (ej: "owner", "admin", "billing", "member")
+        allowed_roles: Roles mínimos permitidos (ej: "owner", "admin", "billing", "member")
 
     Returns:
         Dependencia que valida el rol y retorna AuthResult
     """
+    # Definir jerarquía de roles (de mayor a menor)
+    ROLE_HIERARCHY = {
+        "owner": ["owner", "admin", "billing", "member"],
+        "admin": ["admin", "billing", "member"],
+        "billing": ["billing", "member"],
+        "member": ["member"],
+    }
 
     def _require_role(
         credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -343,8 +356,12 @@ def require_organization_role(*allowed_roles: str):
         org_role = OrganizationService.get_user_role(db, user.id, user.organization_id)
         org_role_str = org_role.value if org_role else None
 
-        # Validar rol
-        if org_role_str not in allowed_roles:
+        # Validar rol con jerarquía
+        # El usuario tiene acceso si su rol incluye alguno de los roles permitidos
+        user_permissions = ROLE_HIERARCHY.get(org_role_str, [])
+        has_permission = any(role in user_permissions for role in allowed_roles)
+
+        if not has_permission:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Se requiere uno de los siguientes roles: {', '.join(allowed_roles)}",

@@ -63,7 +63,7 @@ Cada template recibe las siguientes variables:
 
 Se completaron todos los TODOs de envío de email en los siguientes archivos:
 
-#### `app/api/v1/endpoints/clients.py`
+#### `app/api/v1/endpoints/accounts.py`
 
 - ✅ **Línea 89-91**: `create_client()` - Envía email de verificación al crear un nuevo cliente
 
@@ -230,7 +230,7 @@ docker logs siscom-admin-api --tail 50
 
 ```bash
 # Registrar un nuevo cliente
-curl -X POST https://api.tudominio.com/api/v1/clients/ \
+curl -X POST https://api.tudominio.com/api/v1/accounts \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test Client",
@@ -248,12 +248,12 @@ docker logs siscom-admin-api --tail 100 | grep EMAIL
 ### 1. Registro de Cliente
 
 ```
-Usuario → POST /api/v1/clients/
+Usuario → POST /api/v1/auth/register
        → Se crea cliente y usuario en DB (status PENDING)
        → Se genera token de verificación
        → ✉️ Email de verificación enviado
        → Usuario hace clic en link del email
-       → GET /api/v1/clients/verify-email?token={token}
+       → POST /api/v1/auth/verify-email?token={token}
        → Usuario creado en Cognito
        → Cliente y usuario activados
 ```

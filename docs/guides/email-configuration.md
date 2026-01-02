@@ -143,7 +143,7 @@ echo $FRONTEND_URL
 ### 2. Probar registro de cliente
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/clients/ \
+curl -X POST http://localhost:8000/api/v1/accounts \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test Client",

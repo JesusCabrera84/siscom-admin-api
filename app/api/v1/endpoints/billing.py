@@ -126,7 +126,9 @@ def get_billing_summary(
         - next_billing_date se obtiene de subscription.expires_at
     """
     # Obtener organización
-    organization = db.query(Organization).filter(Organization.id == organization_id).first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id).first()
+    )
 
     # Obtener suscripción activa principal
     active_sub = get_primary_active_subscription(db, organization_id)
@@ -237,7 +239,8 @@ def list_invoices(
     """
     # Obtener pagos exitosos como "invoices"
     query = db.query(Payment).filter(
-        Payment.client_id == organization_id, Payment.status == PaymentStatus.SUCCESS.value
+        Payment.client_id == organization_id,
+        Payment.status == PaymentStatus.SUCCESS.value,
     )
 
     total = query.count()

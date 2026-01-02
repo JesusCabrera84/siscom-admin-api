@@ -22,23 +22,23 @@ from app.api.deps import AuthResult, get_auth_cognito_or_paseto
 from app.db.session import get_db
 from app.models.organization import Organization, OrganizationStatus
 from app.models.user import User
-from app.schemas.client import ClientOut
+from app.schemas.organization import OrganizationOut
 
 router = APIRouter()
 
 # Dependencia para autenticación PASETO (o Cognito para flexibilidad)
-get_auth_for_internal_clients = get_auth_cognito_or_paseto(
+get_auth_for_internal_organizations = get_auth_cognito_or_paseto(
     required_service="gac",
     required_role="NEXUS_ADMIN",
 )
 
 
-@router.get("", response_model=list[ClientOut])
-def list_all_clients(
+@router.get("", response_model=list[OrganizationOut])
+def list_all_organizations(
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_internal_clients),
+    auth: AuthResult = Depends(get_auth_for_internal_organizations),
     status_filter: Optional[OrganizationStatus] = Query(
-        None, alias="status", description="Filtrar por estado del cliente"
+        None, alias="status", description="Filtrar por estado de la organización"
     ),
     search: Optional[str] = Query(
         None, description="Buscar por nombre (parcial, case-insensitive)"
@@ -47,7 +47,7 @@ def list_all_clients(
     offset: int = Query(0, ge=0, description="Offset para paginación"),
 ):
     """
-    Lista todos los clientes/organizaciones del sistema.
+    Lista todas las organizaciones del sistema.
 
     Solo accesible para administradores internos con token PASETO válido.
 
@@ -76,14 +76,14 @@ def list_all_clients(
 
 
 @router.get("/stats")
-def get_clients_stats(
+def get_organizations_stats(
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_internal_clients),
+    auth: AuthResult = Depends(get_auth_for_internal_organizations),
 ):
     """
-    Obtiene estadísticas generales de los clientes/organizaciones.
+    Obtiene estadísticas generales de las organizaciones.
 
-    Retorna conteo por estado y total de clientes.
+    Retorna conteo por estado y total de organizaciones.
     """
     total = db.query(Organization).count()
     pending = (
@@ -118,48 +118,52 @@ def get_clients_stats(
     }
 
 
-@router.get("/{client_id}", response_model=ClientOut)
-def get_client_by_id(
-    client_id: UUID,
+@router.get("/{organization_id}", response_model=OrganizationOut)
+def get_organization_by_id(
+    organization_id: UUID,
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_internal_clients),
+    auth: AuthResult = Depends(get_auth_for_internal_organizations),
 ):
     """
-    Obtiene un cliente/organización específico por su ID.
+    Obtiene una organización específica por su ID.
 
     Solo accesible para administradores internos con token PASETO válido.
     """
-    organization = db.query(Organization).filter(Organization.id == client_id).first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id).first()
+    )
 
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente no encontrado",
+            detail="Organización no encontrada",
         )
 
     return organization
 
 
-@router.get("/{client_id}/users")
-def get_client_users(
-    client_id: UUID,
+@router.get("/{organization_id}/users")
+def get_organization_users(
+    organization_id: UUID,
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_internal_clients),
+    auth: AuthResult = Depends(get_auth_for_internal_organizations),
 ):
     """
-    Lista todos los usuarios de un cliente/organización específico.
+    Lista todos los usuarios de una organización específica.
 
     Útil para administración y soporte.
     """
     # Verificar que la organización existe
-    organization = db.query(Organization).filter(Organization.id == client_id).first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id).first()
+    )
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente no encontrado",
+            detail="Organización no encontrada",
         )
 
-    users = db.query(User).filter(User.organization_id == client_id).all()
+    users = db.query(User).filter(User.organization_id == organization_id).all()
 
     return [
         {
@@ -175,30 +179,32 @@ def get_client_users(
     ]
 
 
-@router.patch("/{client_id}/status")
-def update_client_status(
-    client_id: UUID,
+@router.patch("/{organization_id}/status")
+def update_organization_status(
+    organization_id: UUID,
     new_status: OrganizationStatus,
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_internal_clients),
+    auth: AuthResult = Depends(get_auth_for_internal_organizations),
 ):
     """
-    Actualiza el estado de un cliente/organización.
+    Actualiza el estado de una organización.
 
-    Permite suspender, activar o marcar como eliminado un cliente.
+    Permite suspender, activar o marcar como eliminada una organización.
 
     Estados válidos:
-    - PENDING: Cliente pendiente de verificación
-    - ACTIVE: Cliente activo
-    - SUSPENDED: Cliente suspendido
-    - DELETED: Cliente eliminado lógicamente
+    - PENDING: Organización pendiente de verificación
+    - ACTIVE: Organización activa
+    - SUSPENDED: Organización suspendida
+    - DELETED: Organización eliminada lógicamente
     """
-    organization = db.query(Organization).filter(Organization.id == client_id).first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id).first()
+    )
 
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente no encontrado",
+            detail="Organización no encontrada",
         )
 
     old_status = organization.status
@@ -208,7 +214,7 @@ def update_client_status(
 
     return {
         "message": f"Estado actualizado de {old_status} a {new_status}",
-        "client": {
+        "organization": {
             "id": str(organization.id),
             "name": organization.name,
             "status": organization.status,
