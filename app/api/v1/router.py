@@ -58,6 +58,7 @@ from app.api.v1.endpoints import (
 from app.api.v1.endpoints.internal import accounts as internal_accounts
 from app.api.v1.endpoints.internal import organizations as internal_organizations
 from app.api.v1.endpoints.internal import plans as internal_plans
+from app.api.v1.endpoints.internal import products as internal_products
 
 api_router = APIRouter()
 
@@ -152,4 +153,11 @@ api_router.include_router(
     internal_plans.router,
     prefix="/internal/plans",
     tags=["internal-plans"],
+)
+
+# Internal Products (Gestión de productos)
+api_router.include_router(
+    internal_products.router,
+    prefix="/internal/products",
+    tags=["internal-products"],
 )
