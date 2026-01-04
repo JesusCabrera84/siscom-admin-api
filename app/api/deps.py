@@ -207,7 +207,7 @@ def get_auth_cognito_or_paseto(
 
     Args:
         required_service: Servicio requerido para tokens PASETO (ej: "gac")
-        required_role: Rol requerido para tokens PASETO (ej: "NEXUS_ADMIN")
+        required_role: Rol requerido para tokens PASETO (ej: "GAC_ADMIN")
 
     Returns:
         Una dependencia de FastAPI que valida el token y retorna AuthResult
@@ -440,9 +440,9 @@ def require_capability(capability_code: str):
 
 
 # Dependencias pre-configuradas
-get_auth_for_gac_nexus_admin = get_auth_cognito_or_paseto(
+get_auth_for_gac_admin = get_auth_cognito_or_paseto(
     required_service="gac",
-    required_role="NEXUS_ADMIN",
+    required_role="GAC_ADMIN",
 )
 
 # Dependencias de rol comunes

@@ -1302,7 +1302,7 @@ def generate_internal_token(
     **Parámetros:**
     - `email`: Email del usuario que solicita el token (obligatorio)
     - `service`: Nombre del servicio (ej: "gac")
-    - `role`: Rol del servicio (ej: "NEXUS_ADMIN")
+    - `role`: Rol del servicio (ej: "GAC_ADMIN")
     - `expires_in_hours`: Horas de validez del token (default: 24, max: 720)
 
     **Retorna:**

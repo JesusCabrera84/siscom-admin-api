@@ -43,15 +43,16 @@ Comienza aquí si eres nuevo en el proyecto:
 |-----------|-------------|
 | **[Autenticación](api/auth.md)** | Login, registro, tokens, verificación de email |
 | **[Cuentas (Accounts)](api/accounts.md)** | Gestión de cuentas (raíz comercial) |
-| **[Organizaciones](api/organizations.md)** | Gestión de organizaciones (raíz operativa) |
+| **[Organizaciones](api/organizations.md)** | 📌 Gestión de organizaciones, usuarios y capabilities |
 | **[Usuarios](api/users.md)** | Invitaciones, roles y gestión de usuarios |
 
-### API Interna (Administrativa)
+### API Interna (Staff / GAC)
 
 | Documento | Descripción |
 |-----------|-------------|
 | **[API Interna - Accounts](api/internal-accounts.md)** | Estadísticas globales del sistema (PASETO) |
 | **[API Interna - Organizations](api/internal-organizations.md)** | Gestión de organizaciones (PASETO) |
+| **[API Interna - Plans](api/internal-plans.md)** | 📌 Gestión de planes con operaciones compuestas (PASETO) |
 
 ### Gestión de Dispositivos y Flotas
 
@@ -130,6 +131,23 @@ Comienza aquí si eres nuevo en el proyecto:
 | `GET` | `/{subscription_id}` | Obtener detalle de suscripción | 🔐 Cognito |
 | `POST` | `/{subscription_id}/cancel` | Cancelar suscripción | 🔐 Cognito (Billing) |
 | `PATCH` | `/{subscription_id}/auto-renew` | Configurar auto-renovación | 🔐 Cognito (Billing) |
+
+### Usuarios de Organización (`/api/v1/organizations/{id}/users`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar usuarios de la organización | 🔐 Cognito (Member+) |
+| `POST` | `/` | Agregar usuario a la organización | 🔐 Cognito (Admin+) |
+| `PATCH` | `/{user_id}` | Cambiar rol de usuario | 🔐 Cognito (Admin+) |
+| `DELETE` | `/{user_id}` | Eliminar usuario de organización | 🔐 Cognito (Admin+) |
+
+### Capabilities de Organización (`/api/v1/organizations/{id}/capabilities`)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/` | Listar capabilities efectivas | 🔐 Cognito (Member+) |
+| `POST` | `/` | Crear/actualizar override | 🔐 Cognito (Owner) |
+| `DELETE` | `/{capability_code}` | Eliminar override | 🔐 Cognito (Owner) |
 
 ### Capabilities (`/api/v1/capabilities`)
 
@@ -276,6 +294,30 @@ Comienza aquí si eres nuevo en el proyecto:
 | `GET` | `/{organization_id}/users` | Usuarios de una organización | 🔑 PASETO |
 | `PATCH` | `/{organization_id}/status` | Cambiar estado de organización | 🔑 PASETO |
 
+### API Interna - Plans (`/api/v1/internal/plans`) - 🔑 PASETO Only
+
+> **Operaciones compuestas**: Crear/editar planes con capabilities y productos en una sola llamada.
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/plans` | Listar todos los planes | 🔑 PASETO |
+| `POST` | `/plans` | **Crear plan completo** | 🔑 PASETO |
+| `GET` | `/plans/{plan_id}` | Obtener plan por ID | 🔑 PASETO |
+| `PATCH` | `/plans/{plan_id}` | **Actualizar plan completo** | 🔑 PASETO |
+| `DELETE` | `/plans/{plan_id}` | Eliminar plan | 🔑 PASETO |
+| `GET` | `/plans/{plan_id}/capabilities` | Listar capabilities del plan | 🔑 PASETO |
+| `POST` | `/plans/{plan_id}/capabilities/{code}` | Agregar capability | 🔑 PASETO |
+| `DELETE` | `/plans/{plan_id}/capabilities/{code}` | Eliminar capability | 🔑 PASETO |
+| `GET` | `/plans/{plan_id}/products` | Listar productos del plan | 🔑 PASETO |
+| `POST` | `/plans/{plan_id}/products/{code}` | Agregar producto al plan | 🔑 PASETO |
+| `DELETE` | `/plans/{plan_id}/products/{code}` | Eliminar producto del plan | 🔑 PASETO |
+| `GET` | `/products` | Listar productos del catálogo | 🔑 PASETO |
+| `POST` | `/products` | Crear producto | 🔑 PASETO |
+| `GET` | `/products/{product_id}` | Obtener producto por ID | 🔑 PASETO |
+| `PATCH` | `/products/{product_id}` | Actualizar producto | 🔑 PASETO |
+| `DELETE` | `/products/{product_id}` | Eliminar producto | 🔑 PASETO |
+| `GET` | `/capabilities` | Listar capabilities disponibles | 🔑 PASETO |
+
 ### Leyenda de Autenticación
 
 | Símbolo | Significado |
@@ -283,6 +325,9 @@ Comienza aquí si eres nuevo en el proyecto:
 | 🌐 Público | No requiere autenticación |
 | 🔐 Cognito | Token JWT de AWS Cognito |
 | 🔐 Cognito (Master) | Token Cognito + usuario maestro |
+| 🔐 Cognito (Member+) | Token Cognito + rol member o superior |
+| 🔐 Cognito (Admin+) | Token Cognito + rol admin o superior |
+| 🔐 Cognito (Owner) | Token Cognito + rol owner |
 | 🔐 Cognito (Billing) | Token Cognito + rol billing u owner |
 | 🔑 PASETO | Token PASETO interno (service=gac, role=NEXUS_ADMIN) |
 | 🔐 Cognito / 🔑 PASETO | Acepta cualquiera de los dos |
@@ -427,9 +472,27 @@ Estos endpoints **NO** requieren autenticación:
 2. Invitado acepta
    POST /api/v1/users/accept-invitation
    ↓
-3. Admin asigna rol específico (si aplica)
+3. Admin gestiona usuarios de organización
+   POST /api/v1/organizations/{id}/users (agregar)
+   PATCH /api/v1/organizations/{id}/users/{user_id} (cambiar rol)
+   DELETE /api/v1/organizations/{id}/users/{user_id} (eliminar)
    ↓
 4. Usuario opera según su rol
+```
+
+### 4. Gestión de Capabilities
+
+```
+1. Consultar capabilities actuales
+   GET /api/v1/organizations/{id}/capabilities
+   ↓
+2. Crear override (promoción, acuerdo especial)
+   POST /api/v1/organizations/{id}/capabilities
+   ↓
+3. Capability efectiva se actualiza automáticamente
+   ↓
+4. Eliminar override cuando expire
+   DELETE /api/v1/organizations/{id}/capabilities/{code}
 ```
 
 ---
@@ -591,6 +654,33 @@ alembic upgrade head
 
 ## 🔄 Actualizaciones
 
+### Versión 2.3.0 (Enero 2026)
+
+- ✅ **API Internal refactorizada** - Separación clara de API Pública e Internal
+- ✅ **Operaciones compuestas** - Crear/editar planes con capabilities y productos en una llamada
+- ✅ Campo `is_active` en planes para activar/desactivar
+- ✅ Endpoints auxiliares para ajustes puntuales (uso avanzado)
+- ✅ API Pública de planes ahora solo muestra planes activos
+- ✅ Renombrado de rutas: `/admin/` → `/internal/plans/`
+- ✅ Documentación actualizada con nueva estructura
+
+### Versión 2.2.0 (Enero 2026)
+
+- ✅ CRUD completo de Plans (crear, actualizar, eliminar)
+- ✅ CRUD completo de Products (crear, actualizar, eliminar)
+- ✅ Gestión de plan_capabilities (agregar, actualizar, eliminar)
+- ✅ Gestión de plan_products (asociar productos a planes)
+- ✅ Modelo Product y PlanProduct
+- ✅ Documentación de API Admin Plans (ahora Internal Plans)
+
+### Versión 2.1.0 (Enero 2026)
+
+- ✅ Endpoints de gestión de usuarios por organización (CRUD)
+- ✅ Endpoints de gestión de capabilities por organización (overrides)
+- ✅ Sistema de auditoría con `account_events`
+- ✅ Reglas de negocio para roles (owner > admin > billing > member)
+- ✅ Documentación actualizada de Organizations
+
 ### Versión 2.0.0 (Diciembre 2025)
 
 - ✅ Modelo organizacional documentado
@@ -601,5 +691,5 @@ alembic upgrade head
 
 ---
 
-**Última actualización**: Diciembre 2025  
-**Versión de documentación**: 2.0.0
+**Última actualización**: Enero 2026  
+**Versión de documentación**: 2.3.0

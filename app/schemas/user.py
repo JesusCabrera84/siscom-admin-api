@@ -392,7 +392,7 @@ class InternalTokenRequest(BaseModel):
 
     email: EmailStr = Field(..., description="Email del usuario que solicita el token")
     service: str = Field(..., description="Nombre del servicio (ej: 'gac')")
-    role: str = Field(..., description="Rol del servicio (ej: 'NEXUS_ADMIN')")
+    role: str = Field(..., description="Rol del servicio (ej: 'GAC_ADMIN')")
     expires_in_hours: int = Field(
         default=24, ge=1, le=720, description="Horas de validez del token (1-720)"
     )
@@ -402,7 +402,7 @@ class InternalTokenRequest(BaseModel):
             "example": {
                 "email": "usuario@ejemplo.com",
                 "service": "gac",
-                "role": "NEXUS_ADMIN",
+                "role": "GAC_ADMIN",
                 "expires_in_hours": 24,
             }
         }

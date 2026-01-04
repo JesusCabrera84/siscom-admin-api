@@ -127,11 +127,17 @@ class OrganizationCapability(SQLModel, table=True):
 
     __tablename__ = "organization_capabilities"
 
+    id: UUID = Field(
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            primary_key=True,
+            server_default=text("gen_random_uuid()"),
+        )
+    )
     organization_id: UUID = Field(
         sa_column=Column(
             PGUUID(as_uuid=True),
             ForeignKey("organizations.id"),
-            primary_key=True,
             nullable=False,
         )
     )
@@ -139,7 +145,6 @@ class OrganizationCapability(SQLModel, table=True):
         sa_column=Column(
             PGUUID(as_uuid=True),
             ForeignKey("capabilities.id"),
-            primary_key=True,
             nullable=False,
         )
     )

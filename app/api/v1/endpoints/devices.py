@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import (
     AuthResult,
-    get_auth_for_gac_nexus_admin,
+    get_auth_for_gac_admin,
     get_current_organization_id,
     get_current_user_full,
     get_current_user_id,
@@ -113,14 +113,14 @@ def build_device_out(db: Session, device: Device) -> DeviceOut:
 def create_device(
     device_in: DeviceCreate,
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_gac_nexus_admin),
+    auth: AuthResult = Depends(get_auth_for_gac_admin),
 ):
     """
     Registra un nuevo dispositivo en el inventario.
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN"
 
     Regla: El dispositivo se crea con status='nuevo' y sin cliente asignado.
     Opcionalmente puede incluir:
@@ -496,14 +496,14 @@ def update_device(
     device_id: str,
     device_update: DeviceUpdate,
     db: Session = Depends(get_db),
-    auth: AuthResult = Depends(get_auth_for_gac_nexus_admin),
+    auth: AuthResult = Depends(get_auth_for_gac_admin),
 ):
     """
     Actualiza información básica del dispositivo.
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN"
 
     Si se proporciona un ICCID:
     - Si no existe una sim_card para el dispositivo, se crea.

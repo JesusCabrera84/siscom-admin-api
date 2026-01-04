@@ -294,6 +294,18 @@ if not CapabilityService.has_capability(db, client_id, "ai_features"):
 
 Los overrides son ajustes específicos para una organización que sobreescriben los valores del plan.
 
+### Endpoints de Gestión de Overrides
+
+Los overrides se gestionan a través de los endpoints de Organization Capabilities:
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/v1/organizations/{id}/capabilities` | Listar capabilities efectivas |
+| POST | `/api/v1/organizations/{id}/capabilities` | Crear/actualizar override |
+| DELETE | `/api/v1/organizations/{id}/capabilities/{code}` | Eliminar override |
+
+> **Documentación completa**: [API de Organizations - Capabilities](./organizations.md#endpoints-de-capabilities-de-organización)
+
 ### Casos de Uso
 
 - Cliente negoció más dispositivos
@@ -305,7 +317,7 @@ Los overrides son ajustes específicos para una organización que sobreescriben 
 
 ```json
 {
-  "client_id": "org-uuid",
+  "organization_id": "org-uuid",
   "capability_id": "cap-uuid",
   "value_int": 100,
   "value_bool": null,
@@ -328,6 +340,20 @@ Antes de 2024-12-31:
 
 Después de 2024-12-31:
   Capability Efectiva = 50 (plan)
+```
+
+### Ejemplo: Crear Override via API
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/organizations/{org_id}/capabilities" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "capability_code": "max_devices",
+    "value_int": 100,
+    "reason": "Promoción Q1 2025",
+    "expires_at": "2025-03-31T23:59:59Z"
+  }'
 ```
 
 ---
@@ -438,6 +464,6 @@ summary = CapabilityService.get_capabilities_summary(db, org_id)
 
 ---
 
-**Última actualización**: Diciembre 2025  
-**Referencia**: [Modelo Organizacional](../guides/organizational-model.md)
+**Última actualización**: Enero 2026  
+**Referencia**: [Modelo Organizacional](../guides/organizational-model.md) | [API de Organizations](./organizations.md)
 

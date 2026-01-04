@@ -27,7 +27,7 @@ router = APIRouter()
 # Dependencia para autenticación dual (Cognito o PASETO)
 get_auth_for_commands = get_auth_cognito_or_paseto(
     required_service="gac",
-    required_role="NEXUS_ADMIN",
+    required_role="GAC_ADMIN",
 )
 
 
@@ -42,7 +42,7 @@ async def create_command(
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN"
 
     **Parámetros:**
     - `command`: El comando a enviar al dispositivo
@@ -198,7 +198,7 @@ def get_commands_by_device(
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN"
 
     **Parámetros:**
     - `device_id`: ID del dispositivo
@@ -270,7 +270,7 @@ def get_command(
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN"
 
     **Parámetros:**
     - `command_id`: UUID del comando
@@ -312,7 +312,7 @@ async def sync_command(
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN"
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN"
 
     **Parámetros:**
     - `command_id`: UUID del comando a sincronizar

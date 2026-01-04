@@ -28,7 +28,7 @@ router = APIRouter()
 # Dependencia para autenticación dual (Cognito o PASETO)
 get_auth_for_trips = get_auth_cognito_or_paseto(
     required_service="gac",
-    required_role="NEXUS_ADMIN",
+    required_role="GAC_ADMIN",
 )
 
 
@@ -350,7 +350,7 @@ def list_trips(
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema (aplican permisos)
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN" (acceso total)
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN" (acceso total)
 
     **Permisos (solo Cognito):**
     - Usuario maestro: puede ver todos los trips de todas las unidades del cliente
@@ -521,7 +521,7 @@ def get_trip(
 
     **Autenticación:**
     - Token de Cognito: Usuario autenticado del sistema (aplican permisos)
-    - Token PASETO: Requiere service="gac" y role="NEXUS_ADMIN" (acceso total)
+    - Token PASETO: Requiere service="gac" y role="GAC_ADMIN" (acceso total)
 
     **Permisos (solo Cognito):**
     - Usuario maestro: puede ver cualquier trip de su cliente

@@ -25,6 +25,14 @@ Los nombres pueden repetirse; la unicidad está en los UUIDs.
 # Account (raíz comercial)
 from app.models.account import Account, AccountStatus
 
+# Account Events (auditoría)
+from app.models.account_event import (
+    AccountEvent,
+    ActorType,
+    EventType,
+    TargetType,
+)
+
 # Account Users (roles a nivel account)
 from app.models.account_user import AccountRole, AccountUser
 
@@ -62,6 +70,9 @@ from app.models.payment import Payment, PaymentStatus
 # Subscriptions & Plans
 from app.models.plan import Plan
 
+# Products
+from app.models.product import PlanProduct, Product
+
 # SIM Cards
 from app.models.sim_card import SimCard
 from app.models.sim_kore_profile import SimKoreProfile
@@ -88,6 +99,10 @@ __all__ = [
     # Account (raíz comercial)
     "Account",
     "AccountStatus",
+    "AccountEvent",
+    "ActorType",
+    "EventType",
+    "TargetType",
     "AccountUser",
     "AccountRole",
     # Organization (raíz operativa)
@@ -105,6 +120,8 @@ __all__ = [
     "Invitation",
     # Subscriptions & Plans
     "Plan",
+    "Product",
+    "PlanProduct",
     "Subscription",
     "SubscriptionStatus",
     "BillingCycle",

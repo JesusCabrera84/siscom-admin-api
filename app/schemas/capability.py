@@ -120,10 +120,12 @@ class OrganizationCapabilityCreate(BaseModel):
 class OrganizationCapabilityOut(BaseModel):
     """Override de capability en respuestas."""
 
-    client_id: UUID
+    organization_id: UUID
     capability_id: UUID
     capability_code: str
     value: Union[int, bool, str, None]
+    value_type: str
+    source: str = "organization"
     reason: Optional[str] = None
     expires_at: Optional[datetime] = None
 
@@ -131,12 +133,83 @@ class OrganizationCapabilityOut(BaseModel):
         from_attributes = True
         json_schema_extra = {
             "example": {
-                "client_id": "123e4567-e89b-12d3-a456-426614174000",
+                "organization_id": "123e4567-e89b-12d3-a456-426614174000",
                 "capability_id": "223e4567-e89b-12d3-a456-426614174000",
                 "capability_code": "max_devices",
                 "value": 100,
+                "value_type": "int",
+                "source": "organization",
                 "reason": "Promoción especial Q4 2024",
                 "expires_at": "2024-12-31T23:59:59Z",
+            }
+        }
+
+
+class EffectiveCapabilityOut(BaseModel):
+    """
+    Capability efectiva de una organización.
+
+    Muestra el valor resuelto con su fuente (organization, plan, default).
+    """
+
+    code: str = Field(..., description="Código de la capability")
+    value: Union[int, bool, str, None] = Field(..., description="Valor efectivo")
+    value_type: str = Field(..., description="Tipo de valor: int, bool, text")
+    source: str = Field(
+        ..., description="Fuente del valor: organization, plan, default"
+    )
+    plan_id: Optional[UUID] = Field(None, description="ID del plan si source=plan")
+    expires_at: Optional[datetime] = Field(
+        None, description="Fecha de expiración si es override"
+    )
+    is_override: bool = Field(..., description="Si es un override de organización")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "code": "max_devices",
+                "value": 50,
+                "value_type": "int",
+                "source": "organization",
+                "plan_id": None,
+                "expires_at": "2024-12-31T23:59:59Z",
+                "is_override": True,
+            }
+        }
+
+
+class OrganizationCapabilitiesListOut(BaseModel):
+    """Lista de capabilities efectivas de una organización."""
+
+    capabilities: list[EffectiveCapabilityOut]
+    total: int
+    overrides_count: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "capabilities": [
+                    {
+                        "code": "max_devices",
+                        "value": 50,
+                        "value_type": "int",
+                        "source": "organization",
+                        "plan_id": None,
+                        "expires_at": None,
+                        "is_override": True,
+                    },
+                    {
+                        "code": "ai_features",
+                        "value": True,
+                        "value_type": "bool",
+                        "source": "plan",
+                        "plan_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "expires_at": None,
+                        "is_override": False,
+                    },
+                ],
+                "total": 2,
+                "overrides_count": 1,
             }
         }
 

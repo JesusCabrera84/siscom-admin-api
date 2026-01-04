@@ -4,7 +4,7 @@ Endpoints internos para gestión de accounts.
 Estos endpoints están protegidos por tokens PASETO y están diseñados
 para ser usados por aplicaciones administrativas internas como gac-web.
 
-Requiere: Token PASETO con service="gac" y role="NEXUS_ADMIN"
+Requiere: Token PASETO con service="gac" y role="GAC_ADMIN"
 
 MODELO CONCEPTUAL:
 ==================
@@ -39,7 +39,7 @@ router = APIRouter()
 # Dependencia para autenticación PASETO (o Cognito para flexibilidad)
 get_auth_for_internal_accounts = get_auth_cognito_or_paseto(
     required_service="gac",
-    required_role="NEXUS_ADMIN",
+    required_role="GAC_ADMIN",
 )
 
 

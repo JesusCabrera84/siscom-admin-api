@@ -1,4 +1,4 @@
-# API de Planes
+# API de Planes (Pública)
 
 ## Descripción
 
@@ -8,10 +8,16 @@ Endpoints **READ-ONLY** para consultar el catálogo de planes de servicio dispon
 > - La lógica de qué puede hacer una organización está en **capabilities**
 > - La lógica de qué plan tiene una organización está en **subscriptions**
 
+### Restricciones
+- **Solo lectura**: Esta API no permite crear ni modificar planes
+- **Solo activos**: Solo muestra planes con `is_active = true`
+- Para gestión de planes, usar la **API Internal**
+
 Ver también:
 - [API de Capabilities](capabilities.md) - para ver qué puede hacer una organización
 - [API de Subscriptions](subscriptions.md) - para ver suscripciones activas
 - [API de Billing](billing.md) - para información de facturación
+- [API Internal - Plans](internal-plans.md) - 📌 para **crear/editar/eliminar** planes (staff)
 
 ---
 

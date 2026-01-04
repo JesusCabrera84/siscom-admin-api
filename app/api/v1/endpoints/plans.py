@@ -1,10 +1,16 @@
 """
-Endpoints de Planes (Read-Only).
+Endpoints de Planes - API Pública (Read-Only).
 
 Los planes son INFORMATIVOS - muestran precios, capabilities y opciones disponibles.
 NO gobiernan la lógica del sistema, eso lo hacen:
 - Suscripciones: determinan qué plan tiene cada organización
 - Capabilities: determinan qué puede hacer cada organización
+
+IMPORTANTE:
+- Esta API es de solo lectura
+- Solo muestra planes activos
+- No permite crear ni modificar planes
+- Para gestión de planes, usar la API Internal (/internal/plans)
 
 Estos endpoints son públicos para que el frontend pueda mostrar
 el catálogo de planes sin requerir autenticación.
@@ -108,6 +114,7 @@ def list_plans(
     Obtiene el catálogo de planes disponibles.
 
     Este endpoint NO requiere autenticación para permitir consultas públicas.
+    Solo muestra planes activos.
 
     Returns:
         Lista de planes con sus precios, capabilities y opciones de facturación.
@@ -116,8 +123,11 @@ def list_plans(
         - Los planes son INFORMATIVOS, no gobiernan la lógica
         - Para ver qué puede hacer una organización, usar /capabilities
         - Para ver suscripciones activas, usar /subscriptions
+        - Para gestión de planes, usar la API Internal (/internal/plans)
     """
-    plans = db.query(Plan).order_by(Plan.price_monthly.asc()).all()
+    plans = (
+        db.query(Plan).filter(Plan.is_active).order_by(Plan.price_monthly.asc()).all()
+    )
 
     plans_detail = [_plan_to_detail(db, plan) for plan in plans]
 

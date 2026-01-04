@@ -10,6 +10,18 @@ MODELO CONCEPTUAL:
 Account = Raíz comercial (billing, facturación)
 Organization = Raíz operativa (permisos, uso diario)
 
+SEPARACIÓN DE APIs:
+===================
+API Pública:
+- Uso por frontend cliente
+- Read-only para catálogos (planes, productos)
+- No permite crear ni modificar catálogo
+
+API Interna:
+- Uso exclusivo GAC (staff)
+- Control total del catálogo
+- Operaciones compuestas (crear/editar plan con capabilities y productos)
+
 ENDPOINTS PRINCIPALES:
 ======================
 - POST /auth/register: Registro (crea Account + Organization + User)
@@ -30,6 +42,8 @@ from app.api.v1.endpoints import (
     device_events,
     devices,
     orders,
+    organization_capabilities,
+    organization_users,
     organizations,
     payments,
     plans,
@@ -43,6 +57,7 @@ from app.api.v1.endpoints import (
 )
 from app.api.v1.endpoints.internal import accounts as internal_accounts
 from app.api.v1.endpoints.internal import organizations as internal_organizations
+from app.api.v1.endpoints.internal import plans as internal_plans
 
 api_router = APIRouter()
 
@@ -59,6 +74,20 @@ api_router.include_router(accounts.router, prefix="/accounts", tags=["accounts"]
 # Organizations (raíz operativa - múltiples por account)
 api_router.include_router(
     organizations.router, prefix="/organizations", tags=["organizations"]
+)
+
+# Organization Users (gestión de usuarios de una organización)
+api_router.include_router(
+    organization_users.router,
+    prefix="/organizations",
+    tags=["organization-users"],
+)
+
+# Organization Capabilities (overrides de capabilities por organización)
+api_router.include_router(
+    organization_capabilities.router,
+    prefix="/organizations",
+    tags=["organization-capabilities"],
 )
 
 # Usuarios
@@ -116,4 +145,11 @@ api_router.include_router(
     internal_organizations.router,
     prefix="/internal/organizations",
     tags=["internal-organizations"],
+)
+
+# Internal Plans (Gestión de planes, productos y capabilities)
+api_router.include_router(
+    internal_plans.router,
+    prefix="/internal/plans",
+    tags=["internal-plans"],
 )

@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, Numeric, Text, text
+from sqlalchemy import Boolean, Column, DateTime, Numeric, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -53,6 +53,11 @@ class Plan(SQLModel, table=True):
     )
     price_yearly: Decimal = Field(
         sa_column=Column(Numeric(10, 2), default=0, nullable=False)
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, server_default=text("true"), nullable=False),
+        description="Indica si el plan está activo y disponible para nuevas suscripciones",
     )
 
     created_at: Optional[datetime] = Field(

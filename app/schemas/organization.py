@@ -192,6 +192,77 @@ class InviteUserRequest(BaseModel):
         }
 
 
+class AddUserToOrganizationRequest(BaseModel):
+    """Request para agregar un usuario existente a la organización."""
+
+    user_id: UUID = Field(..., description="ID del usuario a agregar")
+    role: OrganizationRole = Field(
+        default=OrganizationRole.MEMBER, description="Rol a asignar"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "role": "member",
+            }
+        }
+
+
+class OrganizationUserOut(BaseModel):
+    """Relación usuario-organización en respuestas."""
+
+    id: UUID = Field(..., description="ID de la membresía")
+    organization_id: UUID
+    user_id: UUID
+    email: str
+    full_name: Optional[str] = None
+    role: str
+    created_at: Optional[datetime] = None
+    email_verified: bool = False
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "323e4567-e89b-12d3-a456-426614174000",
+                "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+                "user_id": "223e4567-e89b-12d3-a456-426614174000",
+                "email": "usuario@empresa.com",
+                "full_name": "Juan García",
+                "role": "admin",
+                "created_at": "2024-01-15T10:30:00Z",
+                "email_verified": True,
+            }
+        }
+
+
+class OrganizationUsersListOut(BaseModel):
+    """Lista de usuarios de una organización."""
+
+    users: list[OrganizationUserOut]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "users": [
+                    {
+                        "id": "323e4567-e89b-12d3-a456-426614174000",
+                        "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "user_id": "223e4567-e89b-12d3-a456-426614174000",
+                        "email": "owner@empresa.com",
+                        "full_name": "Carlos López",
+                        "role": "owner",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "email_verified": True,
+                    }
+                ],
+                "total": 1,
+            }
+        }
+
+
 # --- Suscripciones ---
 
 

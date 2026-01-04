@@ -3,7 +3,7 @@ Utilidades para generación de tokens PASETO.
 
 Soporta dos tipos de tokens:
 1. Tokens de compartir ubicación (scope: public-location-share)
-2. Tokens de servicio para aplicaciones externas (scope: internal-nexus-admin)
+2. Tokens de servicio para aplicaciones externas (scope: internal-gac-admin)
 """
 
 import base64
@@ -18,7 +18,7 @@ from pyseto import Key
 from app.core.config import settings
 
 # Roles válidos para tokens de servicio
-ServiceRole = Literal["NEXUS_ADMIN"]
+ServiceRole = Literal["GAC_ADMIN"]
 
 # Servicios válidos
 ServiceName = Literal["gac"]
@@ -127,7 +127,7 @@ class PasetoTokenGenerator:
 
         Args:
             service: Nombre del servicio (ej: "gac")
-            role: Rol del servicio (ej: "NEXUS_ADMIN")
+            role: Rol del servicio (ej: "GAC_ADMIN")
             expires_in_hours: Tiempo de expiración en horas (default: 24)
             additional_claims: Claims adicionales opcionales
 
@@ -141,7 +141,7 @@ class PasetoTokenGenerator:
             "token_id": str(uuid4()),
             "service": service,
             "role": role,
-            "scope": "internal-nexus-admin",
+            "scope": "internal-gac-admin",
             "iat": now.isoformat(),
             "exp": exp.isoformat(),
         }
@@ -187,9 +187,20 @@ class PasetoTokenGenerator:
                 return None
 
             # Validar scope - aceptar scopes de servicio válidos
-            valid_service_scopes = {"service-auth", "internal-nexus-admin"}
-            if payload.get("scope") not in valid_service_scopes:
-                return None
+            # Permite tokens de diferentes sistemas (gac-api, nexus-admin, etc.)
+            valid_service_scopes = {
+                "service-auth",
+                "internal-nexus-admin",
+                "internal-gac-admin",
+                "internal-app-admin",
+            }
+            scope = payload.get("scope")
+            if scope and scope not in valid_service_scopes:
+                # Ser más flexible: si tiene service="gac", aceptar cualquier scope que empiece con "internal"
+                if payload.get("service") == "gac" and scope.startswith("internal"):
+                    pass  # Aceptar
+                else:
+                    return None
 
             # Validar service si se requiere
             if required_service and payload.get("service") != required_service:
@@ -275,7 +286,7 @@ def generate_service_token(
 
     Args:
         service: Nombre del servicio (ej: "gac")
-        role: Rol del servicio (ej: "NEXUS_ADMIN")
+        role: Rol del servicio (ej: "GAC_ADMIN")
         expires_in_hours: Tiempo de expiración en horas (default: 24)
         additional_claims: Claims adicionales opcionales
 
