@@ -34,6 +34,8 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     accounts,
+    alerts,
+    alert_rules,
     auth,
     billing,
     capabilities,
@@ -128,6 +130,14 @@ api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
 
 # Viajes
 api_router.include_router(trips.router, prefix="/trips", tags=["trips"])
+
+# Reglas de alertas y alertas generadas
+api_router.include_router(
+    alert_rules.router,
+    prefix="/alert_rules",
+    tags=["alert-rules"],
+)
+api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 
 # Comandos
 api_router.include_router(commands.router, prefix="/commands", tags=["commands"])

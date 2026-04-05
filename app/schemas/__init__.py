@@ -26,6 +26,16 @@ from app.schemas.account import (
     AccountUpdateResponse,
     AccountWithOrganizationsOut,
 )
+from app.schemas.alert import AlertOut
+from app.schemas.alert_rule import (
+    AlertRuleCreate,
+    AlertRuleDeleteOut,
+    AlertRuleOut,
+    AlertRuleUpdate,
+    AlertRuleUnitsAssign,
+    AlertRuleUnitsOut,
+    AlertRuleUnitsUnassign,
+)
 
 # Capabilities
 from app.schemas.capability import (
@@ -124,6 +134,14 @@ __all__ = [
     "AccountUpdate",
     "AccountUpdateResponse",
     "AccountWithOrganizationsOut",
+    "AlertOut",
+    "AlertRuleCreate",
+    "AlertRuleUpdate",
+    "AlertRuleOut",
+    "AlertRuleDeleteOut",
+    "AlertRuleUnitsAssign",
+    "AlertRuleUnitsUnassign",
+    "AlertRuleUnitsOut",
     # Capabilities
     "CapabilityOut",
     "ResolvedCapabilityOut",

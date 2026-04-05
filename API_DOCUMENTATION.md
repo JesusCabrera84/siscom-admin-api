@@ -121,6 +121,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 12. [**Planes** (`/plans`)](#12-planes-plans) - Catálogo de planes disponibles
 13. [**Órdenes** (`/orders`)](#13-órdenes-orders) - Pedidos de hardware
 14. [**Pagos** (`/payments`)](#14-pagos-payments) - Gestión de pagos
+15. [**Alertas y Reglas** (`/alerts`, `/alert_rules`)](#15-alertas-y-reglas-alerts-alert_rules) - Consulta de alertas y administración de reglas
 
 ---
 
@@ -1902,6 +1903,100 @@ Gestión de pagos del cliente.
   "updated_at": "2024-11-08T10:05:00Z"
 }
 ```
+
+---
+
+## 15. Alertas y Reglas (`/alerts`, `/alert_rules`)
+
+Gestión de reglas de alertas configurables por organización y consulta de alertas generadas.
+
+### 🔒 Todos requieren autenticación
+
+### `POST /api/v1/alert_rules`
+
+**Crear regla de alerta**
+
+Al crear una regla se normaliza `config` (orden determinístico y sin claves con `null`) y se genera un `fingerprint` SHA-256 con:
+
+```
+organization_id|type|canonical_json(config)
+```
+
+Si el fingerprint ya existe, la API devuelve conflicto de duplicado.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Request:**
+
+```json
+{
+  "name": "Regla ignicion off",
+  "type": "ignition_off",
+  "config": {
+    "event": "Engine OFF",
+    "threshold": null
+  },
+  "unit_ids": ["uuid-unit-1"]
+}
+```
+
+**Response:** `201 Created`
+
+```json
+{
+  "id": "uuid",
+  "organization_id": "uuid",
+  "created_by": "uuid",
+  "name": "Regla ignicion off",
+  "type": "ignition_off",
+  "config": {
+    "event": "Engine OFF"
+  },
+  "unit_ids": ["uuid-unit-1"],
+  "is_active": true,
+  "created_at": "2026-04-04T10:00:00Z",
+  "updated_at": "2026-04-04T10:00:00Z"
+}
+```
+
+**Response duplicado:** `409 Conflict`
+
+```json
+{
+  "id": "existing_rule_id",
+  "message": "Regla ya existente"
+}
+```
+
+### `PATCH /api/v1/alert_rules/{rule_id}`
+
+**Actualizar regla de alerta**
+
+Si cambia `type` o `config`, se recalcula fingerprint. Si el resultado colisiona con otra regla, devuelve `409 Conflict` con el mismo formato de respuesta de duplicado.
+
+### `GET /api/v1/alert_rules`
+
+Lista reglas activas de la organización autenticada. Soporta filtros por `type` y `unit_id`.
+
+### `GET /api/v1/alert_rules/{rule_id}`
+
+Obtiene una regla activa por id.
+
+### `DELETE /api/v1/alert_rules/{rule_id}`
+
+Desactiva la regla (soft delete).
+
+### `POST /api/v1/alert_rules/{rule_id}/units`
+
+Asigna unidades a la regla.
+
+### `DELETE /api/v1/alert_rules/{rule_id}/units`
+
+Desasigna unidades de la regla.
+
+### `GET /api/v1/alerts`
+
+Lista alertas por `unit_id` con filtros opcionales `type`, `date_from`, `date_to`, `limit`, `offset`.
 
 ---
 

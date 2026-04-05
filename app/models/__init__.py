@@ -35,6 +35,8 @@ from app.models.account_event import (
 
 # Account Users (roles a nivel account)
 from app.models.account_user import AccountRole, AccountUser
+from app.models.alert import Alert
+from app.models.alert_rule import AlertRule, AlertRuleUnit
 
 # Capabilities
 from app.models.capability import (
@@ -105,6 +107,9 @@ __all__ = [
     "TargetType",
     "AccountUser",
     "AccountRole",
+    "Alert",
+    "AlertRule",
+    "AlertRuleUnit",
     # Organization (raíz operativa)
     "Organization",
     "OrganizationStatus",
