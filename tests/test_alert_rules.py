@@ -1,8 +1,11 @@
 import json
 from uuid import uuid4
 
+import pytest
 from fastapi import status
 
+from app.api.deps import get_rules_kafka_producer
+from app.main import app
 from app.models.alert_rule import AlertRule, AlertRuleUnit
 from app.models.organization import Organization
 from app.models.unit import Unit
@@ -21,7 +24,27 @@ def _create_unit(db_session, organization_id, name):
     return unit
 
 
-def test_alert_rules_crud_soft_delete(authenticated_client, db_session, test_user_data):
+class _StubRulesKafkaProducer:
+    def __init__(self):
+        self.messages = []
+        self.should_fail = False
+
+    def publish_rule_update(self, payload, key=None):
+        self.messages.append({"payload": payload, "key": key})
+        return not self.should_fail
+
+
+@pytest.fixture(scope="function")
+def kafka_stub_producer():
+    stub = _StubRulesKafkaProducer()
+    app.dependency_overrides[get_rules_kafka_producer] = lambda: stub
+    yield stub
+    app.dependency_overrides.pop(get_rules_kafka_producer, None)
+
+
+def test_alert_rules_crud_soft_delete(
+    authenticated_client, db_session, test_user_data, kafka_stub_producer
+):
     unit_1 = _create_unit(db_session, test_user_data.organization_id, "Unidad 1")
     unit_2 = _create_unit(db_session, test_user_data.organization_id, "Unidad 2")
 
@@ -77,6 +100,7 @@ def test_alert_rule_rejects_unit_from_other_organization(
     test_account_data,
     test_organization_data,
     test_user_data,
+    kafka_stub_producer,
 ):
     valid_unit = _create_unit(
         db_session, test_user_data.organization_id, "Unidad valida"
@@ -106,7 +130,7 @@ def test_alert_rule_rejects_unit_from_other_organization(
 
 
 def test_alert_rules_hidden_when_organization_inactive(
-    authenticated_client, db_session, test_user_data
+    authenticated_client, db_session, test_user_data, kafka_stub_producer
 ):
     unit = _create_unit(db_session, test_user_data.organization_id, "Unidad 1")
 
@@ -139,7 +163,7 @@ def test_alert_rules_hidden_when_organization_inactive(
     assert response.json() == []
 
 
-def test_create_alert_rule_without_units(authenticated_client):
+def test_create_alert_rule_without_units(authenticated_client, kafka_stub_producer):
     payload = {
         "name": "Regla sin unidades",
         "type": "ignition_off",
@@ -154,7 +178,7 @@ def test_create_alert_rule_without_units(authenticated_client):
 
 
 def test_assign_and_unassign_units_for_rule(
-    authenticated_client, db_session, test_user_data
+    authenticated_client, db_session, test_user_data, kafka_stub_producer
 ):
     unit_1 = _create_unit(db_session, test_user_data.organization_id, "Unidad 1")
     unit_2 = _create_unit(db_session, test_user_data.organization_id, "Unidad 2")
@@ -192,7 +216,7 @@ def test_assign_and_unassign_units_for_rule(
     assert get_after_unassign.json()["unit_ids"] == [str(unit_2.id)]
 
 
-def test_create_alert_rule_normalizes_config(authenticated_client):
+def test_create_alert_rule_normalizes_config(authenticated_client, kafka_stub_producer):
     payload = {
         "name": "Regla config normalizada",
         "type": "ignition_off",
@@ -230,6 +254,7 @@ def test_update_alert_rule_normalizes_only_when_config_is_sent(
     authenticated_client,
     db_session,
     test_user_data,
+    kafka_stub_producer,
 ):
     unit = _create_unit(db_session, test_user_data.organization_id, "Unidad update")
     create_payload = {
@@ -283,3 +308,89 @@ def test_update_alert_rule_normalizes_only_when_config_is_sent(
     assert (
         serialized == '{"a": {"keep": true}, "list": [{"x": 1, "y": 2}], "z": "last"}'
     )
+
+
+def test_alert_rule_write_endpoints_publish_kafka_events(
+    authenticated_client,
+    db_session,
+    test_user_data,
+    kafka_stub_producer,
+):
+    unit_1 = _create_unit(db_session, test_user_data.organization_id, "Unidad 1")
+    unit_2 = _create_unit(db_session, test_user_data.organization_id, "Unidad 2")
+
+    create_response = authenticated_client.post(
+        "/api/v1/alert_rules",
+        json={
+            "name": "Regla kafka",
+            "type": "ignition_on",
+            "config": {"event": "Engine ON"},
+            "unit_ids": [str(unit_1.id)],
+        },
+    )
+    assert create_response.status_code == status.HTTP_201_CREATED
+    rule_id = create_response.json()["id"]
+
+    update_response = authenticated_client.patch(
+        f"/api/v1/alert_rules/{rule_id}",
+        json={"name": "Regla kafka actualizada", "unit_ids": [str(unit_2.id)]},
+    )
+    assert update_response.status_code == status.HTTP_200_OK
+
+    assign_response = authenticated_client.post(
+        f"/api/v1/alert_rules/{rule_id}/units",
+        json={"unit_ids": [str(unit_1.id)]},
+    )
+    assert assign_response.status_code == status.HTTP_200_OK
+
+    unassign_response = authenticated_client.delete(
+        f"/api/v1/alert_rules/{rule_id}/units",
+        json={"unit_ids": [str(unit_2.id)]},
+    )
+    assert unassign_response.status_code == status.HTTP_200_OK
+
+    delete_response = authenticated_client.delete(f"/api/v1/alert_rules/{rule_id}")
+    assert delete_response.status_code == status.HTTP_200_OK
+
+    events = kafka_stub_producer.messages
+    assert len(events) == 5
+    assert [event["payload"]["operation"] for event in events] == [
+        "UPSERT",
+        "UPSERT",
+        "UPSERT",
+        "UPSERT",
+        "DELETE",
+    ]
+
+    delete_payload = events[-1]["payload"]
+    assert delete_payload["rule_id"] == rule_id
+    assert "rule" not in delete_payload
+
+
+def test_alert_rule_kafka_error_does_not_break_persistence(
+    authenticated_client,
+    caplog,
+    db_session,
+    test_user_data,
+    kafka_stub_producer,
+):
+    unit_1 = _create_unit(db_session, test_user_data.organization_id, "Unidad 1")
+    kafka_stub_producer.should_fail = True
+
+    with caplog.at_level("ERROR"):
+        response = authenticated_client.post(
+            "/api/v1/alert_rules",
+            json={
+                "name": "Regla con error kafka",
+                "type": "ignition_on",
+                "config": {"event": "Engine ON"},
+                "unit_ids": [str(unit_1.id)],
+            },
+        )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    created_rule_id = response.json()["id"]
+
+    persisted_rule = db_session.query(AlertRule).filter(AlertRule.id == created_rule_id).first()
+    assert persisted_rule is not None
+    assert any("Fallo publicando evento en Kafka" in rec.message for rec in caplog.records)

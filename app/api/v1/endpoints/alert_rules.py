@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -6,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user_full
+from app.api.deps import get_current_user_full, get_rules_kafka_producer
 from app.db.session import get_db
 from app.models.alert_rule import AlertRule, AlertRuleUnit
 from app.models.organization import Organization, OrganizationStatus
@@ -21,9 +22,80 @@ from app.schemas.alert_rule import (
     AlertRuleUnitsUnassign,
     AlertRuleUpdate,
 )
+from app.services.messaging.kafka_producer import RulesKafkaProducer
 from app.utils.json_normalization import generate_fingerprint, normalize_json
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _to_utc_iso_z(value: datetime | None) -> str:
+    dt = value or datetime.utcnow()
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat() + "Z"
+
+
+def _build_upsert_event_payload(db: Session, rule: AlertRule) -> dict:
+    rule_out = _build_rule_out(db, rule)
+    return {
+        "operation": "UPSERT",
+        "rule": {
+            "id": str(rule_out.id),
+            "organization_id": str(rule_out.organization_id),
+            "name": rule_out.name,
+            "type": rule_out.type,
+            "config": rule_out.config,
+            "unit_ids": [str(unit_id) for unit_id in rule_out.unit_ids],
+            "is_active": rule_out.is_active,
+            "updated_at": _to_utc_iso_z(rule_out.updated_at),
+        },
+    }
+
+
+def _build_delete_event_payload(rule: AlertRule) -> dict:
+    return {
+        "operation": "DELETE",
+        "rule_id": str(rule.id),
+        "updated_at": _to_utc_iso_z(rule.updated_at),
+    }
+
+
+def _publish_rule_event(
+    producer: RulesKafkaProducer,
+    payload: dict,
+    endpoint: str,
+    organization_id: UUID,
+) -> None:
+    rule_id = payload.get("rule_id") or payload.get("rule", {}).get("id")
+    try:
+        published = producer.publish_rule_update(payload=payload, key=rule_id)
+    except Exception:
+        logger.exception(
+            "[ALERT RULES] Excepcion inesperada publicando evento en Kafka.",
+            extra={
+                "extra_data": {
+                    "endpoint": endpoint,
+                    "operation": payload.get("operation"),
+                    "rule_id": rule_id,
+                    "organization_id": str(organization_id),
+                }
+            },
+        )
+        return
+
+    if not published:
+        logger.error(
+            "[ALERT RULES] Fallo publicando evento en Kafka.",
+            extra={
+                "extra_data": {
+                    "endpoint": endpoint,
+                    "operation": payload.get("operation"),
+                    "rule_id": rule_id,
+                    "organization_id": str(organization_id),
+                }
+            },
+        )
 
 
 def _organization_is_active(db: Session, organization_id: UUID) -> bool:
@@ -118,6 +190,7 @@ def create_alert_rule(
     payload: AlertRuleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    rules_kafka_producer: RulesKafkaProducer = Depends(get_rules_kafka_producer),
 ):
     normalized_config = normalize_json(payload.config)
     fingerprint = generate_fingerprint(
@@ -155,6 +228,14 @@ def create_alert_rule(
 
     db.commit()
     db.refresh(rule)
+
+    kafka_payload = _build_upsert_event_payload(db, rule)
+    _publish_rule_event(
+        rules_kafka_producer,
+        kafka_payload,
+        endpoint="create_alert_rule",
+        organization_id=current_user.organization_id,
+    )
 
     return _build_rule_out(db, rule)
 
@@ -210,6 +291,7 @@ def update_alert_rule(
     payload: AlertRuleUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    rules_kafka_producer: RulesKafkaProducer = Depends(get_rules_kafka_producer),
 ):
     rule = _get_active_rule_or_404(db, rule_id, current_user.organization_id)
 
@@ -255,6 +337,14 @@ def update_alert_rule(
 
     db.refresh(rule)
 
+    kafka_payload = _build_upsert_event_payload(db, rule)
+    _publish_rule_event(
+        rules_kafka_producer,
+        kafka_payload,
+        endpoint="update_alert_rule",
+        organization_id=current_user.organization_id,
+    )
+
     return _build_rule_out(db, rule)
 
 
@@ -263,6 +353,7 @@ def delete_alert_rule(
     rule_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    rules_kafka_producer: RulesKafkaProducer = Depends(get_rules_kafka_producer),
 ):
     rule = _get_active_rule_or_404(db, rule_id, current_user.organization_id)
 
@@ -271,6 +362,14 @@ def delete_alert_rule(
 
     db.add(rule)
     db.commit()
+
+    kafka_payload = _build_delete_event_payload(rule)
+    _publish_rule_event(
+        rules_kafka_producer,
+        kafka_payload,
+        endpoint="delete_alert_rule",
+        organization_id=current_user.organization_id,
+    )
 
     return AlertRuleDeleteOut(
         message="Regla desactivada exitosamente",
@@ -285,6 +384,7 @@ def assign_units_to_rule(
     payload: AlertRuleUnitsAssign,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    rules_kafka_producer: RulesKafkaProducer = Depends(get_rules_kafka_producer),
 ):
     rule = _get_active_rule_or_404(db, rule_id, current_user.organization_id)
     valid_unit_ids = _validate_unit_ids(
@@ -309,6 +409,15 @@ def assign_units_to_rule(
     db.add(rule)
     db.commit()
 
+    db.refresh(rule)
+    kafka_payload = _build_upsert_event_payload(db, rule)
+    _publish_rule_event(
+        rules_kafka_producer,
+        kafka_payload,
+        endpoint="assign_units_to_rule",
+        organization_id=current_user.organization_id,
+    )
+
     return AlertRuleUnitsOut(rule_id=rule.id, unit_ids=valid_unit_ids)
 
 
@@ -318,6 +427,7 @@ def unassign_units_from_rule(
     payload: AlertRuleUnitsUnassign,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    rules_kafka_producer: RulesKafkaProducer = Depends(get_rules_kafka_producer),
 ):
     rule = _get_active_rule_or_404(db, rule_id, current_user.organization_id)
     target_ids = list(dict.fromkeys(payload.unit_ids))
@@ -330,5 +440,14 @@ def unassign_units_from_rule(
     rule.updated_at = datetime.utcnow()
     db.add(rule)
     db.commit()
+
+    db.refresh(rule)
+    kafka_payload = _build_upsert_event_payload(db, rule)
+    _publish_rule_event(
+        rules_kafka_producer,
+        kafka_payload,
+        endpoint="unassign_units_from_rule",
+        organization_id=current_user.organization_id,
+    )
 
     return AlertRuleUnitsOut(rule_id=rule.id, unit_ids=target_ids)

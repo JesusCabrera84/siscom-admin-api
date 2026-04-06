@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     KORE_API_AUTH: Optional[str] = None  # URL del endpoint de autenticación
     KORE_API_SMS: Optional[str] = None  # URL del endpoint de SMS
 
+    # Kafka - Alert rules updates
+    KAFKA_BROKERS: str = "localhost:9092"
+    KAFKA_RULES_UPDATES_TOPIC: str = "alert-rules-updates"
+    KAFKA_RULES_UPDATES_GROUP_ID: str = "alert-rules-updates-group"
+    KAFKA_SASL_USERNAME: Optional[str] = "events-alert-consumer"
+    KAFKA_SASL_PASSWORD: Optional[str] = "eventsalertconsumerpassword"
+    KAFKA_SASL_MECHANISM: str = "SCRAM-SHA-256"
+    KAFKA_SECURITY_PROTOCOL: str = "SASL_PLAINTEXT"
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

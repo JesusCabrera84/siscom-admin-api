@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.deps import close_rules_kafka_producer
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.services.health import check_kafka_accessibility
 
 app = FastAPI(
     title=settings.PROJECT_NAME, version="1.0.0", docs_url="/docs", redoc_url="/redoc"
@@ -68,3 +70,15 @@ def root():
 def health_check():
     """Health check endpoint para Docker y monitoring"""
     return {"status": "healthy", "service": "siscom-admin-api"}
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    """Verifica accesibilidad de servicios externos al iniciar la aplicación."""
+    check_kafka_accessibility()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    """Cierra recursos compartidos al apagar la aplicación."""
+    close_rules_kafka_producer()

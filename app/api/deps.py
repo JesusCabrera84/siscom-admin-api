@@ -31,9 +31,26 @@ from sqlalchemy.orm import Session
 from app.core.security import verify_cognito_token
 from app.db.session import get_db
 from app.services.organization import OrganizationService
+from app.services.messaging.kafka_producer import RulesKafkaProducer
 from app.utils.paseto_token import decode_service_token
 
 security = HTTPBearer()
+_rules_kafka_producer: Optional[RulesKafkaProducer] = None
+
+
+def get_rules_kafka_producer() -> RulesKafkaProducer:
+    """Retorna una instancia singleton del producer de reglas."""
+    global _rules_kafka_producer
+    if _rules_kafka_producer is None:
+        _rules_kafka_producer = RulesKafkaProducer()
+    return _rules_kafka_producer
+
+
+def close_rules_kafka_producer() -> None:
+    global _rules_kafka_producer
+    if _rules_kafka_producer is not None:
+        _rules_kafka_producer.close()
+        _rules_kafka_producer = None
 
 
 @dataclass

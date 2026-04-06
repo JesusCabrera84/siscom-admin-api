@@ -423,6 +423,71 @@ Si no se envía `unit_id`, el endpoint devuelve las ultimas 20 alertas de la org
 
 ---
 
+## Eventos Kafka de Reglas
+
+Los endpoints que escriben en `alert_rules` o `alert_rule_units` publican un evento en Kafka **despues** de confirmar transaccion en BD.
+
+La BD es la fuente de verdad. Si falla la publicacion en Kafka:
+
+- La respuesta HTTP del endpoint exitoso se mantiene.
+- No se hace rollback de BD.
+- Se registra error en logs con contexto de operacion.
+- No hay reintentos automaticos.
+
+### Variables de Entorno
+
+```text
+KAFKA_BROKERS=localhost:9092
+KAFKA_RULES_UPDATES_TOPIC=alert-rules-updates
+KAFKA_RULES_UPDATES_GROUP_ID=alert-rules-updates-group
+KAFKA_SASL_USERNAME=events-alert-consumer
+KAFKA_SASL_PASSWORD=eventsalertconsumerpassword
+KAFKA_SASL_MECHANISM=SCRAM-SHA-256
+KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
+```
+
+### Operaciones que Publican
+
+- `POST /api/v1/alert_rules` -> `UPSERT`
+- `PATCH /api/v1/alert_rules/{rule_id}` -> `UPSERT`
+- `DELETE /api/v1/alert_rules/{rule_id}` -> `DELETE`
+- `POST /api/v1/alert_rules/{rule_id}/units` -> `UPSERT`
+- `DELETE /api/v1/alert_rules/{rule_id}/units` -> `UPSERT`
+
+### Payload UPSERT
+
+```json
+{
+  "operation": "UPSERT",
+  "rule": {
+    "id": "3b6afa2b-0f8d-4ef2-bdbf-bb20c8af9ae6",
+    "organization_id": "c24ba579-6a27-42d9-a398-0486fbe54f8c",
+    "name": "Encendido",
+    "type": "ignition_on",
+    "config": {
+      "event": "Engine ON"
+    },
+    "unit_ids": [
+      "18961401-9405-4124-8d2a-e2c445d11e1a"
+    ],
+    "is_active": true,
+    "updated_at": "2026-04-05T23:25:03.582955Z"
+  }
+}
+```
+
+### Payload DELETE
+
+```json
+{
+  "operation": "DELETE",
+  "rule_id": "3b6afa2b-0f8d-4ef2-bdbf-bb20c8af9ae6",
+  "updated_at": "2026-04-05T23:30:00Z"
+}
+```
+
+---
+
 ## Ejemplos de Uso con cURL
 
 ### cURL: Crear regla con unidades
