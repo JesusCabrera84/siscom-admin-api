@@ -6,9 +6,8 @@ de servicios como Kafka, bases de datos, etc.
 """
 
 import importlib
-import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from app.core.config import settings
 

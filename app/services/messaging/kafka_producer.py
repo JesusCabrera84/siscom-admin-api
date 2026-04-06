@@ -1,5 +1,5 @@
-import json
 import importlib
+import json
 import logging
 from typing import Any, Optional
 
@@ -104,6 +104,16 @@ class RulesKafkaProducer:
             return False
 
         try:
+            logger.info(
+                f"Publishing rule update: {json.dumps(payload, ensure_ascii=False)}",
+                extra={
+                    "extra_data": {
+                        "topic": self.topic,
+                        "key": key,
+                        "payload": payload,
+                    }
+                },
+            )
             future = producer.send(self.topic, key=key, value=payload)
             future.get(timeout=3)
             producer.flush(timeout=3)
