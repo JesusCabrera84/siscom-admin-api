@@ -56,6 +56,7 @@ from app.models.device_service import (
     DeviceServiceStatus,
     SubscriptionType,
 )
+from app.models.geofence import Geofence, GeofenceCell
 from app.models.invitation import Invitation
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem, OrderItemType
@@ -151,6 +152,8 @@ __all__ = [
     "DeviceService",
     "DeviceServiceStatus",
     "SubscriptionType",
+    "Geofence",
+    "GeofenceCell",
     # Tokens
     "TokenConfirmacion",
     "TokenType",

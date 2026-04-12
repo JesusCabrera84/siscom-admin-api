@@ -242,6 +242,27 @@ Reglas de alerta por organizacion y consulta de alertas generadas por unidad.
 
 ---
 
+## 🗺️ Geocercas (H3)
+
+### [geofences.md](./geofences.md)
+
+CRUD de geocercas por organización usando índices H3.
+
+**Endpoints:**
+
+- `POST /api/v1/geofences` - Crear geocerca con celdas H3
+- `GET /api/v1/geofences` - Listar geocercas activas
+- `GET /api/v1/geofences/{geofence_id}` - Obtener detalle de geocerca
+- `PATCH /api/v1/geofences/{geofence_id}` - Actualizar metadata y reemplazar H3 de forma atómica
+- `DELETE /api/v1/geofences/{geofence_id}` - Desactivar geocerca (soft delete)
+
+**Notas:**
+
+- `PATCH` con `h3_indexes` aplica `delete + insert` en una sola transacción
+- Los índices H3 duplicados en el request se deduplican
+
+---
+
 ## 🛒 Órdenes y Servicios
 
 ### [orders.md](./orders.md)

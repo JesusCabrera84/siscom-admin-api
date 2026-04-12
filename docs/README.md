@@ -65,6 +65,7 @@ Comienza aquí si eres nuevo en el proyecto:
 | **[Asignación Usuario-Unidad](api/user-units.md)** | Permisos de usuarios sobre unidades |
 | **[Comandos](api/commands.md)** | Envío de comandos a dispositivos |
 | **[Viajes](api/trips.md)** | Gestión de viajes y rutas |
+| **[Geocercas](api/geofences.md)** | CRUD de geocercas con índices H3 |
 
 ### Suscripciones y Comercial
 

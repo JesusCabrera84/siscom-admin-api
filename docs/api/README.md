@@ -51,6 +51,9 @@ Bienvenido a la documentación de endpoints de la **SISCOM Admin API**.
 ### 🚨 Alertas
 - [alerts.md](./alerts.md) - Reglas de alerta y alertas generadas, con ejemplos curl
 
+### 🗺️ Geocercas
+- [geofences.md](./geofences.md) - CRUD de geocercas con indices H3
+
 ### 🛒 Órdenes
 - [orders.md](./orders.md) - Órdenes de compra
 - [services.md](./services.md) - Activación de servicios
@@ -175,4 +178,4 @@ MÉTODO /api/v1/recurso/{parametro}
 
 ---
 
-**Última actualización**: 4 de abril de 2026
+**Última actualización**: 6 de abril de 2026

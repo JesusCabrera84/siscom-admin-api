@@ -122,6 +122,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 13. [**Órdenes** (`/orders`)](#13-órdenes-orders) - Pedidos de hardware
 14. [**Pagos** (`/payments`)](#14-pagos-payments) - Gestión de pagos
 15. [**Alertas y Reglas** (`/alerts`, `/alert_rules`)](#15-alertas-y-reglas-alerts-alert_rules) - Consulta de alertas y administración de reglas
+16. [**Geocercas** (`/geofences`)](#16-geocercas-geofences) - CRUD de geocercas con índices H3
 
 ---
 
@@ -1931,6 +1932,31 @@ Documentación detallada y ejemplos `curl`: [docs/api/alerts.md](docs/api/alerts
 - Sin `unit_id`, `GET /api/v1/alerts` devuelve las ultimas 20 alertas de la organizacion
 - Si la organización no está activa, los endpoints de listado devuelven `[]`
 - Si el fingerprint ya existe, la API responde `409 Conflict` con `{ "id": "existing_rule_id", "message": "Regla ya existente" }`
+
+---
+
+## 16. Geocercas (`/geofences`)
+
+Gestión de geocercas por organización usando índices H3.
+
+Documentación detallada y ejemplos `curl`: [docs/api/geofences.md](docs/api/geofences.md)
+
+### 🔒 Todos requieren autenticación
+
+### Resumen funcional
+
+- `POST /api/v1/geofences`: crea una geocerca y persiste su lista inicial de `h3_indexes`
+- `GET /api/v1/geofences`: lista geocercas activas de la organización autenticada
+- `GET /api/v1/geofences/{geofence_id}`: obtiene una geocerca activa
+- `PATCH /api/v1/geofences/{geofence_id}`: actualiza metadata; si se envía `h3_indexes`, reemplaza las celdas de forma atómica
+- `DELETE /api/v1/geofences/{geofence_id}`: desactiva la geocerca (`soft delete`)
+
+### Notas importantes
+
+- Todas las consultas usan la organización del usuario autenticado
+- `h3_indexes` se deduplica antes de persistir
+- El reemplazo de celdas H3 en `PATCH` usa la estrategia `delete + insert` en una sola transacción
+- La eliminación es lógica (`is_active=false`), no física
 
 ---
 

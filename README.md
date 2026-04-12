@@ -190,6 +190,7 @@ Una vez que la API esté corriendo:
 | **[Usuarios](docs/api/users.md)** | Invitaciones y roles organizacionales |
 | **[Planes](docs/api/plans.md)** | Catálogo de planes y capabilities |
 | **[Dispositivos](docs/api/devices.md)** | Registro de GPS |
+| **[Geocercas](docs/api/geofences.md)** | CRUD de geocercas con índices H3 |
 | **[Servicios](docs/api/services.md)** | Activación de suscripciones |
 | **[Órdenes](docs/api/orders.md)** | Compra de dispositivos |
 | **[Pagos](docs/api/payments.md)** | Historial de pagos |

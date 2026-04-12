@@ -43,6 +43,7 @@ from app.api.v1.endpoints import (
     contact,
     device_events,
     devices,
+    geofences,
     orders,
     organization_capabilities,
     organization_users,
@@ -138,6 +139,9 @@ api_router.include_router(
     tags=["alert-rules"],
 )
 api_router.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+
+# Geocercas
+api_router.include_router(geofences.router, prefix="/geofences", tags=["geofences"])
 
 # Comandos
 api_router.include_router(commands.router, prefix="/commands", tags=["commands"])
