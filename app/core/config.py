@@ -74,6 +74,16 @@ class Settings(BaseSettings):
             return None
         return v
 
+    @field_validator("AWS_REGION", mode="before")
+    @classmethod
+    def normalize_aws_region(cls, v: Optional[str]) -> str:
+        if v is None:
+            return "us-east-1"
+        if isinstance(v, str):
+            region = v.strip()
+            return region or "us-east-1"
+        return str(v)
+
     @field_validator("COGNITO_REGION")
     @classmethod
     def validate_cognito_region(cls, v: str) -> str:

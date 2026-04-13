@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 try:
     kafka_module = importlib.import_module("kafka")
     KafkaProducer = kafka_module.KafkaProducer
-except Exception:  # pragma: no cover - import guard for environments without kafka client
+except (
+    Exception
+):  # pragma: no cover - import guard for environments without kafka client
     KafkaProducer = None
 
 
@@ -39,7 +41,9 @@ class RulesKafkaProducer:
             "request_timeout_ms": 3000,
             "max_block_ms": 3000,
             "api_version_auto_timeout_ms": 2000,
-            "value_serializer": lambda value: json.dumps(value, ensure_ascii=False).encode("utf-8"),
+            "value_serializer": lambda value: json.dumps(
+                value, ensure_ascii=False
+            ).encode("utf-8"),
             "key_serializer": lambda value: value.encode("utf-8") if value else None,
         }
 
@@ -98,7 +102,9 @@ class RulesKafkaProducer:
             )
             return None
 
-    def publish_rule_update(self, payload: dict[str, Any], key: Optional[str] = None) -> bool:
+    def publish_rule_update(
+        self, payload: dict[str, Any], key: Optional[str] = None
+    ) -> bool:
         producer = self._get_or_create()
         if producer is None:
             return False

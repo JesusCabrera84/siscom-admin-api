@@ -12,6 +12,7 @@ Uso:
     python scripts/apply_006_migration.py [--dry-run]
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -19,14 +20,12 @@ from pathlib import Path
 root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
-import argparse
+from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
-
-from app.core.config import settings
+from app.core.config import settings  # noqa: E402
 
 
 def get_db_engine():
@@ -44,7 +43,7 @@ def check_current_schema(session: Session):
         text(
             """
         SELECT EXISTS (
-            SELECT FROM information_schema.tables 
+            SELECT FROM information_schema.tables
             WHERE table_name = 'devices'
         )
     """
@@ -101,7 +100,7 @@ def check_device_events_table(session: Session) -> bool:
         text(
             """
         SELECT EXISTS (
-            SELECT FROM information_schema.tables 
+            SELECT FROM information_schema.tables
             WHERE table_name = 'device_events'
         )
     """

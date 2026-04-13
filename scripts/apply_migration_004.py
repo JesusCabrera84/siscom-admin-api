@@ -35,7 +35,7 @@ def apply_migration():
             connection.execute(
                 text(
                     """
-                ALTER TABLE users 
+                ALTER TABLE users
                 ALTER COLUMN password_hash DROP NOT NULL
             """
                 )
@@ -47,7 +47,7 @@ def apply_migration():
             connection.execute(
                 text(
                     """
-                ALTER TABLE tokens_confirmacion 
+                ALTER TABLE tokens_confirmacion
                 ADD COLUMN IF NOT EXISTS password_temp VARCHAR(255) NULL
             """
                 )
@@ -61,12 +61,12 @@ def apply_migration():
             result = connection.execute(
                 text(
                     """
-                SELECT 
+                SELECT
                     column_name,
                     is_nullable,
                     data_type
-                FROM information_schema.columns 
-                WHERE 
+                FROM information_schema.columns
+                WHERE
                     (table_name = 'users' AND column_name = 'password_hash')
                     OR
                     (table_name = 'tokens_confirmacion' AND column_name = 'password_temp')

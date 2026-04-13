@@ -76,6 +76,9 @@ jobs:
           IMAGE_NAME: siscom-admin-api
           CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
           PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          SNS_PLATFORM_APPLICATION_ARN_IOS: ${{ vars.SNS_PLATFORM_APPLICATION_ARN_IOS }}
+          SNS_PLATFORM_APPLICATION_ARN_ANDROID: ${{ vars.SNS_PLATFORM_APPLICATION_ARN_ANDROID }}
           DB_HOST: ${{ vars.DB_HOST }}
           DB_PORT: ${{ vars.DB_PORT }}
           DB_USER: ${{ vars.DB_USER }}
@@ -108,7 +111,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
-          envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,CONTACT_EMAIL,RECAPTCHA_SECRET_KEY,PASETO_SECRET_KEY,KORE_CLIENT_ID,KORE_CLIENT_SECRET,KORE_API_AUTH,KORE_API_SMS,KAFKA_BROKERS,KAFKA_RULES_UPDATES_TOPIC,KAFKA_RULES_UPDATES_GROUP_ID,KAFKA_SASL_USERNAME,KAFKA_SASL_PASSWORD,KAFKA_SASL_MECHANISM,KAFKA_SECURITY_PROTOCOL
+          envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,AWS_REGION,SNS_PLATFORM_APPLICATION_ARN_IOS,SNS_PLATFORM_APPLICATION_ARN_ANDROID,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,CONTACT_EMAIL,RECAPTCHA_SECRET_KEY,PASETO_SECRET_KEY,KORE_CLIENT_ID,KORE_CLIENT_SECRET,KORE_API_AUTH,KORE_API_SMS,KAFKA_BROKERS,KAFKA_RULES_UPDATES_TOPIC,KAFKA_RULES_UPDATES_GROUP_ID,KAFKA_SASL_USERNAME,KAFKA_SASL_PASSWORD,KAFKA_SASL_MECHANISM,KAFKA_SECURITY_PROTOCOL
           script: |
             cd /home/${{ secrets.EC2_USERNAME }}/siscom-admin-api
 
@@ -123,6 +126,9 @@ jobs:
             echo "🔧 Configurando variables de entorno..."
             cat > .env << EOF
             PROJECT_NAME=${PROJECT_NAME}
+            AWS_REGION=${AWS_REGION}
+            SNS_PLATFORM_APPLICATION_ARN_IOS=${SNS_PLATFORM_APPLICATION_ARN_IOS}
+            SNS_PLATFORM_APPLICATION_ARN_ANDROID=${SNS_PLATFORM_APPLICATION_ARN_ANDROID}
             DB_HOST=${DB_HOST}
             DB_PORT=${DB_PORT}
             DB_USER=${DB_USER}
@@ -285,8 +291,14 @@ jobs:
             echo "✅ Contenedor healthy"
             echo ""
 
+            # Verificar variables críticas dentro del contenedor
+            echo "3. Verificando variables AWS/SNS dentro del contenedor:"
+            docker exec siscom-admin-api sh -c 'for v in AWS_REGION SNS_PLATFORM_APPLICATION_ARN_IOS SNS_PLATFORM_APPLICATION_ARN_ANDROID; do if [ -z "$(printenv "$v")" ]; then echo "MISSING:$v"; exit 1; fi; done; echo "✅ Variables AWS/SNS presentes"'
+            echo "✅ Variables AWS/SNS disponibles en runtime"
+            echo ""
+
             # Verificar que no hay errores críticos en logs
-            echo "3. Verificando logs recientes:"
+            echo "4. Verificando logs recientes:"
             RECENT_LOGS=$(docker logs --tail 50 siscom-admin-api 2>&1)
 
             if echo "$RECENT_LOGS" | grep -q "Application startup failed"; then
@@ -311,7 +323,7 @@ jobs:
             echo ""
 
             # Verificar que el health endpoint responde
-            echo "4. Verificando health endpoint:"
+            echo "5. Verificando health endpoint:"
             CONTAINER_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' siscom-admin-api)
             if curl -f -s http://localhost:8100/health > /dev/null 2>&1 || curl -f -s http://$CONTAINER_IP:8100/health > /dev/null 2>&1; then
               echo "✅ Health endpoint responde correctamente"

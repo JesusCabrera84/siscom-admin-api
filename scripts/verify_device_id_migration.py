@@ -25,8 +25,8 @@ def main():
             text(
                 """
             SELECT column_name, data_type, is_nullable
-            FROM information_schema.columns 
-            WHERE table_name = 'devices' 
+            FROM information_schema.columns
+            WHERE table_name = 'devices'
             AND column_name IN ('imei', 'device_id')
             ORDER BY column_name
         """
@@ -56,9 +56,9 @@ def main():
         result = conn.execute(
             text(
                 """
-            SELECT indexname 
-            FROM pg_indexes 
-            WHERE tablename = 'devices' 
+            SELECT indexname
+            FROM pg_indexes
+            WHERE tablename = 'devices'
             AND indexname IN ('idx_devices_imei', 'idx_devices_device_id')
             ORDER BY indexname
         """

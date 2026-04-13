@@ -391,6 +391,10 @@ def test_alert_rule_kafka_error_does_not_break_persistence(
     assert response.status_code == status.HTTP_201_CREATED
     created_rule_id = response.json()["id"]
 
-    persisted_rule = db_session.query(AlertRule).filter(AlertRule.id == created_rule_id).first()
+    persisted_rule = (
+        db_session.query(AlertRule).filter(AlertRule.id == created_rule_id).first()
+    )
     assert persisted_rule is not None
-    assert any("Fallo publicando evento en Kafka" in rec.message for rec in caplog.records)
+    assert any(
+        "Fallo publicando evento en Kafka" in rec.message for rec in caplog.records
+    )

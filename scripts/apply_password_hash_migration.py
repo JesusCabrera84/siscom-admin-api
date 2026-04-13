@@ -35,14 +35,14 @@ def apply_migration():
             result = connection.execute(
                 text(
                     """
-                SELECT 
-                    column_name, 
-                    data_type, 
-                    is_nullable 
-                FROM 
-                    information_schema.columns 
-                WHERE 
-                    table_name = 'users' 
+                SELECT
+                    column_name,
+                    data_type,
+                    is_nullable
+                FROM
+                    information_schema.columns
+                WHERE
+                    table_name = 'users'
                     AND column_name = 'password_hash'
             """
                 )
@@ -67,7 +67,7 @@ def apply_migration():
             connection.execute(
                 text(
                     """
-                ALTER TABLE users 
+                ALTER TABLE users
                 ALTER COLUMN password_hash DROP NOT NULL
             """
                 )
@@ -80,14 +80,14 @@ def apply_migration():
             result = connection.execute(
                 text(
                     """
-                SELECT 
-                    column_name, 
-                    data_type, 
-                    is_nullable 
-                FROM 
-                    information_schema.columns 
-                WHERE 
-                    table_name = 'users' 
+                SELECT
+                    column_name,
+                    data_type,
+                    is_nullable
+                FROM
+                    information_schema.columns
+                WHERE
+                    table_name = 'users'
                     AND column_name = 'password_hash'
             """
                 )

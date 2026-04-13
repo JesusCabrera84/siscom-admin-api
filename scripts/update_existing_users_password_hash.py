@@ -34,7 +34,7 @@ def update_users_without_password_hash():
         # Buscar usuarios sin password_hash
         users_without_hash = (
             db.query(User)
-            .filter((User.password_hash == None) | (User.password_hash == ""))
+            .filter(User.password_hash.is_(None) | (User.password_hash == ""))
             .all()
         )
 

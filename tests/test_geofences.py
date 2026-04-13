@@ -14,7 +14,9 @@ def test_geofences_crud_soft_delete(authenticated_client, test_user_data):
         "h3_indexes": [600000000001, 600000000002, 600000000002],
     }
 
-    create_response = authenticated_client.post("/api/v1/geofences", json=create_payload)
+    create_response = authenticated_client.post(
+        "/api/v1/geofences", json=create_payload
+    )
     assert create_response.status_code == status.HTTP_201_CREATED
 
     created = create_response.json()
@@ -60,7 +62,9 @@ def test_geofences_crud_soft_delete(authenticated_client, test_user_data):
     assert get_after_delete.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_geofence_patch_replaces_all_h3_cells(authenticated_client, db_session, test_user_data):
+def test_geofence_patch_replaces_all_h3_cells(
+    authenticated_client, db_session, test_user_data
+):
     geofence = Geofence(
         id=uuid4(),
         organization_id=test_user_data.organization_id,

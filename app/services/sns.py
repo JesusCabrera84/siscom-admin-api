@@ -14,7 +14,13 @@ _sns_client = None
 def get_sns_client():
     global _sns_client
     if _sns_client is None:
-        client_kwargs = {"region_name": settings.AWS_REGION}
+        region = (settings.AWS_REGION or "").strip()
+        if not region:
+            raise RuntimeError(
+                "AWS_REGION no configurada para SNS. Define AWS_REGION (ej. us-east-1)."
+            )
+
+        client_kwargs = {"region_name": region}
 
         # Si hay credenciales explícitas (local), se usan.
         # Si no hay, boto3 usa su cadena por defecto (IAM Role en producción).

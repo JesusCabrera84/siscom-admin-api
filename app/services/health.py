@@ -44,9 +44,7 @@ def check_kafka_accessibility() -> bool:
         return False
 
     brokers = [
-        broker.strip()
-        for broker in settings.KAFKA_BROKERS.split(",")
-        if broker.strip()
+        broker.strip() for broker in settings.KAFKA_BROKERS.split(",") if broker.strip()
     ]
 
     if not brokers:
