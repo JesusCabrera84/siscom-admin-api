@@ -31,6 +31,20 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_data, ensure_ascii=False)
 
 
+class HealthCheckFilter(logging.Filter):
+    """Suprime los logs de acceso del endpoint /health cuando son exitosos (2xx)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        # El formato de uvicorn.access es: '... "GET /health HTTP/1.1" 200 ...'
+        if '"GET /health HTTP' in message:
+            # Solo suprimir si el status code es 2xx
+            parts = message.split('"GET /health HTTP')
+            if len(parts) > 1 and parts[1].strip().split()[0].startswith("2"):
+                return False
+        return True
+
+
 def setup_logging(level: str = "INFO") -> None:
     """
     Configura el sistema de logging con formato JSON.
@@ -54,7 +68,9 @@ def setup_logging(level: str = "INFO") -> None:
 
     # Configurar loggers específicos
     logging.getLogger("uvicorn").setLevel(logging.INFO)
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.setLevel(logging.INFO)
+    uvicorn_access.addFilter(HealthCheckFilter())
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 
