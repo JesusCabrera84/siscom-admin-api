@@ -2,7 +2,7 @@
 
 ## Descripción
 
-Endpoints para gestionar reglas de alerta por organización y consultar alertas generadas por unidad.
+Endpoints para gestionar reglas de alerta por organización y consultar alertas generadas por las unidades visibles para el usuario autenticado.
 
 Todas las operaciones usan el contexto del usuario autenticado. El cliente no debe enviar `organization_id` ni `user_id` para consultar sus propias reglas o alertas.
 
@@ -60,10 +60,11 @@ Todas las operaciones usan el contexto del usuario autenticado. El cliente no de
 | --- | --- |
 | Tenant actual | Todas las consultas se filtran por la organizacion del usuario autenticado |
 | Organizacion inactiva | `GET /alert_rules` y `GET /alerts` responden lista vacia si la organizacion no esta activa |
+| Visibilidad por unidad | Usuarios `is_master` ven alertas de todas las unidades activas de la organizacion; usuarios normales solo de sus unidades asignadas en `user_units` |
 | Soft delete | `DELETE /alert_rules/{rule_id}` no elimina la regla; marca `is_active=false` |
 | Deduplicacion | Crear o actualizar una regla puede responder `409` si el fingerprint colisiona con otra regla activa o existente |
 | Unidades validas | Los `unit_ids` deben pertenecer a la organizacion del usuario y no estar eliminados |
-| Filtro por unidad en alertas | Si se envia `unit_id`, el endpoint valida acceso a esa unidad |
+| Filtro por unidad en alertas | Si se envia `unit_id`, el endpoint valida que la unidad pertenezca a la organizacion y que el usuario tenga acceso a ella |
 | Normalizacion de config | `config` se normaliza antes de persistir: elimina claves con `null` y ordena llaves de forma deterministica |
 
 ### Fingerprint de reglas
@@ -369,20 +370,20 @@ Elimina las asociaciones indicadas para la regla.
 
 **GET** `/api/v1/alerts`
 
-Lista alertas de una unidad dentro de la organizacion autenticada.
+Lista alertas visibles para el usuario autenticado dentro de su organizacion.
 
 #### Query Parameters
 
 | Parametro | Tipo | Requerido | Descripcion |
 | --- | --- | --- | --- |
-| `unit_id` | UUID | No | Unidad a consultar |
+| `unit_id` | UUID | No | Unidad a consultar; debe estar dentro del alcance del usuario autenticado |
 | `type` | string | No | Filtra por tipo exacto |
 | `date_from` | datetime ISO 8601 | No | Retorna alertas con `occurred_at >= date_from` |
 | `date_to` | datetime ISO 8601 | No | Retorna alertas con `occurred_at <= date_to` |
-| `limit` | integer | No | Default `100`, minimo `1`, maximo `500` |
-| `offset` | integer | No | Default `0` |
+| `limit` | integer | No | Default `100`, minimo `1`, maximo `500`. Si no se envia `unit_id`, el backend fuerza `limit=20` |
+| `offset` | integer | No | Default `0`. Si no se envia `unit_id`, el backend fuerza `offset=0` |
 
-Si no se envía `unit_id`, el endpoint devuelve las ultimas 20 alertas de la organizacion autenticada (sin filtrar por unidad).
+Si no se envía `unit_id`, el endpoint devuelve las ultimas 20 alertas visibles para el usuario autenticado. Para usuarios `is_master`, esto incluye todas las unidades activas de la organizacion. Para usuarios normales, solo incluye sus unidades asignadas en `user_units`.
 
 #### Response `200 OK`
 
@@ -408,7 +409,16 @@ Si no se envía `unit_id`, el endpoint devuelve las ultimas 20 alertas de la org
 
 #### Errores comunes
 
+- `403 Forbidden`: la unidad pertenece a la organizacion, pero el usuario no tiene permiso para consultarla
 - `404 Not Found`: la unidad no existe, no pertenece a la organizacion o fue eliminada logicamente
+
+#### Response `403 Forbidden`
+
+```json
+{
+  "detail": "No tienes permiso para acceder a esta unidad"
+}
+```
 
 ---
 
@@ -418,6 +428,7 @@ Si no se envía `unit_id`, el endpoint devuelve las ultimas 20 alertas de la org
 | --- | --- |
 | `400 Bad Request` | Alguno de los `unit_ids` no pertenece a la organizacion o no esta activo |
 | `401 Unauthorized` | Token ausente o invalido |
+| `403 Forbidden` | El usuario no tiene acceso a la unidad solicitada |
 | `404 Not Found` | Regla o unidad no encontrada |
 | `409 Conflict` | Regla duplicada por fingerprint |
 
@@ -592,7 +603,14 @@ curl -X GET "http://localhost:8000/api/v1/alerts?unit_id=550e8400-e29b-41d4-a716
   -H "Authorization: Bearer <token>"
 ```
 
+### cURL: Intentar consultar una unidad sin permiso (403)
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/alerts?unit_id=550e8400-e29b-41d4-a716-446655449999" \
+  -H "Authorization: Bearer <token>"
+```
+
 ---
 
-**Ultima actualizacion**: 5 de abril de 2026  
+**Ultima actualizacion**: 14 de abril de 2026  
 **Referencia**: [API principal](../../API_DOCUMENTATION.md) | [Documentacion de unidades](./units.md)

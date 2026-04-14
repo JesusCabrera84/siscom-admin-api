@@ -14,7 +14,6 @@ from app.models.trip import Trip, TripAlert, TripEvent, TripPoint
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.models.user import User
-from app.models.user_unit import UserUnit
 from app.schemas.trip import (
     TripAlertOut,
     TripDetail,
@@ -22,6 +21,7 @@ from app.schemas.trip import (
     TripOut,
     TripPointOut,
 )
+from app.services.access_control import get_accessible_unit_ids
 
 router = APIRouter()
 
@@ -69,35 +69,6 @@ def get_user_from_auth(db: Session, auth: AuthResult) -> Optional[User]:
 
     # PASETO: No hay usuario de BD, se asume acceso total
     return None
-
-
-def get_accessible_unit_ids(db: Session, user: User) -> List[UUID]:
-    """
-    Retorna los IDs de unidades accesibles para el usuario.
-    - Si es maestro: todas las unidades del cliente
-    - Si no es maestro: solo las unidades en user_units
-    """
-    if user.is_master:
-        # Maestro ve todas las unidades del cliente
-        unit_ids = (
-            db.query(Unit.id)
-            .filter(
-                Unit.organization_id == user.organization_id,
-                Unit.deleted_at.is_(None),
-            )
-            .all()
-        )
-    else:
-        # Usuario normal ve solo las unidades con permisos
-        unit_ids = (
-            db.query(UserUnit.unit_id)
-            .filter(UserUnit.user_id == user.id)
-            .join(Unit, Unit.id == UserUnit.unit_id)
-            .filter(Unit.deleted_at.is_(None))
-            .all()
-        )
-
-    return [unit_id[0] for unit_id in unit_ids]
 
 
 def get_accessible_device_ids(db: Session, user: User) -> List[str]:

@@ -10,7 +10,9 @@ from app.models.alert import Alert
 from app.models.organization import Organization, OrganizationStatus
 from app.models.unit import Unit
 from app.models.user import User
+from app.models.user_unit import UserUnit
 from app.schemas.alert import AlertOut
+from app.services.access_control import get_accessible_unit_ids
 
 router = APIRouter()
 
@@ -30,6 +32,27 @@ def _validate_unit_access(db: Session, user: User, unit_id: UUID) -> None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Unidad no encontrada",
+        )
+
+    if user.is_master:
+        return
+
+    user_unit = (
+        db.query(UserUnit)
+        .join(Unit, Unit.id == UserUnit.unit_id)
+        .filter(
+            UserUnit.user_id == user.id,
+            UserUnit.unit_id == unit_id,
+            Unit.organization_id == user.organization_id,
+            Unit.deleted_at.is_(None),
+        )
+        .first()
+    )
+
+    if not user_unit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para acceder a esta unidad",
         )
 
 
@@ -67,8 +90,14 @@ def list_alerts(
         _validate_unit_access(db, current_user, unit_id)
         query = query.filter(Alert.unit_id == unit_id)
     else:
+        accessible_unit_ids = get_accessible_unit_ids(db, current_user)
+        if not accessible_unit_ids:
+            return []
+
+        query = query.filter(Alert.unit_id.in_(accessible_unit_ids))
+
         # Si no se envía unit_id, el endpoint devuelve las últimas 20 alertas
-        # de la organización autenticada, ignorando paginación de entrada.
+        # visibles para el usuario autenticado, ignorando paginación de entrada.
         limit = 20
         offset = 0
 

@@ -75,8 +75,7 @@ async def verify_recaptcha(token: str, min_score: float = 0.5) -> dict:
         score = data.get("score", 0.0)
         if score < min_score:
             print(
-                f"[RECAPTCHA] Score bajo: {score} < {min_score}. "
-                f"Posible bot detectado."
+                f"[RECAPTCHA] Score bajo: {score} < {min_score}. Posible bot detectado."
             )
             raise HTTPException(
                 status_code=400,

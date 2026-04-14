@@ -3,9 +3,17 @@ from uuid import uuid4
 
 from fastapi import status
 
+from app.api.deps import (
+    get_current_organization_id,
+    get_current_user_full,
+    get_current_user_id,
+)
+from app.main import app
 from app.models.alert import Alert
 from app.models.organization import Organization
 from app.models.unit import Unit
+from app.models.user import User
+from app.models.user_unit import UserUnit
 
 
 def _create_unit(db_session, organization_id, name):
@@ -19,6 +27,72 @@ def _create_unit(db_session, organization_id, name):
     db_session.commit()
     db_session.refresh(unit)
     return unit
+
+
+def _create_user(db_session, organization_id, email, is_master=False):
+    user = User(
+        id=uuid4(),
+        organization_id=organization_id,
+        cognito_sub=f"test-cognito-{uuid4()}",
+        email=email,
+        full_name="Usuario de prueba",
+        is_master=is_master,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+def _assign_user_unit(db_session, user_id, unit_id, role="viewer"):
+    assignment = UserUnit(
+        id=uuid4(),
+        user_id=user_id,
+        unit_id=unit_id,
+        role=role,
+    )
+    db_session.add(assignment)
+    db_session.commit()
+    db_session.refresh(assignment)
+    return assignment
+
+
+def _create_alert(
+    db_session,
+    organization_id,
+    unit_id,
+    source_id,
+    occurred_at,
+    alert_type="ignition_off",
+):
+    alert = Alert(
+        organization_id=organization_id,
+        unit_id=unit_id,
+        source_type="event",
+        source_id=source_id,
+        type=alert_type,
+        payload={"source_id": source_id},
+        occurred_at=occurred_at,
+    )
+    db_session.add(alert)
+    return alert
+
+
+def _authenticate_as_user(client, organization_id, user):
+    def override_get_current_organization_id():
+        return organization_id
+
+    def override_get_current_user_full():
+        return user
+
+    def override_get_current_user_id():
+        return user.id
+
+    app.dependency_overrides[get_current_organization_id] = (
+        override_get_current_organization_id
+    )
+    app.dependency_overrides[get_current_user_full] = override_get_current_user_full
+    app.dependency_overrides[get_current_user_id] = override_get_current_user_id
 
 
 def test_get_alerts_filtered_by_unit(authenticated_client, db_session, test_user_data):
@@ -193,3 +267,110 @@ def test_get_alerts_without_unit_id_returns_latest_20_for_org(
         int(item["source_id"].replace("evt-org-", "")) for item in items
     )
     assert returned_indexes == list(range(10, 30))
+
+
+def test_get_alerts_without_unit_id_returns_latest_20_for_user_units(
+    client,
+    db_session,
+    test_user_data,
+):
+    unit_allowed = _create_unit(
+        db_session, test_user_data.organization_id, "Unidad visible"
+    )
+    unit_hidden = _create_unit(
+        db_session, test_user_data.organization_id, "Unidad oculta"
+    )
+    restricted_user = _create_user(
+        db_session,
+        test_user_data.organization_id,
+        "viewer@example.com",
+        is_master=False,
+    )
+    _assign_user_unit(db_session, restricted_user.id, unit_allowed.id)
+
+    base_time = datetime.utcnow() - timedelta(minutes=60)
+    for i in range(30):
+        _create_alert(
+            db_session,
+            test_user_data.organization_id,
+            unit_allowed.id,
+            f"evt-allowed-{i}",
+            base_time + timedelta(minutes=i),
+        )
+
+    for i in range(10):
+        _create_alert(
+            db_session,
+            test_user_data.organization_id,
+            unit_hidden.id,
+            f"evt-hidden-{i}",
+            base_time + timedelta(minutes=100 + i),
+        )
+
+    db_session.commit()
+
+    _authenticate_as_user(client, test_user_data.organization_id, restricted_user)
+    response = client.get("/api/v1/alerts")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == status.HTTP_200_OK
+    items = response.json()
+    assert len(items) == 20
+    assert all(item["unit_id"] == str(unit_allowed.id) for item in items)
+    returned_indexes = sorted(
+        int(item["source_id"].replace("evt-allowed-", "")) for item in items
+    )
+    assert returned_indexes == list(range(10, 30))
+
+
+def test_get_alerts_rejects_unit_without_permission(client, db_session, test_user_data):
+    unit_allowed = _create_unit(
+        db_session, test_user_data.organization_id, "Unidad visible"
+    )
+    unit_hidden = _create_unit(
+        db_session, test_user_data.organization_id, "Unidad oculta"
+    )
+    restricted_user = _create_user(
+        db_session,
+        test_user_data.organization_id,
+        "viewer-denied@example.com",
+        is_master=False,
+    )
+    _assign_user_unit(db_session, restricted_user.id, unit_allowed.id)
+
+    _authenticate_as_user(client, test_user_data.organization_id, restricted_user)
+    response = client.get(f"/api/v1/alerts?unit_id={unit_hidden.id}")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"] == "No tienes permiso para acceder a esta unidad"
+
+
+def test_get_alerts_returns_empty_for_non_master_without_assigned_units(
+    client,
+    db_session,
+    test_user_data,
+):
+    unit = _create_unit(db_session, test_user_data.organization_id, "Unidad sin acceso")
+    restricted_user = _create_user(
+        db_session,
+        test_user_data.organization_id,
+        "viewer-empty@example.com",
+        is_master=False,
+    )
+
+    _create_alert(
+        db_session,
+        test_user_data.organization_id,
+        unit.id,
+        "evt-no-access",
+        datetime.utcnow(),
+    )
+    db_session.commit()
+
+    _authenticate_as_user(client, test_user_data.organization_id, restricted_user)
+    response = client.get("/api/v1/alerts")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []

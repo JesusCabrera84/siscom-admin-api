@@ -37,7 +37,7 @@ router = APIRouter()
 
 # Emitir warning al importar este módulo
 warnings.warn(
-    "Los endpoints /services son LEGACY. " "Para código nuevo, usar /subscriptions.",
+    "Los endpoints /services son LEGACY. Para código nuevo, usar /subscriptions.",
     DeprecationWarning,
     stacklevel=2,
 )
