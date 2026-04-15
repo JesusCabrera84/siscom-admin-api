@@ -78,6 +78,7 @@ def health_check():
 @app.on_event("startup")
 def on_startup() -> None:
     """Verifica accesibilidad de servicios externos al iniciar la aplicación."""
+    setup_logging()
     check_kafka_accessibility()
 
 

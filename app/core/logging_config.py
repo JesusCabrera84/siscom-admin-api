@@ -69,7 +69,10 @@ def setup_logging(level: str = "INFO") -> None:
     logging.getLogger("uvicorn").setLevel(logging.INFO)
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.setLevel(logging.INFO)
-    uvicorn_access.addFilter(HealthCheckFilter())
+    health_filter = HealthCheckFilter()
+    uvicorn_access.addFilter(health_filter)
+    for handler in uvicorn_access.handlers:
+        handler.addFilter(health_filter)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 
