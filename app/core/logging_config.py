@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 
@@ -34,15 +35,13 @@ class JSONFormatter(logging.Formatter):
 class HealthCheckFilter(logging.Filter):
     """Suprime los logs de acceso del endpoint /health cuando son exitosos (2xx)."""
 
+    health_success_pattern = re.compile(
+        r'"[A-Z]+ /health(?:\?.*)? HTTP/[^"]+" 2\d\d\b'
+    )
+
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
-        # El formato de uvicorn.access es: '... "GET /health HTTP/1.1" 200 ...'
-        if '"GET /health HTTP' in message:
-            # Solo suprimir si el status code es 2xx
-            parts = message.split('"GET /health HTTP')
-            if len(parts) > 1 and parts[1].strip().split()[0].startswith("2"):
-                return False
-        return True
+        return not bool(self.health_success_pattern.search(message))
 
 
 def setup_logging(level: str = "INFO") -> None:
