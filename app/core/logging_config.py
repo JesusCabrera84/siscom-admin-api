@@ -35,9 +35,7 @@ class JSONFormatter(logging.Formatter):
 class HealthCheckFilter(logging.Filter):
     """Suprime los logs de acceso del endpoint /health cuando son exitosos (2xx)."""
 
-    health_success_pattern = re.compile(
-        r'"[A-Z]+ /health(?:\?.*)? HTTP/[^"]+" 2\d\d\b'
-    )
+    health_success_pattern = re.compile(r'"[A-Z]+ /health(?:\?.*)? HTTP/[^"]+" 2\d\d\b')
 
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
