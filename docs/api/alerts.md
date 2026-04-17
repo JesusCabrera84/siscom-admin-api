@@ -483,9 +483,35 @@ KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
     ],
     "is_active": true,
     "updated_at": "2026-04-05T23:25:03.582955Z"
+  },
+  "context": {
+    "units": [
+      {
+        "id": "18961401-9405-4124-8d2a-e2c445d11e1a",
+        "name": "Camioneta Juan"
+      }
+    ]
   }
 }
 ```
+
+#### Descripción de campos UPSERT
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `operation` | `string` | Siempre `UPSERT` para operaciones de creación o actualización |
+| `rule.id` | `UUID` | ID único de la regla |
+| `rule.organization_id` | `UUID` | ID de la organización propietaria de la regla |
+| `rule.name` | `string` | Nombre descriptivo de la regla |
+| `rule.type` | `string` | Tipo de regla (ej: `ignition_on`, `ignition_off`, `geofence`, etc.) |
+| `rule.config` | `object` | Configuración específica de la regla según su tipo |
+| `rule.unit_ids` | `UUID[]` | Lista de IDs de unidades asociadas a la regla |
+| `rule.is_active` | `boolean` | Indica si la regla está activa |
+| `rule.updated_at` | `ISO 8601` | Timestamp de la última actualización en formato UTC ISO con sufijo Z |
+| `context.units` | `object[]` | Arreglo con información enriquecida de las unidades |
+| `context.units[].id` | `UUID` | ID de la unidad |
+| `context.units[].name` | `string` | Nombre descriptivo de la unidad |
+
 
 ### Payload DELETE
 

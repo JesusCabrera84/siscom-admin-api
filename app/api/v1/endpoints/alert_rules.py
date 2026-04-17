@@ -38,6 +38,24 @@ def _to_utc_iso_z(value: datetime | None) -> str:
 
 def _build_upsert_event_payload(db: Session, rule: AlertRule) -> dict:
     rule_out = _build_rule_out(db, rule)
+
+    # Get units with their names
+    unit_rows = (
+        db.query(Unit.id, Unit.name)
+        .join(AlertRuleUnit, AlertRuleUnit.unit_id == Unit.id)
+        .filter(AlertRuleUnit.rule_id == rule.id)
+        .order_by(AlertRuleUnit.created_at.asc())
+        .all()
+    )
+
+    units_context = [
+        {
+            "id": str(row.id),
+            "name": row.name,
+        }
+        for row in unit_rows
+    ]
+
     return {
         "operation": "UPSERT",
         "rule": {
@@ -49,6 +67,9 @@ def _build_upsert_event_payload(db: Session, rule: AlertRule) -> dict:
             "unit_ids": [str(unit_id) for unit_id in rule_out.unit_ids],
             "is_active": rule_out.is_active,
             "updated_at": _to_utc_iso_z(rule_out.updated_at),
+        },
+        "context": {
+            "units": units_context,
         },
     }
 
