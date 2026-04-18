@@ -88,11 +88,56 @@ def endpoint_is_valid(endpoint_arn: str) -> bool:
         return False
 
 
+def _can_recreate_endpoint(exc: ClientError) -> bool:
+    error = exc.response.get("Error", {})
+    code = (error.get("Code") or "").lower()
+    message = (error.get("Message") or "").lower()
+
+    if code in {"notfound", "notfoundexception"}:
+        return True
+
+    if code == "invalidparameter" and (
+        "does not exist" in message
+        or "not found" in message
+        or "endpoint" in message
+        and "exist" in message
+    ):
+        return True
+
+    return False
+
+
+def update_endpoint(endpoint_arn: str, device_token: str) -> None:
+    sns = get_sns_client()
+    sns.set_endpoint_attributes(
+        EndpointArn=endpoint_arn,
+        Attributes={
+            "Token": device_token,
+            "Enabled": "true",
+        },
+    )
+
+
 def get_or_recreate_endpoint(
     device_token: str,
     platform: str,
     endpoint_arn: str | None,
 ) -> tuple[str, bool]:
-    if endpoint_arn and endpoint_is_valid(endpoint_arn):
-        return endpoint_arn, False
+    if endpoint_arn:
+        try:
+            update_endpoint(endpoint_arn=endpoint_arn, device_token=device_token)
+            return endpoint_arn, False
+        except ClientError as exc:
+            if not _can_recreate_endpoint(exc):
+                raise
+            logger.warning(
+                "No se pudo actualizar endpoint SNS; se recreara endpoint.",
+                extra={
+                    "extra_data": {
+                        "endpoint_arn": endpoint_arn,
+                        "error_code": exc.response.get("Error", {}).get("Code"),
+                    }
+                },
+            )
+
     return create_endpoint(device_token=device_token, platform=platform), True

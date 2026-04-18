@@ -116,6 +116,18 @@ def register_user_device(
         .first()
     )
 
+    # If token rotated (common in iOS), reuse latest user+platform device record.
+    if not device:
+        device = (
+            db.query(UserDevice)
+            .filter(
+                UserDevice.user_id == current_user.id,
+                UserDevice.platform == payload.platform,
+            )
+            .order_by(UserDevice.updated_at.desc())
+            .first()
+        )
+
     try:
         if not device:
             endpoint_arn, _ = get_or_recreate_endpoint(
@@ -166,6 +178,7 @@ def register_user_device(
         )
 
         device.user_id = current_user.id
+        device.device_token = payload.device_token
         device.platform = payload.platform
         device.is_active = True
         device.last_seen_at = now
