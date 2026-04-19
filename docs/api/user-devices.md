@@ -119,6 +119,40 @@ Marca el dispositivo como inactivo (`is_active=false`) para el `device_token` en
 
 ---
 
+## Flujo SNS (Creación y Actualización de Endpoints)
+
+Este es el flujo completo que ejecuta `POST /api/v1/user-devices/register` para SNS:
+
+1. Valida el payload (`device_token`, `platform`) con `platform` en `ios|android`.
+2. Busca un registro existente en `user_devices` por `device_token`.
+3. Si no existe, intenta reutilizar el último registro del mismo `user_id + platform` (caso típico de rotación de token en iOS).
+4. Llama al servicio SNS `get_or_recreate_endpoint(device_token, platform, endpoint_arn)`:
+  - Si `endpoint_arn` existe, intenta `set_endpoint_attributes` para actualizar `Token` y `Enabled=true`.
+  - Si ese endpoint no existe o es inválido en AWS, lo recrea automáticamente.
+  - Si `endpoint_arn` no existe, crea uno nuevo con `create_platform_endpoint`.
+5. Guarda o actualiza el registro en `user_devices` con el `endpoint_arn` resultante.
+6. Publica evento Kafka `UPSERT` con datos del dispositivo.
+7. Si falla SNS (configuración o AWS), responde `503 Service Unavailable`.
+
+### APNS vs GCM/FCM
+
+No se decide por una lógica fija en código; se decide por el ARN configurado para cada plataforma:
+
+- `platform=ios` usa `SNS_PLATFORM_APPLICATION_ARN_IOS`.
+- `platform=android` usa `SNS_PLATFORM_APPLICATION_ARN_ANDROID`.
+
+Por lo tanto:
+
+- Si el ARN es `...:app/APNS/...` o `...:app/APNS_SANDBOX/...`, el endpoint se crea como APNS.
+- Si el ARN es `...:app/GCM/...`, el endpoint se crea como GCM/FCM.
+
+### Nota de configuración actual
+
+En el entorno local actual, `SNS_PLATFORM_APPLICATION_ARN_IOS` apunta a `app/GCM/...`.
+Con esa configuración, solicitudes con `platform=ios` intentarán registrar endpoint en GCM/FCM, no en APNS.
+
+---
+
 ## Publicación de Eventos en Kafka
 
 Al completar exitosamente las operaciones, se publica un evento en Kafka al tópico configurado por la variable de entorno `KAFKA_USER_DEVICES_UPDATES_TOPIC`.
@@ -151,6 +185,7 @@ Si el envío a Kafka falla, el endpoint **no falla**: se registra el error en lo
   "is_active": false,
   "updated_at": "2026-04-13T20:10:00Z"
 }
+```
 
 `unit_id` se toma de la asignación más reciente del usuario en `user_units`. Si el usuario no tiene unidades asignadas, se envía `null`.
 
