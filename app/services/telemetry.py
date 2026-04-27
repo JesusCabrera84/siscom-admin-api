@@ -381,8 +381,8 @@ def _map_row_to_point(row, metrics: Sequence[MetricName]) -> TelemetryPointOut:
 
     if "comm_quality" in metrics:
         comm_out = CommQualityOut(
-            fixable_count=mapping.get("count_comm_fixable") or 0,
-            with_fix_count=mapping.get("count_comm_with_fix") or 0,
+            count_comm_fixable=mapping.get("count_comm_fixable") or 0,
+            count_comm_with_fix=mapping.get("count_comm_with_fix") or 0,
         )
 
     if "samples" in metrics:

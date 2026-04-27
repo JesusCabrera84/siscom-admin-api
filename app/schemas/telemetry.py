@@ -9,7 +9,7 @@ Métricas soportadas:
   - main_battery   → avg_voltage, min_voltage
   - backup_battery → avg_voltage, min_voltage
   - alerts         → count
-  - comm_quality   → fixable_count, with_fix_count
+  - comm_quality   → count_comm_fixable, count_comm_with_fix
   - samples        → total
 
 Granularidades:
@@ -99,11 +99,13 @@ class AlertsOut(BaseModel):
 
 
 class CommQualityOut(BaseModel):
-    fixable_count: int = Field(
-        ..., description="Mensajes con error recuperable de comunicación"
+    count_comm_fixable: int = Field(
+        ...,
+        description="Comunicaciones que tuvieron información de GPS (puede no ser válida)",
     )
-    with_fix_count: int = Field(
-        ..., description="Mensajes que llegaron con corrección aplicada"
+    count_comm_with_fix: int = Field(
+        ...,
+        description="Comunicaciones que tuvieron información de GPS válida",
     )
 
 

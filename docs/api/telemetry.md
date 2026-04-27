@@ -71,7 +71,7 @@ Authorization: Bearer <access_token>
 | `main_battery` | `avg_voltage`, `min_voltage`, `max_voltage` | V | Tensión de la batería principal |
 | `backup_battery` | `avg_voltage`, `min_voltage`, `max_voltage` | V | Tensión de la batería de respaldo |
 | `alerts` | `count` | — | Total de alertas generadas en el período |
-| `comm_quality` | `fixable_count`, `with_fix_count` | — | Mensajes con error recuperable y mensajes con corrección GPS aplicada |
+| `comm_quality` | `count_comm_fixable`, `count_comm_with_fix` | — | Comunicaciones con información GPS (fixable) y con información GPS válida (with_fix) |
 | `samples` | `total` | — | Total de mensajes procesados en el período |
 | `signal` | `avg`, `min`, `max` | dBm (rx level) | Nivel de señal celular promedio, mínimo y máximo |
 | `satellites` | `avg`, `min`, `max` | # | Cantidad de satélites promedio, mínima y máxima |
@@ -156,7 +156,7 @@ Re-agrega los buckets horarios por día calendario en UTC (`date_trunc('day', bu
 | `avg_speed`, `avg_voltage`, `signal.avg`, `satellites.avg` | `SUM(suma_horaria) / SUM(conteo_horario)` — **no** promedio de promedios |
 | `speed.min_speed`, `max_speed`, `min_voltage`, `max_voltage`, `signal.min/max`, `satellites.min/max` | `MAX/MIN` sobre todos los registros del día |
 | `alerts.count`, `samples.total` | `SUM` de todos los buckets del día |
-| `comm_quality` | `SUM` de `fixable_count` y `with_fix_count` del día |
+| `comm_quality` | `SUM` de `count_comm_fixable` y `count_comm_with_fix` del día |
 | `odometer.total_distance_mt` | `MAX(last_odometer) - MIN(first_odometer)` |
 
 ---
@@ -490,7 +490,7 @@ curl -G "https://api.ejemplo.com/api/v1/devices/864537040123456/telemetry" \
       "main_battery": { "avg_voltage": 12.7, "min_voltage": 12.4, "max_voltage": 13.1 },
       "backup_battery": { "avg_voltage": 3.9, "min_voltage": 3.8, "max_voltage": 4.1 },
       "alerts": { "count": 1 },
-      "comm_quality": { "fixable_count": 2, "with_fix_count": 118 },
+      "comm_quality": { "count_comm_fixable": 2, "count_comm_with_fix": 118 },
       "samples": { "total": 120 },
       "signal": { "avg": -64.4, "min": -87.0, "max": -45.0 },
       "satellites": { "avg": 8.9, "min": 5.0, "max": 12.0 },
@@ -502,7 +502,7 @@ curl -G "https://api.ejemplo.com/api/v1/devices/864537040123456/telemetry" \
       "main_battery": { "avg_voltage": 12.6, "min_voltage": 12.3, "max_voltage": 12.9 },
       "backup_battery": { "avg_voltage": 3.9, "min_voltage": 3.9, "max_voltage": 4.0 },
       "alerts": { "count": 0 },
-      "comm_quality": { "fixable_count": 0, "with_fix_count": 115 },
+      "comm_quality": { "count_comm_fixable": 0, "count_comm_with_fix": 115 },
       "samples": { "total": 115 },
       "signal": { "avg": -68.2, "min": -90.0, "max": -51.0 },
       "satellites": { "avg": 8.1, "min": 4.0, "max": 11.0 },
@@ -514,7 +514,7 @@ curl -G "https://api.ejemplo.com/api/v1/devices/864537040123456/telemetry" \
       "main_battery": { "avg_voltage": 12.5, "min_voltage": 12.5, "max_voltage": 12.7 },
       "backup_battery": { "avg_voltage": 3.9, "min_voltage": 3.9, "max_voltage": 4.0 },
       "alerts": { "count": 0 },
-      "comm_quality": { "fixable_count": 1, "with_fix_count": 59 },
+      "comm_quality": { "count_comm_fixable": 1, "count_comm_with_fix": 59 },
       "samples": { "total": 60 },
       "signal": { "avg": -71.0, "min": -92.0, "max": -56.0 },
       "satellites": { "avg": 6.7, "min": 3.0, "max": 9.0 },
@@ -752,12 +752,12 @@ curl -X POST "https://api.ejemplo.com/api/v1/telemetry/query" \
       "series": [
         {
           "bucket": "2026-04-14T00:00:00Z",
-          "comm_quality": { "fixable_count": 5, "with_fix_count": 1435 },
+          "comm_quality": { "count_comm_fixable": 5, "count_comm_with_fix": 1435 },
           "samples": { "total": 1440 }
         },
         {
           "bucket": "2026-04-15T00:00:00Z",
-          "comm_quality": { "fixable_count": 3, "with_fix_count": 1437 },
+          "comm_quality": { "count_comm_fixable": 3, "count_comm_with_fix": 1437 },
           "samples": { "total": 1440 }
         }
       ]
@@ -767,12 +767,12 @@ curl -X POST "https://api.ejemplo.com/api/v1/telemetry/query" \
       "series": [
         {
           "bucket": "2026-04-14T00:00:00Z",
-          "comm_quality": { "fixable_count": 280, "with_fix_count": 860 },
+          "comm_quality": { "count_comm_fixable": 280, "count_comm_with_fix": 860 },
           "samples": { "total": 1440 }
         },
         {
           "bucket": "2026-04-15T00:00:00Z",
-          "comm_quality": { "fixable_count": 310, "with_fix_count": 830 },
+          "comm_quality": { "count_comm_fixable": 310, "count_comm_with_fix": 830 },
           "samples": { "total": 1440 }
         }
       ]
