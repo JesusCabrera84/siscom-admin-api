@@ -8,10 +8,10 @@ from datetime import timedelta
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_current_user_full
+from app.api.deps import BearerAuth, get_current_user, get_current_user_full
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.account import Account, AccountStatus
@@ -67,8 +67,10 @@ if getattr(settings, "COGNITO_ENDPOINT", None):
     cognito_client_kwargs["endpoint_url"] = settings.COGNITO_ENDPOINT
 cognito = boto3.client("cognito-idp", **cognito_client_kwargs)
 
-# Security bearer para obtener el token
-security = HTTPBearer()
+# Security bearer para obtener el token.
+# Se reutiliza BearerAuth (401 en vez del 403 por defecto) para que el contrato de
+# autenticación sea el mismo en todo el servicio.
+security = BearerAuth()
 
 
 def get_secret_hash(username: str) -> str:
