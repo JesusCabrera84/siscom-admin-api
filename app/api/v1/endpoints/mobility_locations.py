@@ -1,8 +1,13 @@
 from datetime import datetime, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_mobility_kafka_producer
+from app.api.deps import get_current_user_full, get_mobility_kafka_producer
+from app.db.session import get_db
+from app.models.mobility_device import MobilityDevice
+from app.models.user import User
 from app.schemas.mobility_location import (
     MobilityLocationBatchIn,
     MobilityLocationBatchItemOut,
@@ -15,6 +20,37 @@ from app.schemas.mobility_location import (
 from app.services.messaging.kafka_producer import MobilityKafkaProducer
 
 router = APIRouter()
+
+
+def _require_own_active_device(
+    db: Session, device_id: UUID, current_user: User
+) -> MobilityDevice:
+    """
+    Valida que el dispositivo exista, pertenezca al usuario autenticado y esté
+    activo antes de aceptar ubicaciones suyas.
+
+    Se responde 404 tanto si no existe como si es de otro usuario, para no
+    convertir el endpoint en un oráculo de device_id válidos.
+    """
+    device = (
+        db.query(MobilityDevice)
+        .filter(
+            MobilityDevice.id == device_id,
+            MobilityDevice.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="device_id no existe o no pertenece al usuario.",
+        )
+    if not device.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El dispositivo está desactivado y no puede publicar ubicaciones.",
+        )
+    return device
 
 
 def _build_message(
@@ -45,11 +81,15 @@ def _build_message(
 )
 def publish_mobility_location(
     payload: MobilityLocationIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
     mobility_kafka_producer: MobilityKafkaProducer = Depends(
         get_mobility_kafka_producer
     ),
 ):
     """Valida y publica una ubicación de movilidad enriquecida con received_at."""
+    _require_own_active_device(db, payload.device_id, current_user)
+
     received_at = datetime.now(timezone.utc)
     message = _build_message(
         device_id=str(payload.device_id),
@@ -77,11 +117,15 @@ def publish_mobility_location(
 )
 def publish_mobility_locations_batch(
     payload: MobilityLocationBatchIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
     mobility_kafka_producer: MobilityKafkaProducer = Depends(
         get_mobility_kafka_producer
     ),
 ):
     """Valida y publica un batch de ubicaciones enriquecidas con received_at."""
+    _require_own_active_device(db, payload.device_id, current_user)
+
     device_id = str(payload.device_id)
     published_locations: list[MobilityLocationBatchItemOut] = []
 
