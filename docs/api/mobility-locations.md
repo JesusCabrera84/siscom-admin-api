@@ -23,11 +23,10 @@ Además del token, se valida que el `device_id` del payload **pertenezca al usua
 
 En el batch la validación se hace **una sola vez** sobre el `device_id` de nivel superior, no por cada punto.
 
-> **Nota sobre el request sin header:** si no se envía `Authorization`, FastAPI responde
-> `403 Forbidden` (`"Not authenticated"`), no `401`. Es el comportamiento por defecto de
-> `HTTPBearer` y aplica a **todo el servicio**, no solo a estos endpoints — hay tests en
-> `tests/test_auth.py` que esperan `401` y fallan por esto. Los clientes que disparan
-> refresh de token con el `401` deben tenerlo en cuenta.
+> **Nota sobre el request sin header:** si no se envía `Authorization`, la respuesta es
+> `401 Unauthorized` con `WWW-Authenticate: Bearer`, igual que si el token fuera inválido.
+> Aplica a **todo el servicio** vía `BearerAuth` (`app/api/deps.py`), que corrige el `403`
+> que FastAPI devuelve por defecto en ese caso.
 
 ---
 
@@ -170,9 +169,8 @@ Retorna `device_id` y el arreglo de ubicaciones publicadas, enriquecidas con `re
 
 #### Errores comunes
 
-- `401 Unauthorized`: el token es inválido o expiró.
-- `403 Forbidden`: el dispositivo está desactivado, **o** falta por completo el header
-  `Authorization` (comportamiento actual de `HTTPBearer` en todo el servicio; ver nota abajo).
+- `401 Unauthorized`: falta el header `Authorization`, o el token es inválido o expiró.
+- `403 Forbidden`: el dispositivo está desactivado.
 - `404 Not Found`: el `device_id` no existe o no pertenece al usuario autenticado.
 - `422 Unprocessable Entity`: faltan campos obligatorios o formato inválido.
 - `503 Service Unavailable`: no se pudo publicar la ubicación en Kafka.
