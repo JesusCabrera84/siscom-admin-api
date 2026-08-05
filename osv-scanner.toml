@@ -10,7 +10,10 @@ vulnerability.ignore = true
 reason = "pip is not pinned in requirements.txt; false positive from pip-* tooling packages"
 
 # Transitive via python-jose (JWT/Cognito). No fixed release; maintainers consider
-# Minerva timing attacks out of scope. Tracked risk; pip-audit does not flag this ID.
+# Minerva timing attacks out of scope. Does not apply here: `app/core/security.py` only
+# calls `jwt.decode` with `algorithms=["RS256"]` — no signing, no key generation, no ECDH,
+# and signature verification is unaffected. pip-audit flags the same issue as
+# PYSEC-2026-1325 and is silenced in `scripts/pip-audit-scan.sh` with this reasoning.
 [[IgnoredVulns]]
 id = "GHSA-wj6h-64fc-37mp"
-reason = "ecdsa via python-jose; no fix available (CVE-2024-23342); accepted transitive risk"
+reason = "ecdsa via python-jose; no fix available (CVE-2024-23342); not reachable — RS256 verification only"
