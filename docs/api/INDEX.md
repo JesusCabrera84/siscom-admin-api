@@ -169,12 +169,60 @@ Registro de dispositivos de movilidad asociados al usuario autenticado.
 **Endpoints:**
 - `GET /api/v1/mobility/devices` - Listar dispositivos de movilidad
 - `POST /api/v1/mobility/devices` - Registrar dispositivo de movilidad
+- `GET /api/v1/mobility/devices/{device_id}` - Obtener detalle de dispositivo de movilidad
+- `PATCH /api/v1/mobility/devices/{device_id}` - Actualizar dispositivo de movilidad
+- `POST /api/v1/mobility/devices/{device_id}/activate` - Activar dispositivo de movilidad
+- `POST /api/v1/mobility/devices/{device_id}/deactivate` - Desactivar dispositivo de movilidad
+- `PUT /api/v1/mobility/devices/{device_id}/notification-device` - Asociar dispositivo push
+- `DELETE /api/v1/mobility/devices/{device_id}/notification-device` - Desasociar dispositivo push
 
 ### [mobility-locations.md](./mobility-locations.md)
 Ingesta de ubicaciones de movilidad y publicación al tópico Kafka de movilidad.
 
 **Endpoints:**
 - `POST /api/v1/mobility/locations` - Publicar ubicación enriquecida con `received_at`
+- `POST /api/v1/mobility/locations/batch` - Publicar un batch de ubicaciones de un mismo dispositivo
+
+**Notas:**
+
+- Ambos endpoints exigen JWT y que el `device_id` pertenezca al usuario autenticado
+
+### [teams.md](./teams.md)
+Gestión de teams, miembros, invitaciones, reglas de visibilidad, emergencias y snapshots internos.
+
+**Endpoints públicos/autenticados:**
+- `POST /api/v1/teams` - Crear team
+- `GET /api/v1/teams` - Listar teams del usuario
+- `GET /api/v1/teams/{team_id}` - Detalle de team
+- `PATCH /api/v1/teams/{team_id}` - Actualizar team
+- `POST /api/v1/teams/{team_id}/suspend` - Suspender team
+- `POST /api/v1/teams/{team_id}/activate` - Activar team
+- `POST /api/v1/teams/{team_id}/expire` - Expirar team
+- `DELETE /api/v1/teams/{team_id}` - Eliminar team lógico
+- `GET /api/v1/teams/{team_id}/members` - Listar miembros
+- `POST /api/v1/teams/{team_id}/members` - Agregar miembro
+- `PATCH /api/v1/teams/{team_id}/members/{member_id}` - Actualizar miembro
+- `DELETE /api/v1/teams/{team_id}/members/{member_id}` - Remover miembro
+- `GET /api/v1/teams/{team_id}/me` - Ver permisos del usuario en el team
+- `GET /api/v1/teams/{team_id}/visibility-rules` - Listar reglas de visibilidad
+- `POST /api/v1/teams/{team_id}/visibility-rules` - Crear regla de visibilidad
+- `PATCH /api/v1/teams/{team_id}/visibility-rules/{rule_id}` - Actualizar regla de visibilidad
+- `POST /api/v1/teams/{team_id}/visibility-rules/{rule_id}/activate` - Activar regla
+- `POST /api/v1/teams/{team_id}/visibility-rules/{rule_id}/deactivate` - Desactivar regla
+- `DELETE /api/v1/teams/{team_id}/visibility-rules/{rule_id}` - Eliminar regla
+- `POST /api/v1/teams/{team_id}/invites` - Crear invitación
+- `GET /api/v1/teams/{team_id}/invites` - Listar invitaciones
+- `POST /api/v1/teams/{team_id}/invites/{invite_id}/revoke` - Revocar invitación
+- `GET /api/v1/invites/{token}` - Ver invitación pública (sin autenticación)
+- `POST /api/v1/invites/{token}/accept` - Aceptar invitación
+- `POST /api/v1/teams/{team_id}/emergency-events` - Crear evento de emergencia
+- `GET /api/v1/teams/{team_id}/emergency-events` - Listar eventos de emergencia
+- `POST /api/v1/teams/{team_id}/emergency-events/{event_id}/resolve` - Resolver emergencia
+- `POST /api/v1/teams/{team_id}/emergency-events/{event_id}/cancel` - Cancelar emergencia
+
+**Endpoints internos:**
+- `GET /api/v1/internal/teams/snapshot` - Snapshot incremental/global
+- `GET /api/v1/internal/teams/{team_id}/snapshot` - Snapshot por team
 
 ### [device-events.md](./device-events.md)
 Historial de eventos y auditoría de dispositivos.
@@ -422,6 +470,7 @@ GET    /api/v1/plans
 GET    /api/v1/plans/{plan_identifier}
 POST   /api/v1/contact/send-message
 POST   /api/v1/users/accept-invitation
+GET    /api/v1/invites/{token}
 ```
 
 ### Rutas Autenticadas (JWT Cognito)
@@ -504,6 +553,47 @@ POST   /api/v1/commands/{command_id}/sync
 GET    /api/v1/trips
 GET    /api/v1/trips/{trip_id}
 
+# Mobility
+GET    /api/v1/mobility/devices
+POST   /api/v1/mobility/devices
+GET    /api/v1/mobility/devices/{device_id}
+PATCH  /api/v1/mobility/devices/{device_id}
+POST   /api/v1/mobility/devices/{device_id}/activate
+POST   /api/v1/mobility/devices/{device_id}/deactivate
+PUT    /api/v1/mobility/devices/{device_id}/notification-device
+DELETE /api/v1/mobility/devices/{device_id}/notification-device
+POST   /api/v1/mobility/locations
+POST   /api/v1/mobility/locations/batch
+
+# Teams
+POST   /api/v1/teams
+GET    /api/v1/teams
+GET    /api/v1/teams/{team_id}
+PATCH  /api/v1/teams/{team_id}
+POST   /api/v1/teams/{team_id}/suspend
+POST   /api/v1/teams/{team_id}/activate
+POST   /api/v1/teams/{team_id}/expire
+DELETE /api/v1/teams/{team_id}
+GET    /api/v1/teams/{team_id}/me
+GET    /api/v1/teams/{team_id}/members
+POST   /api/v1/teams/{team_id}/members
+PATCH  /api/v1/teams/{team_id}/members/{member_id}
+DELETE /api/v1/teams/{team_id}/members/{member_id}
+GET    /api/v1/teams/{team_id}/visibility-rules
+POST   /api/v1/teams/{team_id}/visibility-rules
+PATCH  /api/v1/teams/{team_id}/visibility-rules/{rule_id}
+POST   /api/v1/teams/{team_id}/visibility-rules/{rule_id}/activate
+POST   /api/v1/teams/{team_id}/visibility-rules/{rule_id}/deactivate
+DELETE /api/v1/teams/{team_id}/visibility-rules/{rule_id}
+POST   /api/v1/teams/{team_id}/invites
+GET    /api/v1/teams/{team_id}/invites
+POST   /api/v1/teams/{team_id}/invites/{invite_id}/revoke
+POST   /api/v1/invites/{token}/accept
+POST   /api/v1/teams/{team_id}/emergency-events
+GET    /api/v1/teams/{team_id}/emergency-events
+POST   /api/v1/teams/{team_id}/emergency-events/{event_id}/resolve
+POST   /api/v1/teams/{team_id}/emergency-events/{event_id}/cancel
+
 # Subscriptions & Billing
 GET    /api/v1/subscriptions
 GET    /api/v1/subscriptions/active
@@ -550,6 +640,10 @@ GET    /api/v1/internal/organizations/{organization_id}
 GET    /api/v1/internal/organizations/{organization_id}/users
 PATCH  /api/v1/internal/organizations/{organization_id}/status
 
+# Teams
+GET    /api/v1/internal/teams/snapshot
+GET    /api/v1/internal/teams/{team_id}/snapshot
+
 # Plans
 GET    /api/v1/internal/plans
 POST   /api/v1/internal/plans
@@ -578,4 +672,4 @@ DELETE /api/v1/internal/products/{product_id}
 
 ---
 
-**Última actualización**: 4 de abril de 2026
+**Última actualización**: 4 de agosto de 2026
