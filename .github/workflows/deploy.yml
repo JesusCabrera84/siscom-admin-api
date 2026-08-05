@@ -145,6 +145,14 @@ jobs:
             KAFKA_SECURITY_PROTOCOL=${KAFKA_SECURITY_PROTOCOL}
             EOF
 
+            # Ejecutar migraciones antes de levantar el nuevo contenedor
+            echo "🗄️ Ejecutando migraciones Alembic..."
+            docker run --rm \
+              --network siscom-network \
+              --env-file .env \
+              siscom-admin-api:latest \
+              alembic upgrade head
+
             # Detener y eliminar el contenedor existente de forma robusta
             echo "🛑 Deteniendo contenedores anteriores..."
 

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -40,7 +40,41 @@ from app.services.messaging.kafka_producer import (
 from app.services.organization import OrganizationService
 from app.utils.paseto_token import decode_service_token
 
-security = HTTPBearer()
+
+class BearerAuth(HTTPBearer):
+    """
+    `HTTPBearer` que responde 401 en lugar del 403 por defecto de FastAPI.
+
+    FastAPI lanza `403 Not authenticated` cuando falta el header `Authorization`
+    o cuando el esquema no es Bearer, lo que invierte la semántica de HTTP: el 401
+    es "no sé quién eres, autentícate" y el 403 es "sé quién eres y aun así no
+    puedes". Con el 403 el servicio respondía algo *más* restrictivo ante la
+    ausencia de credenciales que ante credenciales inválidas (que sí dan 401).
+
+    Además dejaba a los clientes sin señal accionable: tanto iOS como Android
+    disparan el refresh de token únicamente con un 401, así que una petición sin
+    header terminaba en un error genérico del que la app no se recuperaba sola.
+
+    Se preserva el `detail` original y se agrega el `WWW-Authenticate` que exige
+    RFC 9110 para las respuestas 401.
+    """
+
+    async def __call__(  # type: ignore[override]
+        self, request: Request
+    ) -> Optional[HTTPAuthorizationCredentials]:
+        try:
+            return await super().__call__(request)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_403_FORBIDDEN:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=exc.detail,
+                    headers={"WWW-Authenticate": "Bearer"},
+                ) from exc
+            raise
+
+
+security = BearerAuth()
 _rules_kafka_producer: Optional[RulesKafkaProducer] = None
 _geofences_kafka_producer: Optional[GeofencesKafkaProducer] = None
 _user_devices_kafka_producer: Optional[UserDevicesKafkaProducer] = None

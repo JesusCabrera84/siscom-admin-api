@@ -127,6 +127,7 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 15. [**Alertas y Reglas** (`/alerts`, `/alert_rules`)](#15-alertas-y-reglas-alerts-alert_rules) - Consulta de alertas y administración de reglas
 16. [**Geocercas** (`/geofences`)](#16-geocercas-geofences) - CRUD de geocercas con índices H3
 17. [**Telemetría Agregada** (`/devices/{device_id}/telemetry`, `/telemetry/query`)](docs/api/telemetry.md) - Métricas agregadas de operación, señal y distancia
+18. [**Teams, Members, Invites y Emergencias** (`/teams`, `/invites`, `/internal/teams`)](#18-teams-members-invites-y-emergencias) - Teams, miembros, reglas de visibilidad, invitaciones por link y emergencias
 
 ---
 
@@ -961,7 +962,16 @@ Registra o actualiza un dispositivo de usuario por `device_token`.
 
 ```json
 {
+  "id": "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
   "device_token": "abc123",
+  "platform": "ios",
+  "endpoint_arn": "arn:aws:sns:us-east-1:123456789012:endpoint/APNS/siscom/...",
+  "is_active": true,
+  "last_seen_at": "2026-05-31T02:15:21Z"
+}
+```
+
+---
 
 ### Dispositivos de Movilidad (`/mobility/devices`)
 
@@ -1067,6 +1077,62 @@ Registra o actualiza un dispositivo de movilidad asociado al usuario autenticado
 
 ---
 
+#### `GET /api/v1/mobility/devices/{device_id}`
+
+**Obtener detalle de dispositivo de movilidad**
+
+Retorna el detalle de un dispositivo del usuario autenticado.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+**Errores comunes:**
+
+- `404 Not Found`: el dispositivo no existe o no pertenece al usuario.
+
+---
+
+#### `PATCH /api/v1/mobility/devices/{device_id}`
+
+**Actualizar dispositivo de movilidad**
+
+Permite actualizar `device_name`, `app_version`, `os_version`, `notification_device_id` y `metadata`.
+
+**Headers:** `Authorization: Bearer {access_token}`
+
+---
+
+#### `POST /api/v1/mobility/devices/{device_id}/activate`
+
+**Activar dispositivo de movilidad**
+
+Marca el dispositivo con `is_active=true`.
+
+---
+
+#### `POST /api/v1/mobility/devices/{device_id}/deactivate`
+
+**Desactivar dispositivo de movilidad**
+
+Marca el dispositivo con `is_active=false`.
+
+---
+
+#### `PUT /api/v1/mobility/devices/{device_id}/notification-device`
+
+**Asociar dispositivo de notificaciones**
+
+Asocia `notification_device_id` (de `user_devices`) al dispositivo de movilidad.
+
+---
+
+#### `DELETE /api/v1/mobility/devices/{device_id}/notification-device`
+
+**Desasociar dispositivo de notificaciones**
+
+Limpia `notification_device_id` del dispositivo de movilidad.
+
+---
+
 ### Ubicaciones de Movilidad (`/mobility/locations`)
 
 > Documentación completa: [docs/api/mobility-locations.md](docs/api/mobility-locations.md)
@@ -1119,8 +1185,46 @@ Campos obligatorios:
 
 **Errores comunes:**
 
+- `401 Unauthorized`: falta el header `Authorization` o el token es inválido.
+- `403 Forbidden`: el dispositivo existe y es del usuario, pero está inactivo.
+- `404 Not Found`: el `device_id` no existe **o** pertenece a otro usuario (misma respuesta en ambos casos, para no filtrar qué `device_id` son válidos).
 - `422 Unprocessable Entity`: faltan campos obligatorios o formato inválido.
 - `503 Service Unavailable`: no se pudo publicar en Kafka.
+
+#### `POST /api/v1/mobility/locations/batch`
+
+**Publicar un batch de ubicaciones de un mismo dispositivo**
+
+Mismo contrato que el endpoint individual, pero recibe varias ubicaciones de un único
+`device_id`. La validación de pertenencia se hace una sola vez sobre el `device_id` del
+envelope, y cada ubicación se publica al tópico con el `device_id` como key.
+
+**Request:**
+
+```json
+{
+  "device_id": "c7bb5f50-b8e6-4c7d-a0a2-c6fdb2b6f3f0",
+  "locations": [
+    {
+      "recorded_at": "2026-05-31T02:15:20Z",
+      "lat": 20.593212,
+      "lon": -100.392188,
+      "battery_level": 82
+    },
+    {
+      "recorded_at": "2026-05-31T02:15:50Z",
+      "lat": 20.593480,
+      "lon": -100.392001,
+      "battery_level": 81
+    }
+  ]
+}
+```
+
+**Response:** `202 Accepted` — devuelve el `device_id` y el arreglo `locations`, cada una
+enriquecida con `received_at`, `motion_state`, `h3_index` y `h3_resolution`.
+
+**Errores comunes:** los mismos que el endpoint individual. `locations` vacío responde `422`.
 
 ---
 
@@ -2599,6 +2703,95 @@ SES_REGION=us-east-1
 # Frontend
 FRONTEND_URL=https://app.tudominio.com
 ```
+
+---
+
+## 18. Teams, Members, Invites y Emergencias
+
+> Documentación completa: [docs/api/teams.md](docs/api/teams.md)
+
+**Autenticación:**
+
+- `/api/v1/teams/*`: JWT Bearer requerido.
+- `GET /api/v1/invites/{token}`: público.
+- `POST /api/v1/invites/{token}/accept`: JWT Bearer requerido.
+- `/api/v1/internal/teams/*`: token interno (GAC/internal).
+
+### Teams (`/teams`)
+
+- `POST /api/v1/teams`
+- `GET /api/v1/teams`
+- `GET /api/v1/teams/{team_id}`
+- `PATCH /api/v1/teams/{team_id}`
+- `POST /api/v1/teams/{team_id}/suspend`
+- `POST /api/v1/teams/{team_id}/activate`
+- `POST /api/v1/teams/{team_id}/expire`
+- `DELETE /api/v1/teams/{team_id}`
+
+Notas:
+
+- `POST /api/v1/teams` crea automáticamente membresía `OWNER` para el creador.
+- `GET /api/v1/teams` soporta `status`, `type`, `include_deleted`, `page`, `page_size`.
+- `POST /api/v1/teams/{team_id}/activate` acepta body opcional con `expires_at`.
+
+### Members (`/teams/{team_id}/members`)
+
+- `GET /api/v1/teams/{team_id}/members`
+- `POST /api/v1/teams/{team_id}/members`
+- `PATCH /api/v1/teams/{team_id}/members/{member_id}`
+- `DELETE /api/v1/teams/{team_id}/members/{member_id}`
+- `GET /api/v1/teams/{team_id}/me`
+
+Notas:
+
+- No se puede degradar ni remover al último `OWNER`.
+- `ADMIN` no puede promover a `OWNER` ni modificar miembros `OWNER`.
+
+### Visibility Rules
+
+- `GET /api/v1/teams/{team_id}/visibility-rules`
+- `POST /api/v1/teams/{team_id}/visibility-rules`
+- `PATCH /api/v1/teams/{team_id}/visibility-rules/{rule_id}`
+- `POST /api/v1/teams/{team_id}/visibility-rules/{rule_id}/activate`
+- `POST /api/v1/teams/{team_id}/visibility-rules/{rule_id}/deactivate`
+- `DELETE /api/v1/teams/{team_id}/visibility-rules/{rule_id}`
+
+Notas:
+
+- En `access_mode=SCHEDULED`, `schedule` es obligatorio y se valida formato.
+
+### Invites
+
+- `POST /api/v1/teams/{team_id}/invites`
+- `GET /api/v1/teams/{team_id}/invites`
+- `POST /api/v1/teams/{team_id}/invites/{invite_id}/revoke`
+- `GET /api/v1/invites/{token}`
+- `POST /api/v1/invites/{token}/accept`
+
+Notas:
+
+- Se persiste `token_hash`; el token en claro solo se devuelve al crear.
+- Una invitación es válida si `is_active=true`, no expirada y con usos disponibles.
+
+### Emergency Events
+
+- `POST /api/v1/teams/{team_id}/emergency-events`
+- `GET /api/v1/teams/{team_id}/emergency-events`
+- `POST /api/v1/teams/{team_id}/emergency-events/{event_id}/resolve`
+- `POST /api/v1/teams/{team_id}/emergency-events/{event_id}/cancel`
+
+Notas:
+
+- `resolve` y `cancel` pueden ejecutarlos el actor del evento, `OWNER` o `ADMIN`.
+
+### Internal Snapshot
+
+- `GET /api/v1/internal/teams/snapshot`
+- `GET /api/v1/internal/teams/{team_id}/snapshot`
+
+### Eventos Kafka
+
+Operaciones mutantes de este módulo publican eventos en `team-rules-updates` con `team_id` como key.
 
 ---
 

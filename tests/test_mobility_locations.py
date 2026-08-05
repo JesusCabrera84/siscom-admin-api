@@ -1,9 +1,12 @@
 from uuid import uuid4
 
+import pytest
 from fastapi import status
 
 from app.api.deps import get_mobility_kafka_producer
 from app.main import app
+from app.models.mobility_device import MobilityDevice
+from app.models.user import User
 
 
 class _FakeMobilityProducer:
@@ -16,12 +19,34 @@ class _FakeMobilityProducer:
         return self.should_publish
 
 
-def test_publish_mobility_location_success(client):
+def _create_device(db_session, user_id, *, is_active: bool = True) -> MobilityDevice:
+    device = MobilityDevice(
+        id=uuid4(),
+        user_id=user_id,
+        device_type="PHONE",
+        platform="ios",
+        device_name="iPhone de prueba",
+        is_active=is_active,
+        mobility_metadata={},
+    )
+    db_session.add(device)
+    db_session.commit()
+    db_session.refresh(device)
+    return device
+
+
+@pytest.fixture
+def own_device(db_session, test_user_data):
+    """Dispositivo de movilidad activo del usuario autenticado."""
+    return _create_device(db_session, test_user_data.id)
+
+
+def test_publish_mobility_location_success(authenticated_client, own_device):
     fake_producer = _FakeMobilityProducer(should_publish=True)
     app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
 
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "recorded_at": "2026-05-31T02:15:20Z",
         "lat": 20.593212,
         "lon": -100.392188,
@@ -32,7 +57,7 @@ def test_publish_mobility_location_success(client):
         "battery_level": 82,
     }
 
-    response = client.post("/api/v1/mobility/locations", json=payload)
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
     assert response.status_code == status.HTTP_202_ACCEPTED
 
     data = response.json()
@@ -46,15 +71,13 @@ def test_publish_mobility_location_success(client):
     assert fake_producer.calls[0]["key"] == payload["device_id"]
     assert fake_producer.calls[0]["payload"]["received_at"].endswith("Z")
 
-    app.dependency_overrides.clear()
 
-
-def test_publish_mobility_location_accepts_h3_fields(client):
+def test_publish_mobility_location_accepts_h3_fields(authenticated_client, own_device):
     fake_producer = _FakeMobilityProducer(should_publish=True)
     app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
 
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "recorded_at": "2026-05-31T02:15:20Z",
         "lat": 20.593212,
         "lon": -100.392188,
@@ -62,7 +85,7 @@ def test_publish_mobility_location_accepts_h3_fields(client):
         "h3_resolution": 10,
     }
 
-    response = client.post("/api/v1/mobility/locations", json=payload)
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
     assert response.status_code == status.HTTP_202_ACCEPTED
 
     data = response.json()
@@ -73,44 +96,63 @@ def test_publish_mobility_location_accepts_h3_fields(client):
         fake_producer.calls[0]["payload"]["h3_resolution"] == payload["h3_resolution"]
     )
 
-    app.dependency_overrides.clear()
 
-
-def test_publish_mobility_location_accepts_motion_state(client):
+def test_publish_mobility_location_accepts_motion_state(
+    authenticated_client, own_device
+):
     fake_producer = _FakeMobilityProducer(should_publish=True)
     app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
 
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "recorded_at": "2026-05-31T02:15:20Z",
         "lat": 20.593212,
         "lon": -100.392188,
         "motion_state": "moving",
     }
 
-    response = client.post("/api/v1/mobility/locations", json=payload)
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
     assert response.status_code == status.HTTP_202_ACCEPTED
 
     data = response.json()
     assert data["motion_state"] == payload["motion_state"]
     assert fake_producer.calls[0]["payload"]["motion_state"] == payload["motion_state"]
 
-    app.dependency_overrides.clear()
 
-
-def test_publish_mobility_location_requires_required_fields(client):
+def test_publish_mobility_location_requires_required_fields(
+    authenticated_client, own_device
+):
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "recorded_at": "2026-05-31T02:15:20Z",
         "lat": 20.593212,
     }
 
-    response = client.post("/api/v1/mobility/locations", json=payload)
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-def test_publish_mobility_location_returns_503_when_kafka_fails(client):
+def test_publish_mobility_location_returns_503_when_kafka_fails(
+    authenticated_client, own_device
+):
     fake_producer = _FakeMobilityProducer(should_publish=False)
+    app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
+
+    payload = {
+        "device_id": str(own_device.id),
+        "recorded_at": "2026-05-31T02:15:20Z",
+        "lat": 20.593212,
+        "lon": -100.392188,
+    }
+
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+def test_publish_mobility_location_rejects_unknown_device(
+    authenticated_client, own_device
+):
+    fake_producer = _FakeMobilityProducer(should_publish=True)
     app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
 
     payload = {
@@ -120,18 +162,67 @@ def test_publish_mobility_location_returns_503_when_kafka_fails(client):
         "lon": -100.392188,
     }
 
-    response = client.post("/api/v1/mobility/locations", json=payload)
-    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert fake_producer.calls == []
 
-    app.dependency_overrides.clear()
+
+def test_publish_mobility_location_rejects_device_from_other_user(
+    authenticated_client, db_session, test_organization_data
+):
+    fake_producer = _FakeMobilityProducer(should_publish=True)
+    app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
+
+    other_user = User(
+        id=uuid4(),
+        organization_id=test_organization_data.id,
+        cognito_sub="other-cognito-sub-mobility",
+        email="other-mobility@example.com",
+        full_name="Other User",
+        is_master=False,
+    )
+    db_session.add(other_user)
+    db_session.flush()
+    foreign_device = _create_device(db_session, other_user.id)
+
+    payload = {
+        "device_id": str(foreign_device.id),
+        "recorded_at": "2026-05-31T02:15:20Z",
+        "lat": 20.593212,
+        "lon": -100.392188,
+    }
+
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert fake_producer.calls == []
 
 
-def test_publish_mobility_locations_batch_success(client):
+def test_publish_mobility_location_rejects_inactive_device(
+    authenticated_client, db_session, test_user_data
+):
+    fake_producer = _FakeMobilityProducer(should_publish=True)
+    app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
+
+    inactive_device = _create_device(db_session, test_user_data.id, is_active=False)
+
+    payload = {
+        "device_id": str(inactive_device.id),
+        "recorded_at": "2026-05-31T02:15:20Z",
+        "lat": 20.593212,
+        "lon": -100.392188,
+    }
+
+    response = authenticated_client.post("/api/v1/mobility/locations", json=payload)
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert fake_producer.calls == []
+
+
+def test_publish_mobility_locations_batch_success(authenticated_client, own_device):
     fake_producer = _FakeMobilityProducer(should_publish=True)
     app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
 
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "locations": [
             {
                 "recorded_at": "2026-05-31T10:00:00Z",
@@ -151,7 +242,9 @@ def test_publish_mobility_locations_batch_success(client):
         ],
     }
 
-    response = client.post("/api/v1/mobility/locations/batch", json=payload)
+    response = authenticated_client.post(
+        "/api/v1/mobility/locations/batch", json=payload
+    )
     assert response.status_code == status.HTTP_202_ACCEPTED
 
     data = response.json()
@@ -172,25 +265,29 @@ def test_publish_mobility_locations_batch_success(client):
     assert fake_producer.calls[0]["key"] == payload["device_id"]
     assert fake_producer.calls[1]["key"] == payload["device_id"]
 
-    app.dependency_overrides.clear()
 
-
-def test_publish_mobility_locations_batch_requires_locations(client):
+def test_publish_mobility_locations_batch_requires_locations(
+    authenticated_client, own_device
+):
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "locations": [],
     }
 
-    response = client.post("/api/v1/mobility/locations/batch", json=payload)
+    response = authenticated_client.post(
+        "/api/v1/mobility/locations/batch", json=payload
+    )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-def test_publish_mobility_locations_batch_returns_503_when_kafka_fails(client):
+def test_publish_mobility_locations_batch_returns_503_when_kafka_fails(
+    authenticated_client, own_device
+):
     fake_producer = _FakeMobilityProducer(should_publish=False)
     app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
 
     payload = {
-        "device_id": str(uuid4()),
+        "device_id": str(own_device.id),
         "locations": [
             {
                 "recorded_at": "2026-05-31T10:00:00Z",
@@ -200,7 +297,43 @@ def test_publish_mobility_locations_batch_returns_503_when_kafka_fails(client):
         ],
     }
 
-    response = client.post("/api/v1/mobility/locations/batch", json=payload)
+    response = authenticated_client.post(
+        "/api/v1/mobility/locations/batch", json=payload
+    )
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
-    app.dependency_overrides.clear()
+
+def test_publish_mobility_locations_batch_rejects_device_from_other_user(
+    authenticated_client, db_session, test_organization_data
+):
+    fake_producer = _FakeMobilityProducer(should_publish=True)
+    app.dependency_overrides[get_mobility_kafka_producer] = lambda: fake_producer
+
+    other_user = User(
+        id=uuid4(),
+        organization_id=test_organization_data.id,
+        cognito_sub="other-cognito-sub-mobility-batch",
+        email="other-mobility-batch@example.com",
+        full_name="Other User",
+        is_master=False,
+    )
+    db_session.add(other_user)
+    db_session.flush()
+    foreign_device = _create_device(db_session, other_user.id)
+
+    payload = {
+        "device_id": str(foreign_device.id),
+        "locations": [
+            {
+                "recorded_at": "2026-05-31T10:00:00Z",
+                "lat": 20.593,
+                "lon": -100.392,
+            }
+        ],
+    }
+
+    response = authenticated_client.post(
+        "/api/v1/mobility/locations/batch", json=payload
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert fake_producer.calls == []

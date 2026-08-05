@@ -29,8 +29,14 @@ Esta guía te ayudará a configurar y utilizar GitHub Actions para deployments a
 1. ✅ Verifica el código (Ruff + Black)
 2. 🐋 Construye la imagen Docker
 3. 📦 Comprime y copia la imagen al servidor EC2
-4. 🚀 Despliega el contenedor en producción
-5. ✅ Verifica que el deployment fue exitoso
+4. 🗄️ Ejecuta las migraciones Alembic (`alembic upgrade head`)
+5. 🚀 Despliega el contenedor en producción
+6. ✅ Verifica que el deployment fue exitoso
+
+> **Migraciones:** corren en un contenedor efímero (`docker run --rm`) con la imagen
+> recién construida, la red `siscom-network` y el mismo `.env` del servidor, **antes**
+> de detener el contenedor viejo. Si una migración falla, el deploy se detiene y la
+> versión anterior sigue sirviendo tráfico.
 
 ### 🧪 CI (ci.yml)
 
