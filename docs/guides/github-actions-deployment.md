@@ -110,14 +110,21 @@ Crea los siguientes secrets:
 
 Ve a: **Settings → Secrets and variables → Actions → Variables → New repository variable**
 
-| Variable         | Descripción                | Ejemplo                                       |
-| ---------------- | -------------------------- | --------------------------------------------- |
-| `PROJECT_NAME`   | Nombre del proyecto        | `SISCOM Admin API`                            |
-| `DB_HOST`        | Hostname de PostgreSQL     | `siscom-db.xxxxx.us-east-1.rds.amazonaws.com` |
-| `DB_PORT`        | Puerto de PostgreSQL       | `5432`                                        |
-| `DB_USER`        | Usuario de PostgreSQL      | `siscom_admin`                                |
-| `DB_NAME`        | Nombre de la base de datos | `siscom_admin`                                |
-| `COGNITO_REGION` | Región de AWS Cognito      | `us-east-1`                                   |
+- `PROJECT_NAME`: Nombre del proyecto. Ejemplo: `SISCOM Admin API`
+- `DB_HOST`: Hostname de PostgreSQL. Ejemplo: `siscom-db.xxxxx.us-east-1.rds.amazonaws.com`
+- `DB_PORT`: Puerto de PostgreSQL. Ejemplo: `5432`
+- `DB_USER`: Usuario de PostgreSQL. Ejemplo: `siscom_admin`
+- `DB_NAME`: Nombre de la base de datos. Ejemplo: `siscom_admin`
+- `COGNITO_REGION`: Región de AWS Cognito. Ejemplo: `us-east-1`
+- `ALLOWED_ORIGINS`: Orígenes CORS permitidos. Ejemplo: `https://admin.geminislabs.com,https://nexus.geminislabs.com`
+
+`ALLOWED_ORIGINS` acepta una lista separada por comas o un JSON array, por ejemplo:
+
+```bash
+https://admin.geminislabs.com,https://nexus.geminislabs.com
+# o
+["https://admin.geminislabs.com", "https://nexus.geminislabs.com"]
+```
 
 ## Preparación del Servidor EC2
 
@@ -233,6 +240,12 @@ docker logs -f siscom-admin-api
 
 # Verificar health check
 curl http://localhost:8100/health
+
+# Verificar variable CORS en archivo .env remoto
+grep '^ALLOWED_ORIGINS=' ~/siscom-admin-api/.env
+
+# Verificar variable CORS dentro del contenedor
+docker exec siscom-admin-api printenv ALLOWED_ORIGINS
 ```
 
 ## Troubleshooting
@@ -287,14 +300,14 @@ Causas comunes:
 **Solución:**
 
 1. Verifica que el Security Group de RDS permita conexiones desde el EC2
-2. Prueba la conexión manualmente:
+1. Prueba la conexión manualmente:
 
 ```bash
 # Desde el servidor EC2
 psql -h tu-rds-endpoint.rds.amazonaws.com -U siscom_admin -d siscom_admin
 ```
 
-3. Verifica las variables de entorno en `.env`
+1. Verifica las variables de entorno en `.env`
 
 ### ⚠️ Linter failures
 
