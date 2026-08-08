@@ -108,7 +108,13 @@ Crea los siguientes secrets:
 
 ### 🔧 Configurar Variables
 
-Ve a: **Settings → Secrets and variables → Actions → Variables → New repository variable**
+Ve a: **Settings → Environments → `test` → Environment variables**
+
+> ⚠️ Las variables del deploy viven en el **environment `test`**, no a nivel repositorio.
+> El job `build-and-deploy` declara `environment: test` (ver `.github/workflows/deploy.yml`),
+> y las variables de environment tienen precedencia sobre las de repositorio y las de
+> organización. Una variable creada a nivel repo **no se usará** y el síntoma es confuso:
+> el workflow toma el valor viejo (o vacío) sin avisar.
 
 - `PROJECT_NAME`: Nombre del proyecto. Ejemplo: `SISCOM Admin API`
 - `DB_HOST`: Hostname de PostgreSQL. Ejemplo: `siscom-db.xxxxx.us-east-1.rds.amazonaws.com`
@@ -125,6 +131,11 @@ https://admin.geminislabs.com,https://nexus.geminislabs.com
 # o
 ["https://admin.geminislabs.com", "https://nexus.geminislabs.com"]
 ```
+
+Ambos formatos se parsean en `app/core/config.py` (validador `parse_allowed_origins`),
+que además recorta espacios, quita el `/` final y elimina duplicados conservando el orden.
+El CSV es preferible: el JSON viaja con comillas dobles por `envs:` del SSH y por el `.env`
+remoto, donde es más fácil que se rompa al expandirse.
 
 ## Preparación del Servidor EC2
 
@@ -249,6 +260,33 @@ docker exec siscom-admin-api printenv ALLOWED_ORIGINS
 ```
 
 ## Troubleshooting
+
+### ❌ Error: `SettingsError: error parsing value for field "ALLOWED_ORIGINS"`
+
+**Problema:** El contenedor arranca y muere de inmediato; el health check reporta
+`unhealthy` y los logs muestran un `json.decoder.JSONDecodeError` seguido de
+`pydantic_settings.sources.SettingsError`.
+
+**Causa:** El campo se declaró como `list[str]` sin la anotación `NoDecode`. En ese
+caso pydantic-settings corre `json.loads` sobre el valor crudo de la variable *antes*
+de que se ejecute el validador, y cualquier valor que no sea JSON (un CSV, o una
+cadena vacía) revienta en la fuente. Un validador `mode="before"` llega tarde.
+
+**Solución:** El campo debe estar anotado como `Annotated[list[str], NoDecode]` en
+`app/core/config.py`. Cubierto por `tests/test_config.py`.
+
+### ❌ El deploy toma un valor viejo o vacío de una variable
+
+**Problema:** Cambiaste una variable en GitHub pero el workflow sigue usando el valor
+anterior, o la recibe vacía.
+
+**Solución:** Verifica el *scope*. El job usa `environment: test`, y ese nivel tiene
+precedencia sobre repositorio y organización. Confirma dónde vive realmente:
+
+```bash
+gh api repos/<owner>/<repo>/environments/test/variables/ALLOWED_ORIGINS
+gh api repos/<owner>/<repo>/actions/variables/ALLOWED_ORIGINS   # nivel repo
+```
 
 ### ❌ Error: "Permission denied (publickey)"
 
