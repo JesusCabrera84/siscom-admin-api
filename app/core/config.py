@@ -1,8 +1,8 @@
 import json
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -71,7 +71,9 @@ class Settings(BaseSettings):
     KAFKA_SASL_MECHANISM: str = "SCRAM-SHA-256"
     KAFKA_SECURITY_PROTOCOL: str = "SASL_PLAINTEXT"
 
-    ALLOWED_ORIGINS: list[str] = [
+    # NoDecode evita que EnvSettingsSource intente json.loads sobre el valor
+    # crudo: sin él, un CSV revienta en la fuente antes de llegar al validador.
+    ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://localhost",
         "http://localhost:3000",
         "http://localhost:8080",
@@ -83,6 +85,7 @@ class Settings(BaseSettings):
         "http://10.8.0.1:5160",
         "http://10.8.0.1:8100",
         "https://geminislabs.com",
+        "https://www.geminislabs.com",
         "https://admin.geminislabs.com",
         "https://nexus.geminislabs.com",
     ]

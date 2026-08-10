@@ -20,6 +20,21 @@ def test_endpoint_without_token_returns_401(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
+def test_missing_credentials_sets_www_authenticate_header(client):
+    """RFC 9110 exige `WWW-Authenticate` en las respuestas 401."""
+    response = client.get("/api/v1/organizations")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_non_bearer_scheme_returns_401_with_www_authenticate(client):
+    """Un esquema distinto de Bearer es 'no sé quién eres', no 'no puedes'."""
+    headers = {"Authorization": "Basic dXNlcjpwYXNz"}
+    response = client.get("/api/v1/organizations", headers=headers)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
 def test_endpoint_with_invalid_token_returns_401(client):
     """Token inválido en endpoint protegido."""
     headers = {"Authorization": "Bearer invalid_token_here"}

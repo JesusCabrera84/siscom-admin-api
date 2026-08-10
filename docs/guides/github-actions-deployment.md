@@ -29,8 +29,14 @@ Esta guía te ayudará a configurar y utilizar GitHub Actions para deployments a
 1. ✅ Verifica el código (Ruff + Black)
 2. 🐋 Construye la imagen Docker
 3. 📦 Comprime y copia la imagen al servidor EC2
-4. 🚀 Despliega el contenedor en producción
-5. ✅ Verifica que el deployment fue exitoso
+4. 🗄️ Ejecuta las migraciones Alembic (`alembic upgrade head`)
+5. 🚀 Despliega el contenedor en producción
+6. ✅ Verifica que el deployment fue exitoso
+
+> **Migraciones:** corren en un contenedor efímero (`docker run --rm`) con la imagen
+> recién construida, la red `siscom-network` y el mismo `.env` del servidor, **antes**
+> de detener el contenedor viejo. Si una migración falla, el deploy se detiene y la
+> versión anterior sigue sirviendo tráfico.
 
 ### 🧪 CI (ci.yml)
 
@@ -102,16 +108,34 @@ Crea los siguientes secrets:
 
 ### 🔧 Configurar Variables
 
-Ve a: **Settings → Secrets and variables → Actions → Variables → New repository variable**
+Ve a: **Settings → Environments → `test` → Environment variables**
 
-| Variable         | Descripción                | Ejemplo                                       |
-| ---------------- | -------------------------- | --------------------------------------------- |
-| `PROJECT_NAME`   | Nombre del proyecto        | `SISCOM Admin API`                            |
-| `DB_HOST`        | Hostname de PostgreSQL     | `siscom-db.xxxxx.us-east-1.rds.amazonaws.com` |
-| `DB_PORT`        | Puerto de PostgreSQL       | `5432`                                        |
-| `DB_USER`        | Usuario de PostgreSQL      | `siscom_admin`                                |
-| `DB_NAME`        | Nombre de la base de datos | `siscom_admin`                                |
-| `COGNITO_REGION` | Región de AWS Cognito      | `us-east-1`                                   |
+> ⚠️ Las variables del deploy viven en el **environment `test`**, no a nivel repositorio.
+> El job `build-and-deploy` declara `environment: test` (ver `.github/workflows/deploy.yml`),
+> y las variables de environment tienen precedencia sobre las de repositorio y las de
+> organización. Una variable creada a nivel repo **no se usará** y el síntoma es confuso:
+> el workflow toma el valor viejo (o vacío) sin avisar.
+
+- `PROJECT_NAME`: Nombre del proyecto. Ejemplo: `SISCOM Admin API`
+- `DB_HOST`: Hostname de PostgreSQL. Ejemplo: `siscom-db.xxxxx.us-east-1.rds.amazonaws.com`
+- `DB_PORT`: Puerto de PostgreSQL. Ejemplo: `5432`
+- `DB_USER`: Usuario de PostgreSQL. Ejemplo: `siscom_admin`
+- `DB_NAME`: Nombre de la base de datos. Ejemplo: `siscom_admin`
+- `COGNITO_REGION`: Región de AWS Cognito. Ejemplo: `us-east-1`
+- `ALLOWED_ORIGINS`: Orígenes CORS permitidos. Ejemplo: `https://admin.geminislabs.com,https://nexus.geminislabs.com`
+
+`ALLOWED_ORIGINS` acepta una lista separada por comas o un JSON array, por ejemplo:
+
+```bash
+https://admin.geminislabs.com,https://nexus.geminislabs.com
+# o
+["https://admin.geminislabs.com", "https://nexus.geminislabs.com"]
+```
+
+Ambos formatos se parsean en `app/core/config.py` (validador `parse_allowed_origins`),
+que además recorta espacios, quita el `/` final y elimina duplicados conservando el orden.
+El CSV es preferible: el JSON viaja con comillas dobles por `envs:` del SSH y por el `.env`
+remoto, donde es más fácil que se rompa al expandirse.
 
 ## Preparación del Servidor EC2
 
@@ -227,9 +251,42 @@ docker logs -f siscom-admin-api
 
 # Verificar health check
 curl http://localhost:8100/health
+
+# Verificar variable CORS en archivo .env remoto
+grep '^ALLOWED_ORIGINS=' ~/siscom-admin-api/.env
+
+# Verificar variable CORS dentro del contenedor
+docker exec siscom-admin-api printenv ALLOWED_ORIGINS
 ```
 
 ## Troubleshooting
+
+### ❌ Error: `SettingsError: error parsing value for field "ALLOWED_ORIGINS"`
+
+**Problema:** El contenedor arranca y muere de inmediato; el health check reporta
+`unhealthy` y los logs muestran un `json.decoder.JSONDecodeError` seguido de
+`pydantic_settings.sources.SettingsError`.
+
+**Causa:** El campo se declaró como `list[str]` sin la anotación `NoDecode`. En ese
+caso pydantic-settings corre `json.loads` sobre el valor crudo de la variable *antes*
+de que se ejecute el validador, y cualquier valor que no sea JSON (un CSV, o una
+cadena vacía) revienta en la fuente. Un validador `mode="before"` llega tarde.
+
+**Solución:** El campo debe estar anotado como `Annotated[list[str], NoDecode]` en
+`app/core/config.py`. Cubierto por `tests/test_config.py`.
+
+### ❌ El deploy toma un valor viejo o vacío de una variable
+
+**Problema:** Cambiaste una variable en GitHub pero el workflow sigue usando el valor
+anterior, o la recibe vacía.
+
+**Solución:** Verifica el *scope*. El job usa `environment: test`, y ese nivel tiene
+precedencia sobre repositorio y organización. Confirma dónde vive realmente:
+
+```bash
+gh api repos/<owner>/<repo>/environments/test/variables/ALLOWED_ORIGINS
+gh api repos/<owner>/<repo>/actions/variables/ALLOWED_ORIGINS   # nivel repo
+```
 
 ### ❌ Error: "Permission denied (publickey)"
 
@@ -281,14 +338,14 @@ Causas comunes:
 **Solución:**
 
 1. Verifica que el Security Group de RDS permita conexiones desde el EC2
-2. Prueba la conexión manualmente:
+1. Prueba la conexión manualmente:
 
 ```bash
 # Desde el servidor EC2
 psql -h tu-rds-endpoint.rds.amazonaws.com -U siscom_admin -d siscom_admin
 ```
 
-3. Verifica las variables de entorno en `.env`
+1. Verifica las variables de entorno en `.env`
 
 ### ⚠️ Linter failures
 
