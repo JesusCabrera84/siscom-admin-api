@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `verify-email`: include `email` with `email_verified` in Cognito `admin_update_user_attributes` when the user already exists (avoids `InvalidParameterException`)
 - `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
 - User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
 

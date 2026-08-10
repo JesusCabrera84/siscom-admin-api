@@ -1076,6 +1076,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
                 UserPoolId=settings.COGNITO_USER_POOL_ID,
                 Username=user.email,
                 UserAttributes=[
+                    {"Name": "email", "Value": user.email},
                     {"Name": "email_verified", "Value": "true"},
                 ],
             )
