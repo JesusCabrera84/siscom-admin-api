@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `verify-email`: include `email` with `email_verified` in Cognito `admin_update_user_attributes` when the user already exists (avoids `InvalidParameterException`)
 - Auth: las peticiones sin header `Authorization` (o con esquema distinto de Bearer) responden `401` con `WWW-Authenticate: Bearer` en lugar del `403` por defecto de `HTTPBearer`. Los clientes iOS/Android disparan el refresh de token solo con `401`
 - `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
 - User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
