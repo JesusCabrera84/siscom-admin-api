@@ -37,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `verify-email`: include `email` with `email_verified` in Cognito `admin_update_user_attributes` when the user already exists (avoids `InvalidParameterException`)
 - Auth: las peticiones sin header `Authorization` (o con esquema distinto de Bearer) responden `401` con `WWW-Authenticate: Bearer` en lugar del `403` por defecto de `HTTPBearer`. Los clientes iOS/Android disparan el refresh de token solo con `401`
 - `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
 - User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
@@ -72,3 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `KAFKA_TEAM_RULES_TOPIC` ya llega al contenedor. La variable estaba declarada en `app/core/config.py` y `TeamRulesKafkaProducer` la leía vía `settings`, pero no se propagaba en ningún compose ni en `deploy.yml`: el topic de teams era en la práctica un hardcode y no se podía cambiar sin reconstruir la imagen, a diferencia de los otros cuatro topics de Kafka. Se añade a `.env.example`, ambos compose y a las tres apariciones de `deploy.yml` —bloque `env`, lista `envs:` del `ssh-action` y el heredoc que escribe el `.env` remoto— (PR #40)
+
+## [1.23.3] - 2026-08-10
+
+### Fixed
+
+- `POST /auth/verify-email` ya no devuelve 500 cuando el usuario ya existe en Cognito. Esa rama llamaba a `admin_update_user_attributes` solo con `email_verified`, y Cognito exige que `email` viaje en la misma llamada: la excepción `InvalidParameterException` dejaba el correo sin verificar. Se incluye `email` junto a `email_verified` (PR #42)
