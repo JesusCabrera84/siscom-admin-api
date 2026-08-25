@@ -92,3 +92,4 @@ def test_falls_back_to_defaults_when_unset(monkeypatch):
     settings = Settings(_env_file=None)
     assert settings.ALLOWED_ORIGINS == DEFAULT_ORIGINS
     assert "https://admin.geminislabs.com" in settings.ALLOWED_ORIGINS
+    assert "http://localhost:5174" in settings.ALLOWED_ORIGINS

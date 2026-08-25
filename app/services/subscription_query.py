@@ -13,8 +13,13 @@ Los pagos pertenecen a ACCOUNTS (raíz comercial).
 REGLA DE SUSCRIPCIÓN ACTIVA:
 ----------------------------
 Una suscripción se considera activa si cumple TODAS las siguientes condiciones:
-1. status IN ('ACTIVE', 'TRIAL')
-2. expires_at > now() OR expires_at IS NULL
+1. status IN ('ACTIVE', 'TRIAL', 'PAST_DUE')
+2. expires_at > now() OR expires_at IS NULL OR grace_until > now()
+
+PAST_DUE es una suscripción cuyo cobro de renovación falló. Sigue operando
+mientras `grace_until` no venza, para no cortarle el servicio a un cliente por
+un rechazo temporal del banco; al agotarse la gracia deja de estar activa sin
+que nadie tenga que ejecutar nada.
 
 Si hay múltiples suscripciones activas, la estrategia es:
 - Para obtener UNA: la más reciente por started_at (ORDER BY started_at DESC LIMIT 1)
@@ -56,13 +61,21 @@ def _build_active_subscriptions_query(
         db.query(Subscription)
         .filter(
             Subscription.organization_id == organization_id,
-            # Condición 1: Status debe ser ACTIVE o TRIAL
+            # Condición 1: Status debe ser ACTIVE, TRIAL o PAST_DUE
             Subscription.status.in_(
-                [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
+                [
+                    SubscriptionStatus.ACTIVE.value,
+                    SubscriptionStatus.TRIAL.value,
+                    SubscriptionStatus.PAST_DUE.value,
+                ]
             ),
-            # Condición 2: No debe estar expirada
-            # expires_at > now OR expires_at IS NULL (suscripción sin expiración)
-            or_(Subscription.expires_at > now, Subscription.expires_at.is_(None)),
+            # Condición 2: No debe estar expirada, o estar dentro de la gracia
+            # expires_at > now OR expires_at IS NULL OR grace_until > now
+            or_(
+                Subscription.expires_at > now,
+                Subscription.expires_at.is_(None),
+                Subscription.grace_until > now,
+            ),
         )
         .order_by(Subscription.started_at.desc())
     )

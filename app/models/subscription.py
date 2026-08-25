@@ -36,12 +36,14 @@ class SubscriptionStatus(str, enum.Enum):
     - TRIAL: Período de prueba
     - CANCELLED: Cancelada por el usuario/sistema
     - EXPIRED: Venció sin renovación
+    - PAST_DUE: Falló el cobro de renovación; sigue operando durante la gracia
     """
 
     ACTIVE = "ACTIVE"
     CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
     TRIAL = "TRIAL"
+    PAST_DUE = "PAST_DUE"
 
 
 class BillingCycle(str, enum.Enum):
@@ -131,6 +133,26 @@ class Subscription(SQLModel, table=True):
         sa_column=Column(Integer, nullable=False, server_default=text("1")),
     )
 
+    # Renovación automática
+    grace_until: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="Hasta cuándo sigue operando tras un cobro fallido",
+    )
+    dunning_attempt_count: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, server_default=text("0")),
+    )
+    dunning_last_attempt: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    dunning_next_attempt: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    renewal_last_error: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+
     created_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime, server_default=text("now()"), nullable=True),
@@ -164,10 +186,22 @@ class Subscription(SQLModel, table=True):
         return self.organization
 
     def is_active(self) -> bool:
-        """Verifica si la suscripción está activa."""
-        if self.status not in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL]:
+        """
+        Verifica si la suscripción está activa.
+
+        Debe reflejar la misma regla que `subscription_query`: una PAST_DUE sigue
+        operando mientras dure la gracia por cobro fallido.
+        """
+        now = utcnow()
+        if self.status not in [
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.TRIAL,
+            SubscriptionStatus.PAST_DUE,
+        ]:
             return False
-        if self.expires_at and self.expires_at < utcnow():
+        if self.grace_until and self.grace_until > now:
+            return True
+        if self.expires_at and self.expires_at < now:
             return False
         return True
 

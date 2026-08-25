@@ -28,6 +28,7 @@ from app.models.account import Account, AccountStatus
 
 # Account Events (auditoría)
 from app.models.account_event import AccountEvent, ActorType, EventType, TargetType
+from app.models.account_tax_profile import AccountTaxProfile
 
 # Account Users (roles a nivel account)
 from app.models.account_user import AccountRole, AccountUser
@@ -53,6 +54,7 @@ from app.models.device_service import (
     SubscriptionType,
 )
 from app.models.geofence import Geofence, GeofenceCell
+from app.models.idempotency import ApiIdempotencyRequest
 from app.models.invitation import Invitation
 from app.models.invoice import Invoice, InvoiceStatus
 from app.models.mobility_device import MobilityDevice
@@ -111,6 +113,7 @@ __all__ = [
     # Account (raíz comercial)
     "Account",
     "AccountStatus",
+    "AccountTaxProfile",
     "AccountEvent",
     "ActorType",
     "EventType",
@@ -160,6 +163,7 @@ __all__ = [
     # Payments & Orders
     "Payment",
     "PaymentStatus",
+    "ApiIdempotencyRequest",
     "Order",
     "OrderStatus",
     "OrderItem",
@@ -170,6 +174,7 @@ __all__ = [
     "SubscriptionType",
     "Geofence",
     "GeofenceCell",
+    "Invoice",
     # Tokens
     "TokenConfirmacion",
     "TokenType",

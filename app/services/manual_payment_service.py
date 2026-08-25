@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
@@ -20,20 +20,30 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.plan import Plan
 from app.models.subscription import BillingCycle, Subscription, SubscriptionStatus
 from app.schemas.manual_payment import ManualPaymentCreate, ManualPaymentResponse
-from app.services import subscription_query
+from app.services import billing_period, money, subscription_query
+from app.services.invoice_numbering import next_invoice_number as _next_invoice_number
 
 MIGRATE_MIN_UNITS = 20
+
+
+def _manual_breakdown(
+    plan: Plan, billing_cycle: str, active_units: int
+) -> tuple[Decimal, Decimal, Decimal]:
+    cycle = billing_cycle.upper()
+    if cycle == BillingCycle.YEARLY.value:
+        unit_price = money.parse(plan.price_yearly)
+    else:
+        unit_price = money.parse(plan.price_monthly)
+    base = (unit_price * active_units).quantize(Decimal("0.01"))
+    return billing_period.with_iva(base)
 
 
 def calculate_manual_payment_amount(
     plan: Plan, billing_cycle: str, active_units: int
 ) -> Decimal:
-    cycle = billing_cycle.upper()
-    if cycle == BillingCycle.YEARLY.value:
-        unit_price = Decimal(str(plan.price_yearly))
-    else:
-        unit_price = Decimal(str(plan.price_monthly))
-    return (unit_price * active_units).quantize(Decimal("0.01"))
+    """Total a cobrar en efectivo: precio de lista × unidades + IVA."""
+    _, _, total = _manual_breakdown(plan, billing_cycle, active_units)
+    return total
 
 
 def _validate_migrate_units(plan: Plan, active_units: int) -> None:
@@ -52,22 +62,35 @@ def _activate_subscription(
     active_units: int,
 ) -> Subscription:
     now = datetime.now(timezone.utc)
-    expires = now + (
-        timedelta(days=365)
-        if billing_cycle.upper() == BillingCycle.YEARLY.value
-        else timedelta(days=30)
-    )
+    cycle = billing_cycle.upper()
     existing = subscription_query.get_primary_active_subscription(db, organization_id)
     if existing:
+        # Misma política que el cobro con tarjeta: renovar el mismo plan encadena
+        # el período para no descartar los días ya pagados.
+        same_plan = (
+            str(existing.plan_id) == str(plan_id)
+            and (existing.billing_cycle or "").upper() == cycle
+        )
+        start, expires = billing_period.next_period(
+            cycle,
+            now=now,
+            current_end=(
+                existing.current_period_end or existing.expires_at
+                if same_plan
+                else None
+            ),
+        )
         existing.plan_id = plan_id
         existing.status = SubscriptionStatus.ACTIVE.value
         existing.expires_at = expires
-        existing.billing_cycle = billing_cycle.upper()
+        existing.billing_cycle = cycle
         existing.active_units = active_units
-        existing.current_period_start = now
+        existing.current_period_start = start
         existing.current_period_end = expires
         existing.updated_at = now
         return existing
+
+    _, expires = billing_period.next_period(cycle, now=now)
 
     sub = Subscription(
         plan_id=plan_id,
@@ -84,26 +107,6 @@ def _activate_subscription(
     db.add(sub)
     db.flush()
     return sub
-
-
-def _next_invoice_number(db: Session) -> str:
-    """
-    Numeración global INV-YYYY-NNNN (invoice_number es UNIQUE en toda la tabla).
-    """
-    year = datetime.now(timezone.utc).year
-    prefix = f"INV-{year}-"
-    rows = (
-        db.query(Invoice.invoice_number)
-        .filter(Invoice.invoice_number.like(f"{prefix}%"))
-        .all()
-    )
-    max_seq = 0
-    for (number,) in rows:
-        try:
-            max_seq = max(max_seq, int(str(number).removeprefix(prefix)))
-        except ValueError:
-            continue
-    return f"{prefix}{max_seq + 1:04d}"
 
 
 def register_manual_payment(
@@ -151,10 +154,10 @@ def register_manual_payment(
         raise HTTPException(status_code=404, detail="Plan no encontrado o inactivo")
 
     _validate_migrate_units(plan, body.active_units)
-    amount = calculate_manual_payment_amount(
+    subtotal, tax_mxn, total_mxn = _manual_breakdown(
         plan, body.billing_cycle, body.active_units
     )
-    if amount <= 0:
+    if total_mxn <= 0:
         raise HTTPException(
             status_code=400, detail="El monto calculado debe ser mayor a cero"
         )
@@ -186,10 +189,10 @@ def register_manual_payment(
         gateway=PaymentGateway.MANUAL.value,
         invoice_number=_next_invoice_number(db),
         invoice_status=InvoiceStatus.PAID.value,
-        subtotal=amount,
+        subtotal=subtotal,
         discount_amount=Decimal("0"),
-        tax_amount=Decimal("0"),
-        total_amount=amount,
+        tax_amount=tax_mxn,
+        total_amount=total_mxn,
         currency="MXN",
         paid_at=now,
         extra_data={
@@ -211,7 +214,7 @@ def register_manual_payment(
         gateway_payment_id=gateway_ref,
         payment_method_type=PaymentMethodType.MANUAL.value,
         payment_method_meta={},
-        amount=amount,
+        amount=total_mxn,
         currency="MXN",
         payment_status=PaymentStatus.SUCCESS.value,
         succeeded_at=now,
@@ -233,7 +236,7 @@ def register_manual_payment(
         payment_id=payment.id,
         invoice_id=invoice.id,
         subscription_id=subscription.id,
-        amount=str(amount),
+        amount=str(total_mxn),
         currency="MXN",
         billing_cycle=body.billing_cycle,
         active_units=body.active_units,

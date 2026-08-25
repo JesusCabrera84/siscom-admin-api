@@ -7,8 +7,11 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.models.account import Account
 from app.models.invoice import Invoice, InvoiceStatus
+from app.models.organization import Organization
 from app.models.plan import Plan
+from app.services.invoice_numbering import format_invoice_number, next_invoice_number
 from app.services.manual_payment_service import (
     MIGRATE_MIN_UNITS,
     _next_invoice_number,
@@ -30,12 +33,13 @@ def _plan(code: str, monthly: str = "100.00", yearly: str = "1080.00") -> Plan:
 
 def test_calculate_amount_monthly_single_unit():
     plan = _plan("trackgo", "299.00", "3229.20")
-    assert calculate_manual_payment_amount(plan, "MONTHLY", 1) == Decimal("299.00")
+    assert calculate_manual_payment_amount(plan, "MONTHLY", 1) == Decimal("346.84")
 
 
 def test_calculate_amount_yearly_multiple_units():
     plan = _plan("fleet", "50.00", "540.00")
-    assert calculate_manual_payment_amount(plan, "YEARLY", 10) == Decimal("5400.00")
+    # 5400.00 + 16% = 6264.00
+    assert calculate_manual_payment_amount(plan, "YEARLY", 10) == Decimal("6264.00")
 
 
 def test_migrate_plan_rejects_below_minimum():
@@ -66,4 +70,33 @@ def test_next_invoice_number_is_globally_unique(
     )
     db_session.commit()
 
-    assert _next_invoice_number(db_session) == f"INV-{year}-0002"
+    assert _next_invoice_number(db_session) == format_invoice_number(year, 2)
+
+
+def test_next_invoice_number_is_not_per_account(
+    db_session, test_account_data, test_organization_data
+):
+    """Stripe contaba por cuenta y reutilizaba INV-YYYY-0001 (UNIQUE global)."""
+    year = datetime.now(timezone.utc).year
+    db_session.add(
+        Invoice(
+            account_id=test_account_data.id,
+            organization_id=test_organization_data.id,
+            invoice_number=f"INV-{year}-0001",
+            invoice_status=InvoiceStatus.PAID.value,
+            subtotal=Decimal("100"),
+            total_amount=Decimal("100"),
+        )
+    )
+    db_session.commit()
+
+    other = Account(id=uuid4(), name="Other Account", status="ACTIVE")
+    db_session.add(other)
+    db_session.commit()
+    other_org = Organization(
+        id=uuid4(), name="Other Org", status="ACTIVE", account_id=other.id
+    )
+    db_session.add(other_org)
+    db_session.commit()
+
+    assert next_invoice_number(db_session) == format_invoice_number(year, 2)

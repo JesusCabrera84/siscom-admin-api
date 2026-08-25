@@ -7,3 +7,4 @@ class GatewayEventStatus(str, enum.Enum):
     PROCESSED = "processed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    PROCESSING = "processing"

@@ -17,6 +17,10 @@ _TEST_ENV_DEFAULTS = {
     "SES_FROM_EMAIL": "test@example.com",
     "FRONTEND_URL": "http://localhost:3000",
     "PASETO_SECRET_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "STRIPE_SECRET_KEY": "sk_test_siscom_unit_tests",
+    "STRIPE_PUBLISHABLE_KEY": "pk_test_siscom_unit_tests",
+    "STRIPE_WEBHOOK_SECRET": "whsec_test_siscom_unit_tests",
+    "FACTURAPI_API_KEY": "sk_test_siscom_unit_tests",
 }
 
 

@@ -46,6 +46,18 @@ class GatewayProvider(Protocol):
         """
         ...
 
+    def confirm_setup_intent(
+        self,
+        db: Session,
+        organization_id: UUID,
+        setup_intent_id: str,
+    ) -> list[dict]:
+        """
+        Persiste la tarjeta ya confirmada en Stripe, sin esperar el webhook.
+        El cliente solo manda el id del SetupIntent; el servidor lo verifica.
+        """
+        ...
+
     def list_payment_methods(
         self,
         db: Session,
@@ -86,7 +98,7 @@ class GatewayProvider(Protocol):
         Garantías requeridas:
           1. Verificar firma ANTES de leer el body
           2. Idempotencia: ignorar eventos ya procesados
-          3. Siempre responder 200 (incluso en eventos ignorados)
+          3. Duplicados y eventos no manejados: 200. Fallo transitorio: 5xx.
         """
         ...
 

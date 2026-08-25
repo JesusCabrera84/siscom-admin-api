@@ -29,10 +29,16 @@ class BillingCycle(str, Enum):
 class PlanPricing(BaseModel):
     """Precios de un plan por ciclo de facturación."""
 
-    monthly: Decimal = Field(..., description="Precio mensual")
-    yearly: Decimal = Field(..., description="Precio anual")
+    monthly: Decimal = Field(..., description="Precio mensual sin IVA")
+    yearly: Decimal = Field(..., description="Precio anual sin IVA")
     yearly_savings_percent: int = Field(
         default=0, description="Porcentaje de ahorro al pagar anualmente"
+    )
+    monthly_quote: Optional[dict] = Field(
+        default=None, description="Cotización oficial mensual (con IVA)"
+    )
+    yearly_quote: Optional[dict] = Field(
+        default=None, description="Cotización oficial anual (con IVA)"
     )
 
     class Config:

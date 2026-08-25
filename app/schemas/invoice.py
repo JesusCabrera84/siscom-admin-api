@@ -47,6 +47,8 @@ class InvoiceDetailOut(BaseModel):
     due_at: Optional[datetime]
     subscription_id: Optional[UUID]
     invoice_pdf_url: Optional[str]
+    has_cfdi: bool = False
+    cfdi_uuid: Optional[str] = None
 
     # Pago asociado (puede ser None si aún no se intentó)
     payment: Optional[PaymentBrief]

@@ -79,6 +79,8 @@ class Settings(BaseSettings):
         "http://localhost:8080",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
         "http://localhost:5160",
         "http://127.0.0.1:5160",
         "http://127.0.0.1:8100",
@@ -97,6 +99,11 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     STRIPE_PUBLISHABLE_KEY: Optional[str] = None
 
+    # Facturapi — CFDI 4.0. None desactiva el timbrado (el comprobante interno sigue).
+    FACTURAPI_API_KEY: Optional[str] = None
+    FACTURAPI_PRODUCT_KEY: str = "81112100"
+    FACTURAPI_UNIT_KEY: str = "E48"
+
     # Usuario técnico Siscom para registered_by en pagos manuales desde GAC
     GAC_SYSTEM_USER_ID: Optional[str] = None
 
@@ -105,6 +112,7 @@ class Settings(BaseSettings):
         "AWS_SECRET_ACCESS_KEY",
         "SNS_PLATFORM_APPLICATION_ARN_IOS",
         "SNS_PLATFORM_APPLICATION_ARN_ANDROID",
+        "FACTURAPI_API_KEY",
         mode="before",
     )
     @classmethod

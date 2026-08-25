@@ -37,6 +37,16 @@ class InvoiceStatus(str, Enum):
     UNCOLLECTIBLE = "UNCOLLECTIBLE"
 
 
+class MoneyQuote(BaseModel):
+    """Cotización oficial. Strings a dos decimales, nunca float."""
+
+    subtotal: str
+    tax: str
+    total: str
+    amount_cents: int
+    currency: str = "MXN"
+
+
 class CurrentPlanInfo(BaseModel):
     """Información del plan actual."""
 
@@ -47,6 +57,7 @@ class CurrentPlanInfo(BaseModel):
     next_billing_date: Optional[datetime] = None
     amount_due: Decimal
     currency: str = "MXN"
+    quote: Optional[MoneyQuote] = None
 
     class Config:
         from_attributes = True
@@ -65,6 +76,21 @@ class BillingStats(BaseModel):
         from_attributes = True
 
 
+class RenewalStateOut(BaseModel):
+    """Estado de la renovación automática, para avisar en el panel."""
+
+    auto_renew: bool = True
+    #: ok | past_due | action_required | no_payment_method
+    state: str = "ok"
+    message: Optional[str] = None
+    grace_until: Optional[datetime] = None
+    attempts: int = 0
+    next_attempt_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class BillingSummaryOut(BaseModel):
     organization_id: UUID
     organization_name: str
@@ -73,6 +99,7 @@ class BillingSummaryOut(BaseModel):
     pending_amount: Decimal = Decimal("0.00")
     stats: BillingStats
     billing_email: Optional[str] = None
+    renewal: Optional[RenewalStateOut] = None
 
     class Config:
         from_attributes = True
@@ -108,6 +135,9 @@ class InvoiceOut(BaseModel):
     paid_at: Optional[datetime] = None
     due_date: Optional[datetime] = None
     invoice_url: Optional[str] = None
+    has_receipt: bool = False
+    has_cfdi: bool = False
+    cfdi_uuid: Optional[str] = None
     payment_id: Optional[UUID] = None
     subscription_id: Optional[UUID] = None
 
@@ -119,3 +149,33 @@ class InvoicesListOut(BaseModel):
     invoices: list[InvoiceOut]
     total: int
     has_more: bool
+
+
+class CatalogItem(BaseModel):
+    code: str
+    name: str
+
+
+class TaxProfileIn(BaseModel):
+    rfc: str
+    legal_name: str
+    tax_system: str
+    zip: str
+    email: Optional[str] = None
+    default_cfdi_use: str = "G03"
+
+
+class TaxProfileOut(BaseModel):
+    rfc: Optional[str] = None
+    legal_name: Optional[str] = None
+    tax_system: Optional[str] = None
+    zip: Optional[str] = None
+    email: Optional[str] = None
+    default_cfdi_use: str = "G03"
+    is_complete: bool = False
+    tax_systems: list[CatalogItem] = []
+    cfdi_uses: list[CatalogItem] = []
+
+
+class StampCfdiIn(BaseModel):
+    use: Optional[str] = None
