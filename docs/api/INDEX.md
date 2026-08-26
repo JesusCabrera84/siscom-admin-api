@@ -93,7 +93,7 @@ Gestión de suscripciones múltiples por organización.
 - `PATCH /api/v1/subscriptions/{subscription_id}/auto-renew` - Configurar auto-renovación
 
 ### [billing.md](./billing.md)
-Resumen de facturación y pagos.
+Resumen de facturación y pagos (lectura). El cobro, webhooks y renovación están en **[Flujo de pagos — punta a punta](../guides/pagos-flujo-completo.md)**.
 
 **Endpoints:**
 - `GET /api/v1/billing/summary` - Resumen de facturación

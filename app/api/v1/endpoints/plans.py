@@ -30,6 +30,7 @@ from app.schemas.plan import (
     PlanPricing,
     PlansListOut,
 )
+from app.services import billing_period
 
 router = APIRouter()
 
@@ -80,9 +81,8 @@ def _plan_to_detail(db: Session, plan: Plan) -> PlanDetailOut:
     """
     capabilities = _get_plan_capabilities(db, plan.id)
 
-    # Calcular ahorro anual
-    monthly_annual = float(plan.price_monthly) * 12
-    yearly_price = float(plan.price_yearly)
+    monthly_annual = plan.price_monthly * 12
+    yearly_price = plan.price_yearly
     savings_percent = 0
     if monthly_annual > 0 and yearly_price < monthly_annual:
         savings_percent = int(((monthly_annual - yearly_price) / monthly_annual) * 100)
@@ -96,6 +96,8 @@ def _plan_to_detail(db: Session, plan: Plan) -> PlanDetailOut:
             monthly=plan.price_monthly,
             yearly=plan.price_yearly,
             yearly_savings_percent=savings_percent,
+            monthly_quote=billing_period.quote_plan(plan, "MONTHLY"),
+            yearly_quote=billing_period.quote_plan(plan, "YEARLY"),
         ),
         billing_cycles=[BillingCycle.MONTHLY, BillingCycle.YEARLY],
         capabilities=capabilities,

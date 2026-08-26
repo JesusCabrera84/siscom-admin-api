@@ -23,6 +23,9 @@ async def lifespan(_: FastAPI):
     # Startup: verifica accesibilidad de servicios externos
     print_startup_banner()
     check_kafka_accessibility()
+    from app.services.gateways import initialize_gateways
+
+    initialize_gateways()
 
     yield
 

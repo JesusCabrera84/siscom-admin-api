@@ -30,6 +30,7 @@ Bienvenido a la documentación completa de la API administrativa de SISCOM - una
 Comienza aquí si eres nuevo en el proyecto:
 
 - **[Guía Rápida](guides/quickstart.md)** - Configuración inicial y primeros pasos
+- **[Flujo de pagos (Stripe) — punta a punta](guides/pagos-flujo-completo.md)** - 📌 Cobro, IVA, 3DS, webhooks, renovación, reembolsos, efectivo GAC
 - **[Configuración de Cognito](guides/cognito-setup.md)** - Setup de AWS Cognito para autenticación
 - **[Configuración de Emails](guides/email-configuration.md)** - Setup de AWS SES para notificaciones
 
@@ -76,7 +77,8 @@ Comienza aquí si eres nuevo en el proyecto:
 | **[Suscripciones](api/subscriptions.md)** | 📌 Gestión de suscripciones múltiples |
 | **[Capabilities](api/capabilities.md)** | 📌 Límites y features de la organización |
 | **[Planes](api/plans.md)** | Catálogo de planes disponibles (informativo) |
-| **[Billing](api/billing.md)** | 📌 Resumen de facturación e invoices |
+| **[Flujo de pagos Stripe](guides/pagos-flujo-completo.md)** | 📌 Fuente de verdad del cobro (no el catálogo de endpoints) |
+| **[Billing](api/billing.md)** | Resumen de facturación e invoices (lectura) |
 | **[Servicios](api/services.md)** | Activación de servicios (legacy) |
 | **[Órdenes](api/orders.md)** | Compra de dispositivos GPS |
 | **[Pagos](api/payments.md)** | Historial de pagos (raw) |
@@ -174,7 +176,28 @@ Comienza aquí si eres nuevo en el proyecto:
 |--------|----------|-------------|------|
 | `GET` | `/summary` | Resumen de facturación | 🔐 Cognito |
 | `GET` | `/payments` | Historial de pagos | 🔐 Cognito |
-| `GET` | `/invoices` | Lista de invoices (provisional) | 🔐 Cognito |
+| `GET` | `/invoices` | Lista de invoices | 🔐 Cognito |
+
+### Stripe / cobro (`/api/v1/stripe`) — ver [flujo completo](guides/pagos-flujo-completo.md)
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/config` | Publishable key | 🔐 Cognito |
+| `GET` | `/quote` | Cotización oficial (IVA + cents) | 🔐 Cognito |
+| `POST` | `/setup-intent` | Guardar tarjeta | 🔐 Cognito (Billing) |
+| `POST` | `/payment-intent` | Crear cobro (`Idempotency-Key` obligatoria) | 🔐 Cognito (Billing) |
+| `GET` | `/payment-methods` | Listar tarjetas | 🔐 Cognito (Billing) |
+| `DELETE` | `/payment-methods/{external_token}` | Quitar tarjeta | 🔐 Cognito (Billing) |
+| `PATCH` | `/payment-methods/default` | Tarjeta predeterminada | 🔐 Cognito (Billing) |
+| `PATCH` | `/auto-renew` | Renovación automática | 🔐 Cognito (Billing) |
+| `POST` | `/webhook/{gateway}` | Webhooks Stripe (firma, sin JWT) | 🔏 Firma Stripe |
+
+### API Interna - Billing (`/api/v1/internal/billing`) - 🔑 PASETO `gac` / `GAC_ADMIN`
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/manual-payments` | Pago en efectivo + activar/renovar | 🔑 PASETO |
+| `POST` | `/renewals/run` | Cron de renovaciones automáticas | 🔑 PASETO |
 
 ### Dispositivos (`/api/v1/devices`)
 
@@ -708,5 +731,5 @@ alembic upgrade head
 
 ---
 
-**Última actualización**: Enero 2026  
+**Última actualización**: Enero 2026
 **Versión de documentación**: 2.3.0

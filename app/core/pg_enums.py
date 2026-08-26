@@ -67,6 +67,7 @@ gateway_event_status_pg = PgEnum(
     "processed",
     "failed",
     "skipped",
+    "processing",
     name="gateway_event_status",
     create_type=False,
 )
