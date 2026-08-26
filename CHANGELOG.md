@@ -50,6 +50,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gitleaks + Semgrep + pip-audit + OSV-Scanner in CI `security` job
 - `POST /api/v1/mobility/locations` y `/batch` exigen JWT y validan que el `device_id` pertenezca a un dispositivo activo del usuario autenticado. Antes aceptaban cualquier `device_id` sin autenticación, lo que permitía inyectar ubicaciones de terceros al tópico de Kafka
 
+## [1.24.0] - 2026-08-25
+
+### Added
+
+- Cotización en servidor para los cobros de Stripe: el importe deja de venir del cliente y se calcula en el backend (PR #45)
+- Idempotencia de peticiones (`app/services/idempotency_service.py`, migración `021_api_idempotency`) para que un reintento de cobro no genere un segundo cargo (PR #45)
+- Servicio de renovaciones de suscripción (`app/services/renewal_service.py`, migración `022_subscription_renewal`) (PR #45)
+- Comprobante interno en PDF (`app/services/receipt_pdf.py`, `app/services/invoice_numbering.py`) (PR #45)
+- Perfiles fiscales por cuenta (migración `024_account_tax_profiles`) y CFDI emitido **a petición**, no en cada cobro (PR #45)
+- `app/services/money.py` y `app/db/locks.py`; esquema de métodos de pago reestructurado (migración `023_payment_methods_schema`) (PR #45)
+- Guía `docs/guides/pagos-flujo-completo.md` (PR #45)
+
+### Changed
+
+- Stripe y Facturapi pasan a ser **opcionales**: sin claves en el ambiente el servicio arranca igual y esas integraciones quedan inactivas (PR #45)
+
 ## [1.23.1] - 2026-08-08
 
 ### Fixed
