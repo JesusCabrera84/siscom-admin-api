@@ -17,6 +17,9 @@ _TEST_ENV_DEFAULTS = {
     "SES_FROM_EMAIL": "test@example.com",
     "FRONTEND_URL": "http://localhost:3000",
     "PASETO_SECRET_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    # Distinta de PASETO_SECRET_KEY a propósito: los tests deben correr
+    # con las dos claves separadas, igual que producción.
+    "SHARE_LOCATION_KEY_B64": "c2hhcmUtbG9jYXRpb24tdGVzdC1rZXktMzJieXRlcyE=",
     "STRIPE_SECRET_KEY": "sk_test_siscom_unit_tests",
     "STRIPE_PUBLISHABLE_KEY": "pk_test_siscom_unit_tests",
     "STRIPE_WEBHOOK_SECRET": "whsec_test_siscom_unit_tests",

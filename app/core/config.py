@@ -46,8 +46,18 @@ class Settings(BaseSettings):
     # reCAPTCHA v3 - Secret key para validación
     RECAPTCHA_SECRET_KEY: Optional[str] = None
 
-    # PASETO - Token para compartir ubicación
+    # PASETO - Clave de tokens de SERVICIO interno (GAC/Nexus/App admin).
+    # NO usar para tokens de compartir ubicación: firma credenciales
+    # administrativas y no debe salir de este servicio.
     PASETO_SECRET_KEY: str
+
+    # Clave dedicada a los tokens de compartir ubicación (v4.local, 32 bytes
+    # base64). Se separa de PASETO_SECRET_KEY porque el verificador de estos
+    # tokens vive en siscom-api: compartir la clave de servicio le permitiría
+    # firmar tokens `internal-*` y llamar a la API interna como administrador.
+    # Si no está configurada, /units/{id}/share-location responde 503 en lugar
+    # de degradar a la clave de servicio.
+    SHARE_LOCATION_KEY_B64: Optional[str] = None
 
     # KORE Wireless
     KORE_CLIENT_ID: Optional[str] = None
