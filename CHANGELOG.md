@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth: las peticiones sin header `Authorization` (o con esquema distinto de Bearer) responden `401` con `WWW-Authenticate: Bearer` en lugar del `403` por defecto de `HTTPBearer`. Los clientes iOS/Android disparan el refresh de token solo con `401`
 - `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
 - User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
+- Auth: una caída de Cognito (JWKS inalcanzable y sin caché) ya no se presenta como `401`. En los endpoints de doble autenticación el error 5xx se propaga en vez de caer al camino PASETO y acabar respondiendo `401`, que mandaba al cliente a reautenticarse contra un problema que ninguna credencial arregla — y convertía la caída en una tormenta de peticiones sobre esta API
 
 ### Notes
 
@@ -49,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gitleaks + Semgrep + pip-audit + OSV-Scanner in CI `security` job
 - `POST /api/v1/mobility/locations` y `/batch` exigen JWT y validan que el `device_id` pertenezca a un dispositivo activo del usuario autenticado. Antes aceptaban cualquier `device_id` sin autenticación, lo que permitía inyectar ubicaciones de terceros al tópico de Kafka
+- PASETO: los tokens de compartir ubicación se firman con `SHARE_LOCATION_KEY_B64`, una clave dedicada, en lugar de con `PASETO_SECRET_KEY`. El verificador de esos tokens vive en siscom-api; entregarle la clave de servicio le permitía firmar tokens `internal-*` y llamar a la API interna como administrador. Sin la clave nueva configurada, `/units/{id}/share-location` responde `503` en vez de degradar a la clave de servicio (ver ADR-004)
+- `decode_any_token` se elimina: probaba las dos claves contra el mismo token, de modo que un token de compartir ubicación podía acabar aceptado donde se esperaba uno de servicio
+- `scripts/paseto_key_fingerprint.py` imprime la huella SHA-256 (12 hex) del material de clave **efectivo**, para comparar entre servicios sin transmitir la clave
 
 ## [1.24.0] - 2026-08-25
 

@@ -24,6 +24,7 @@ Cada ADR sigue esta estructura:
 | [ADR-001](./001-account-organization-user-model.md) | Migración al Modelo Account / Organization / User | Aceptado | 2024-12-29 |
 | [ADR-002](./002-engineering-governance-baseline.md) | Línea base de gobernanza de ingeniería | Aceptado | 2026-06-24 |
 | [ADR-003](./003-zero-cost-ci-security.md) | Tooling de seguridad en CI sin costo | Aceptado | 2026-06-24 |
+| [ADR-004](./004-separacion-claves-paseto.md) | Separación de claves PASETO (servicio interno vs. compartir ubicación) | Propuesto (secuencia superada por ADR-005) | 2026-08-20 |
 
 ## Crear un nuevo ADR
 
