@@ -21,7 +21,11 @@ from app.schemas.trip import (
     TripOut,
     TripPointOut,
 )
-from app.services.access_control import get_accessible_unit_ids
+from app.services.access_control import (
+    accessible_refs,
+    get_accessible_unit_ids,
+    subject_for_user,
+)
 
 router = APIRouter()
 
@@ -73,32 +77,48 @@ def get_user_from_auth(db: Session, auth: AuthResult) -> Optional[User]:
 
 def get_accessible_device_ids(db: Session, user: User) -> List[str]:
     """
-    Retorna los IDs de dispositivos accesibles para el usuario.
-    Basado en las unidades a las que tiene acceso.
+    IDs de dispositivos que el usuario puede ver **en algún momento**.
+
+    Sirve para decidir si un dispositivo entra en la respuesta, no para decidir
+    qué viajes de ese dispositivo entran: eso lo hace `trips_visibility_filter`,
+    que acota por la ventana. Usar solo esta lista dejaría visibles los viajes
+    posteriores a que el equipo saliera de la flota — y si se reasignó a otra
+    organización, sus viajes con el cliente nuevo.
     """
-    accessible_unit_ids = get_accessible_unit_ids(db, user)
+    refs = accessible_refs(db, subject_for_user(user))
+    return [grant.internal_id for grant in refs.devices.values()]
 
-    if not accessible_unit_ids:
-        return []
 
-    # Obtener dispositivos asignados a las unidades accesibles
-    # Incluir tanto asignaciones activas como históricas
-    device_ids = (
-        db.query(UnitDevice.device_id)
-        .filter(UnitDevice.unit_id.in_(accessible_unit_ids))
-        .distinct()
-        .all()
-    )
+def trips_visibility_filter(db: Session, user: User):
+    """
+    Filtro SQL que deja pasar solo los viajes ocurridos dentro de una ventana.
 
-    return [device_id[0] for device_id in device_ids]
+    Devuelve None si el usuario no ve ningún dispositivo, para que el llamante
+    responda vacío sin construir una consulta imposible.
+    """
+    refs = accessible_refs(db, subject_for_user(user))
+
+    clauses = []
+    for grant in refs.devices.values():
+        for window in grant.windows:
+            conds = [Trip.device_id == grant.internal_id]
+            if window.start is not None:
+                conds.append(Trip.start_time >= window.start)
+            if window.end is not None:
+                conds.append(Trip.start_time < window.end)
+            clauses.append(and_(*conds))
+
+    return or_(*clauses) if clauses else None
 
 
 def check_device_access(db: Session, device_id: str, user: User) -> bool:
     """
-    Verifica si el usuario tiene acceso a un dispositivo específico.
+    ¿El usuario vio este dispositivo en algún momento?
+
+    Booleano a propósito: responde si el dispositivo puede aparecer, no qué parte
+    de su historia. El recorte por ventana lo aplica la consulta.
     """
-    accessible_devices = get_accessible_device_ids(db, user)
-    return device_id in accessible_devices
+    return device_id in get_accessible_device_ids(db, user)
 
 
 def check_unit_access(db: Session, unit_id: UUID, user: User) -> bool:
@@ -374,15 +394,18 @@ def list_trips(
     # Aplicar filtros de permisos solo si es autenticación Cognito
     if current_user:
         # Cognito: aplicar restricciones de permisos
-        accessible_device_ids = get_accessible_device_ids(db, current_user)
+        visibilidad = trips_visibility_filter(db, current_user)
 
-        if not accessible_device_ids:
+        if visibilidad is None:
             # Usuario sin acceso a ninguna unidad
             return TripListResponse(
                 trips=[], total=0, limit=limit, cursor=None, has_more=False
             )
 
-        query = query.filter(Trip.device_id.in_(accessible_device_ids))
+        # Acota por ventana, no solo por dispositivo: un viaje posterior a que el
+        # equipo saliera de la flota no es del usuario, aunque el equipo sí lo
+        # fuera antes.
+        query = query.filter(visibilidad)
 
     # Aplicar filtros
     if unit_id:
