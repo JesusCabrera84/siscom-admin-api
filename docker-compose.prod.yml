@@ -51,6 +51,11 @@ services:
 
       # Clave dedicada a compartir ubicación (la única que ve siscom-api)
       SHARE_LOCATION_KEY_B64: ${SHARE_LOCATION_KEY_B64}
+      DATA_TOKEN_PRIVATE_KEY_B64: ${DATA_TOKEN_PRIVATE_KEY_B64}
+      DATA_TOKEN_KEY_ID: ${DATA_TOKEN_KEY_ID}
+      DATA_TOKEN_INDEX_SECRET_B64: ${DATA_TOKEN_INDEX_SECRET_B64}
+      VALKEY_URL: ${VALKEY_URL}
+      SHARE_LOCATION_USE_DATA_TOKEN: ${SHARE_LOCATION_USE_DATA_TOKEN}
 
       # KORE Wireless - API para envío de comandos SMS
       KORE_CLIENT_ID: ${KORE_CLIENT_ID}

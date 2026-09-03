@@ -12,7 +12,6 @@ from app.services.telemetry import (
     _build_select_columns,
     _group_rows_by_device,
     _map_row_to_point,
-    validate_batch_device_access,
     validate_device_access,
 )
 
@@ -116,23 +115,84 @@ def test_group_rows_by_device_preserves_order_and_skips_unknown():
     assert grouped["b"] == []
 
 
-def test_validate_device_access_raises_when_not_in_list(monkeypatch):
-    monkeypatch.setattr(tel_mod, "_get_accessible_device_ids", lambda db, user: ["x"])
+def _refs_con(**concesiones):
+    """AccessibleRefs a partir de internal_id -> ventanas."""
+    from uuid import uuid4
 
-    user = MagicMock(spec=User)
-    db = MagicMock()
+    from app.services.access_control import AccessibleRefs, Grant
+
+    return AccessibleRefs(
+        units={},
+        devices={
+            uuid4(): Grant(internal_id=internal_id, windows=windows)
+            for internal_id, windows in concesiones.items()
+        },
+    )
+
+
+def test_validate_device_access_raises_when_not_in_list(monkeypatch):
+    from app.services.access_control import TimeWindow
+
+    monkeypatch.setattr(
+        tel_mod, "accessible_refs", lambda db, subject: _refs_con(x=(TimeWindow(),))
+    )
+    monkeypatch.setattr(tel_mod, "subject_for_user", lambda user: None)
 
     with pytest.raises(HTTPException) as ei:
-        validate_device_access(db, user, "y")
+        validate_device_access(
+            MagicMock(),
+            MagicMock(spec=User),
+            "y",
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+            datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
     assert ei.value.status_code == 404
 
 
-def test_validate_batch_device_access_raises_when_not_subset(monkeypatch):
-    monkeypatch.setattr(tel_mod, "_get_accessible_device_ids", lambda db, user: ["a"])
+def test_batch_rejects_the_whole_request_if_any_device_is_unauthorised(monkeypatch):
+    """
+    Devolver solo el subconjunto permitido convertiría el endpoint en un oráculo
+    de pertenencia: pidiendo de uno en uno se averigua de quién es cada equipo.
+    """
+    from app.services.access_control import TimeWindow
+    from app.services.telemetry import _authorized_ranges_for_batch
 
-    user = MagicMock(spec=User)
-    db = MagicMock()
+    monkeypatch.setattr(
+        tel_mod, "accessible_refs", lambda db, subject: _refs_con(a=(TimeWindow(),))
+    )
+    monkeypatch.setattr(tel_mod, "subject_for_user", lambda user: None)
 
     with pytest.raises(HTTPException) as ei:
-        validate_batch_device_access(db, user, ["a", "b"])
+        _authorized_ranges_for_batch(
+            MagicMock(),
+            MagicMock(spec=User),
+            ["a", "b"],
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+            datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
     assert "no encontrados" in ei.value.detail
+
+
+def test_batch_clips_each_device_to_its_own_window(monkeypatch):
+    """Cada dispositivo se recorta a lo suyo, no al mínimo común."""
+    from app.services.access_control import TimeWindow
+    from app.services.telemetry import _authorized_ranges_for_batch
+
+    fin = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        tel_mod,
+        "accessible_refs",
+        lambda db, subject: _refs_con(
+            siempre=(TimeWindow(),), se_fue=(TimeWindow(end=fin),)
+        ),
+    )
+    monkeypatch.setattr(tel_mod, "subject_for_user", lambda user: None)
+
+    desde = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    hasta = datetime(2026, 12, 1, tzinfo=timezone.utc)
+    rangos = _authorized_ranges_for_batch(
+        MagicMock(), MagicMock(spec=User), ["siempre", "se_fue"], desde, hasta
+    )
+
+    assert rangos["siempre"] == [(desde, hasta)]
+    assert rangos["se_fue"] == [(desde, fin)]

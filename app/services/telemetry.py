@@ -14,6 +14,7 @@ Rango semiabierto: [from_ts, to_ts) para evitar doble conteo en consultas contig
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional, Sequence
 
@@ -21,10 +22,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models.unit import Unit
-from app.models.unit_device import UnitDevice
 from app.models.user import User
-from app.models.user_unit import UserUnit
 from app.schemas.telemetry import (
     AlertsOut,
     AvgMinMaxOut,
@@ -38,6 +36,10 @@ from app.schemas.telemetry import (
     SpeedOut,
     TelemetryDeviceItemOut,
     TelemetryPointOut,
+)
+from app.services.access_control import (
+    accessible_refs,
+    subject_for_user,
 )
 
 BASE_METRICS = {
@@ -63,75 +65,51 @@ INTELLIGENCE_METRICS = {
 # ---------------------------------------------------------------------------
 
 
-def _get_accessible_device_ids(db: Session, user: User) -> List[str]:
+def authorized_ranges(
+    db: Session,
+    user: User,
+    device_id: str,
+    from_ts: datetime,
+    to_ts: datetime,
+) -> List[tuple]:
     """
-    Retorna device_ids accesibles para el usuario.
+    Sub-rangos de `[from_ts, to_ts)` que el usuario puede ver de ese dispositivo.
 
-    Regla:
-      - is_master=True  → todos los devices de la organización (via units activas)
-      - is_master=False → solo devices vinculados a units visibles en user_units
+    **Se recorta, no se rechaza**: pedir enero–diciembre habiendo tenido el equipo
+    hasta marzo devuelve enero–marzo. No hay oráculo de pertenencia que proteger
+    —el usuario ya conoce los límites de su propia ventana—, al contrario que con
+    un dispositivo ajeno, que se rechaza entero.
+
+    Lista vacía significa que no hubo permiso en ningún momento del rango, y el
+    llamante responde 404 sin distinguir "no existe" de "no es tuyo".
     """
-    if user.is_master:
-        # Master: todos los devices vinculados a units de la organización
-        rows = (
-            db.query(UnitDevice.device_id)
-            .join(Unit, Unit.id == UnitDevice.unit_id)
-            .filter(
-                Unit.organization_id == user.organization_id,
-                Unit.deleted_at.is_(None),
-            )
-            .distinct()
-            .all()
-        )
-    else:
-        # Usuario normal: solo devices vinculados a units asignadas vía user_units
-        accessible_unit_ids = (
-            db.query(UserUnit.unit_id)
-            .join(Unit, Unit.id == UserUnit.unit_id)
-            .filter(
-                UserUnit.user_id == user.id,
-                Unit.organization_id == user.organization_id,
-                Unit.deleted_at.is_(None),
-            )
-            .subquery()
-        )
-        rows = (
-            db.query(UnitDevice.device_id)
-            .filter(UnitDevice.unit_id.in_(accessible_unit_ids))
-            .distinct()
-            .all()
-        )
-
-    return [r[0] for r in rows]
+    refs = accessible_refs(db, subject_for_user(user))
+    for grant in refs.devices.values():
+        if grant.internal_id == device_id:
+            return grant.clip(from_ts, to_ts)
+    return []
 
 
-def validate_device_access(db: Session, user: User, device_id: str) -> None:
+def validate_device_access(
+    db: Session,
+    user: User,
+    device_id: str,
+    from_ts: Optional[datetime] = None,
+    to_ts: Optional[datetime] = None,
+) -> List[tuple]:
     """
-    Lanza HTTPException 404 si el usuario no tiene acceso al dispositivo.
-    Se usa 404 (en lugar de 403) para no filtrar existencia.
+    Lanza HTTPException 404 si el usuario no puede ver el dispositivo en el rango.
+
+    Se usa 404 (en lugar de 403) para no filtrar existencia. Devuelve los
+    sub-rangos autorizados para que el llamante consulte solo esos.
     """
-    accessible = _get_accessible_device_ids(db, user)
-    if device_id not in accessible:
+    ranges = authorized_ranges(db, user, device_id, from_ts, to_ts)
+    if not ranges:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dispositivo no encontrado",
         )
-
-
-def validate_batch_device_access(
-    db: Session, user: User, device_ids: Sequence[str]
-) -> None:
-    """
-    Valida en una sola consulta que todos los device_ids estén accesibles.
-    Si alguno falta, responde 404 genérico sin filtrar cuál es el problemático.
-    """
-    accessible = set(_get_accessible_device_ids(db, user))
-    requested = set(device_ids)
-    if not requested.issubset(accessible):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Uno o más dispositivos no encontrados",
-        )
+    return ranges
 
 
 # ---------------------------------------------------------------------------
@@ -650,13 +628,46 @@ def get_telemetry_single(
 ) -> List[TelemetryPointOut]:
     """
     Retorna la serie temporal de telemetría para un dispositivo.
-    Valida acceso antes de ejecutar la query.
+
+    El acceso es **temporal**: se consulta únicamente en los sub-rangos en que el
+    usuario tuvo el dispositivo. Un equipo reasignado a otra organización deja de
+    aportar datos posteriores a su marcha sin que la petición falle.
     """
-    validate_device_access(db, user, device_id)
+    ranges = validate_device_access(db, user, device_id, from_ts, to_ts)
 
     base_metrics = [m for m in metrics if m in BASE_METRICS]
     intelligence_metrics = [m for m in metrics if m in INTELLIGENCE_METRICS]
 
+    series: List[TelemetryPointOut] = []
+    for desde, hasta in ranges:
+        series.extend(
+            _query_one_range(
+                db,
+                device_id,
+                desde,
+                hasta,
+                granularity,
+                base_metrics,
+                intelligence_metrics,
+            )
+        )
+
+    # Los sub-rangos son disjuntos y vienen ordenados, pero se reordena por
+    # bucket de todos modos: la propiedad de salida es "ordenado por bucket", y
+    # no debe depender de cómo estén ordenadas las ventanas de entrada.
+    return sorted(series, key=lambda p: p.bucket)
+
+
+def _query_one_range(
+    db: Session,
+    device_id: str,
+    from_ts: Optional[datetime],
+    to_ts: Optional[datetime],
+    granularity: Granularity,
+    base_metrics: List[str],
+    intelligence_metrics: List[str],
+) -> List[TelemetryPointOut]:
+    """Consulta un único sub-rango autorizado."""
     if granularity == "hour":
         base_series = (
             _query_single_hour(db, device_id, from_ts, to_ts, base_metrics)
@@ -665,11 +676,7 @@ def get_telemetry_single(
         )
         intelligence_series = (
             _query_single_hour_intelligence(
-                db,
-                device_id,
-                from_ts,
-                to_ts,
-                intelligence_metrics,
+                db, device_id, from_ts, to_ts, intelligence_metrics
             )
             if intelligence_metrics
             else []
@@ -682,11 +689,7 @@ def get_telemetry_single(
         )
         intelligence_series = (
             _query_single_day_intelligence(
-                db,
-                device_id,
-                from_ts,
-                to_ts,
-                intelligence_metrics,
+                db, device_id, from_ts, to_ts, intelligence_metrics
             )
             if intelligence_metrics
             else []
@@ -705,58 +708,123 @@ def get_telemetry_batch(
     metrics: List[BatchMetricName],
 ) -> List[TelemetryDeviceItemOut]:
     """
-    Retorna la serie temporal agrupada por dispositivo.
-    Valida acceso a todos los device_ids en una sola consulta.
+    Retorna la serie temporal agrupada por dispositivo, con acceso **temporal**.
+
+    Dos reglas distintas, y la diferencia es deliberada:
+
+    - Un dispositivo sin ningún permiso en el rango **rechaza la petición entera**
+      con 404. Devolver el subconjunto permitido convertiría el endpoint en un
+      oráculo de pertenencia: pidiendo de uno en uno se averigua de quién es cada
+      equipo.
+    - Un dispositivo con permiso **parcial** se recorta a su ventana. Ahí no hay
+      nada que proteger, porque quien pregunta ya conoce los límites de su propia
+      ventana.
     """
-    validate_batch_device_access(db, user, device_ids)
+    ranges_by_device = _authorized_ranges_for_batch(
+        db, user, device_ids, from_ts, to_ts
+    )
 
     base_metrics = [m for m in metrics if m in BASE_METRICS]
     intelligence_metrics = [m for m in metrics if m in INTELLIGENCE_METRICS]
+
+    # Los dispositivos que comparten ventanas se consultan juntos. En el caso
+    # habitual —todos asignados y cubriendo el rango entero— hay un solo grupo y
+    # un solo rango, así que la consulta es exactamente la de antes.
+    grupos: Dict[tuple, List[str]] = defaultdict(list)
+    for dev_id in device_ids:
+        grupos[tuple(ranges_by_device[dev_id])].append(dev_id)
+
+    grouped: Dict[str, List[TelemetryPointOut]] = {d: [] for d in device_ids}
+
+    for rangos, ids in grupos.items():
+        for desde, hasta in rangos:
+            parcial = _query_batch_one_range(
+                db, ids, desde, hasta, granularity, base_metrics, intelligence_metrics
+            )
+            for dev_id in ids:
+                grouped[dev_id].extend(parcial.get(dev_id, []))
+
+    # Preservar orden original del request; la serie, ordenada por bucket.
+    return [
+        TelemetryDeviceItemOut(
+            device_id=dev_id, series=sorted(grouped[dev_id], key=lambda p: p.bucket)
+        )
+        for dev_id in device_ids
+    ]
+
+
+def _authorized_ranges_for_batch(
+    db: Session,
+    user: User,
+    device_ids: Sequence[str],
+    from_ts: datetime,
+    to_ts: datetime,
+) -> Dict[str, List[tuple]]:
+    """
+    Ventanas autorizadas de cada dispositivo pedido, en una sola resolución.
+
+    Lanza 404 genérico —sin decir cuál falla— si alguno no tiene permiso alguno
+    en el rango.
+    """
+    refs = accessible_refs(db, subject_for_user(user))
+    por_id = {grant.internal_id: grant for grant in refs.devices.values()}
+
+    resultado: Dict[str, List[tuple]] = {}
+    for dev_id in device_ids:
+        grant = por_id.get(dev_id)
+        rangos = grant.clip(from_ts, to_ts) if grant else []
+        if not rangos:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Uno o más dispositivos no encontrados",
+            )
+        resultado[dev_id] = rangos
+
+    return resultado
+
+
+def _query_batch_one_range(
+    db: Session,
+    device_ids: List[str],
+    from_ts: Optional[datetime],
+    to_ts: Optional[datetime],
+    granularity: Granularity,
+    base_metrics: List[str],
+    intelligence_metrics: List[str],
+) -> Dict[str, List[TelemetryPointOut]]:
+    """Consulta un único sub-rango para un grupo de dispositivos."""
+    vacio = {d: [] for d in device_ids}
 
     if granularity == "hour":
         grouped_base = (
             _query_multi_hour(db, device_ids, from_ts, to_ts, base_metrics)
             if base_metrics
-            else {d: [] for d in device_ids}
+            else vacio
         )
         grouped_intelligence = (
             _query_multi_hour_intelligence(
-                db,
-                device_ids,
-                from_ts,
-                to_ts,
-                intelligence_metrics,
+                db, device_ids, from_ts, to_ts, intelligence_metrics
             )
             if intelligence_metrics
-            else {d: [] for d in device_ids}
+            else vacio
         )
     else:
         grouped_base = (
             _query_multi_day(db, device_ids, from_ts, to_ts, base_metrics)
             if base_metrics
-            else {d: [] for d in device_ids}
+            else vacio
         )
         grouped_intelligence = (
             _query_multi_day_intelligence(
-                db,
-                device_ids,
-                from_ts,
-                to_ts,
-                intelligence_metrics,
+                db, device_ids, from_ts, to_ts, intelligence_metrics
             )
             if intelligence_metrics
-            else {d: [] for d in device_ids}
+            else vacio
         )
 
-    grouped: Dict[str, List[TelemetryPointOut]] = {}
-    for dev_id in device_ids:
-        grouped[dev_id] = _merge_series_by_bucket(
-            grouped_base.get(dev_id, []),
-            grouped_intelligence.get(dev_id, []),
+    return {
+        dev_id: _merge_series_by_bucket(
+            grouped_base.get(dev_id, []), grouped_intelligence.get(dev_id, [])
         )
-
-    # Preservar orden original del request
-    return [
-        TelemetryDeviceItemOut(device_id=dev_id, series=grouped[dev_id])
         for dev_id in device_ids
-    ]
+    }

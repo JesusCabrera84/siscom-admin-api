@@ -111,3 +111,68 @@ def test_verify_email_existing_cognito_user_sends_email_attribute(
     assert test_user_data.cognito_sub == existing_sub
     assert token_record.used is True
     assert token_record.password_temp is None
+
+
+# ---------------------------------------------------------------------------
+# Data token adjunto al login (Fase 1)
+# ---------------------------------------------------------------------------
+
+
+def _make_verified_user(db_session, test_organization_data):
+    from app.models.user import User
+
+    user = User(
+        id=uuid4(),
+        organization_id=test_organization_data.id,
+        email="login-datatoken@example.com",
+        full_name="Login Test",
+        email_verified=True,
+        is_master=True,
+        cognito_sub=str(uuid4()),
+    )
+    db_session.add(user)
+    db_session.commit()
+    return user
+
+
+def _cognito_ok():
+    return {
+        "AuthenticationResult": {
+            "AccessToken": "access",
+            "IdToken": "id",
+            "RefreshToken": "refresh",
+            "ExpiresIn": 3600,
+        }
+    }
+
+
+def test_login_without_data_plane_still_succeeds(
+    client, db_session, test_organization_data
+):
+    """
+    El plano de datos no puede impedir iniciar sesión. Sin Valkey el usuario entra
+    igual y verá la aplicación sin mapa, en vez de no poder entrar; el cliente lo
+    reintenta luego contra `POST /auth/data-token`, que ahí sí devuelve 503.
+    """
+    from app.api.deps import get_scope_store
+    from app.main import app as fastapi_app
+    from app.services.scope_store import ScopeStore
+
+    user = _make_verified_user(db_session, test_organization_data)
+    fastapi_app.dependency_overrides[get_scope_store] = lambda: ScopeStore(None)
+
+    try:
+        with patch("app.api.v1.endpoints.auth.cognito") as cognito:
+            cognito.initiate_auth.return_value = _cognito_ok()
+            response = client.post(
+                "/api/v1/auth/login",
+                json={"email": user.email, "password": "irrelevante"},
+            )
+    finally:
+        fastapi_app.dependency_overrides.pop(get_scope_store, None)
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["data_token"] is None
+    # Las credenciales de sesión siguen llegando
+    assert body["access_token"] == "access"

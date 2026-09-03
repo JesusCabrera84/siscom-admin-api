@@ -52,6 +52,12 @@ class UserLoginResponse(BaseModel):
     refresh_token: str
     token_type: str = "Bearer"
     expires_in: int
+    # Credencial del plano de datos, por conveniencia: ahorra un round trip en el
+    # arranque en frío, que es justo cuando el mapa tiene que pintar. Puede venir
+    # a null —el plano de datos no está configurado o no responde—; en ese caso
+    # el cliente la pide en `POST /auth/data-token`, que es la autoridad. Un
+    # fallo ahí nunca impide iniciar sesión.
+    data_token: Optional["DataTokenResponse"] = None
 
     class Config:
         json_schema_extra = {
@@ -405,6 +411,31 @@ class InternalTokenRequest(BaseModel):
                 "service": "gac",
                 "role": "GAC_ADMIN",
                 "expires_in_hours": 24,
+            }
+        }
+
+
+class DataTokenResponse(BaseModel):
+    """
+    Credencial de lectura para el plano de datos (siscom-api).
+
+    Deliberadamente NO devuelve el alcance concedido. Quien pregunta ya sabe qué
+    ve —lo tiene en `GET /units`— y devolverlo aquí crearía una segunda copia del
+    alcance que podría desincronizarse de la que manda, que es la de Valkey.
+    """
+
+    token: str = Field(..., description="Token PASETO v4.public para siscom-api")
+    expires_at: datetime = Field(..., description="Instante de expiración (UTC)")
+    expires_in: int = Field(..., description="Segundos de validez restantes")
+    token_type: str = Field(default="Bearer", description="Tipo de token")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "v4.public.eyJqdGkiOiI...",
+                "expires_at": "2026-08-21T15:40:00Z",
+                "expires_in": 600,
+                "token_type": "Bearer",
             }
         }
 

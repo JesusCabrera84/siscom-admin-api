@@ -89,6 +89,7 @@ def build_device_out(db: Session, device: Device) -> DeviceOut:
 
     return DeviceOut(
         device_id=device.device_id,
+        device_ref=device.device_ref,
         brand=device.brand,
         model=device.model,
         firmware_version=device.firmware_version,
@@ -220,6 +221,7 @@ def list_devices(
     """
     query = db.query(
         Device.device_id,
+        Device.device_ref,
         Device.brand,
         Device.model,
         Device.firmware_version,
@@ -248,6 +250,7 @@ def list_devices(
     devices = [
         DeviceOut(
             device_id=row.device_id,
+            device_ref=row.device_ref,
             brand=row.brand,
             model=row.model,
             firmware_version=row.firmware_version,
@@ -287,6 +290,7 @@ def list_my_devices(
     query = (
         db.query(
             Device.device_id,
+            Device.device_ref,
             Device.brand,
             Device.model,
             Device.firmware_version,
@@ -332,6 +336,7 @@ def list_my_devices(
     for row in results:
         device = DeviceWithProfileOut(
             device_id=row.device_id,
+            device_ref=row.device_ref,
             brand=row.brand,
             model=row.model,
             firmware_version=row.firmware_version,
@@ -381,6 +386,7 @@ def list_unassigned_devices(
     results = (
         db.query(
             Device.device_id,
+            Device.device_ref,
             Device.brand,
             Device.model,
             Device.firmware_version,
@@ -406,6 +412,7 @@ def list_unassigned_devices(
     devices = [
         DeviceOut(
             device_id=row.device_id,
+            device_ref=row.device_ref,
             brand=row.brand,
             model=row.model,
             firmware_version=row.firmware_version,

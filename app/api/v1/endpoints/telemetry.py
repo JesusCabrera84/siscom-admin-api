@@ -28,6 +28,7 @@ from app.schemas.telemetry import (
     TelemetryQueryRequest,
     TelemetrySingleDeviceResponse,
 )
+from app.services.device_identity import resolve_device_identifiers
 from app.services.telemetry import get_telemetry_batch, get_telemetry_single
 
 router = APIRouter()
@@ -52,7 +53,7 @@ router = APIRouter()
     tags=["telemetry"],
 )
 def get_device_telemetry(
-    device_id: str,
+    device_id: str,  # acepta device_ref (UUID) o device_id (IMEI, deprecated)
     from_ts: datetime = Query(
         ...,
         alias="from",
@@ -83,10 +84,14 @@ def get_device_telemetry(
     # Deduplicar sin cambiar orden
     metrics = _dedup(metrics)
 
+    # El cliente puede direccionar por `device_ref` opaco; internamente todo
+    # sigue funcionando con `device_id`.
+    resolved_id = resolve_device_identifiers(db, [device_id])[0]
+
     series = get_telemetry_single(
         db=db,
         user=current_user,
-        device_id=device_id,
+        device_id=resolved_id,
         from_ts=from_ts,
         to_ts=to_ts,
         granularity=granularity,
@@ -94,7 +99,7 @@ def get_device_telemetry(
     )
 
     return TelemetrySingleDeviceResponse(
-        device_id=device_id,
+        device_id=device_id,  # eco del identificador recibido
         granularity=granularity,
         **{"from": from_ts, "to": to_ts},
         metrics=metrics,
@@ -127,15 +132,26 @@ def query_telemetry_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
 ):
+    # El cliente puede direccionar por `device_ref` opaco; internamente todo
+    # sigue funcionando con `device_id`.
+    resolved_ids = resolve_device_identifiers(db, body.device_ids)
+
     devices = get_telemetry_batch(
         db=db,
         user=current_user,
-        device_ids=body.device_ids,
+        device_ids=resolved_ids,
         from_ts=body.from_ts,
         to_ts=body.to_ts,
         granularity=body.granularity,
         metrics=body.metrics,
     )
+
+    # Devolver los identificadores tal y como los envió el cliente: si preguntó
+    # por refs, recibir IMEIs de vuelta le impediría cruzar la respuesta con su
+    # petición (y reintroduciría el IMEI que la migración quiere sacar de en medio).
+    requested_by_resolved = dict(zip(resolved_ids, body.device_ids, strict=True))
+    for item in devices:
+        item.device_id = requested_by_resolved.get(item.device_id, item.device_id)
 
     return TelemetryMultiDeviceResponse(
         granularity=body.granularity,
