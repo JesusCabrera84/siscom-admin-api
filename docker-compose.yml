@@ -32,6 +32,7 @@ services:
       RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
       # PASETO - Token para compartir ubicación
       PASETO_SECRET_KEY: ${PASETO_SECRET_KEY}
+      SHARE_LOCATION_KEY_B64: ${SHARE_LOCATION_KEY_B64}
       # KORE Wireless - API para envío de comandos SMS
       KORE_CLIENT_ID: ${KORE_CLIENT_ID}
       KORE_CLIENT_SECRET: ${KORE_CLIENT_SECRET}
