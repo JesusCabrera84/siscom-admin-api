@@ -30,7 +30,10 @@ class UnitDeviceOut(BaseModel):
 
     id: UUID
     unit_id: UUID
+    unit_ref: Optional[UUID] = None
+    # DEPRECATED: es el IMEI. Usar `device_ref`.
     device_id: str
+    device_ref: Optional[UUID] = None
     assigned_at: datetime
     unassigned_at: Optional[datetime] = None
 
@@ -52,7 +55,10 @@ class UnitDeviceDetail(BaseModel):
 
     id: UUID
     unit_id: UUID
+    unit_ref: Optional[UUID] = None
+    # DEPRECATED: es el IMEI. Usar `device_ref`.
     device_id: str
+    device_ref: Optional[UUID] = None
     assigned_at: datetime
     unassigned_at: Optional[datetime] = None
 
