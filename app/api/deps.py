@@ -383,9 +383,17 @@ def get_auth_cognito_or_paseto(
                 organization_role=org_role_str,
             )
 
-        except HTTPException:
-            # Cognito falló, intentar con PASETO
-            pass
+        except HTTPException as exc:
+            # Solo se cae al camino PASETO cuando el fallo es de CREDENCIAL. Un
+            # fallo del lado del servidor —Cognito inalcanzable, sin JWKS ni
+            # caché— no puede acabar respondiendo 401: eso le diría al cliente
+            # que su credencial es mala y lo mandaría a reautenticarse contra un
+            # problema que ninguna credencial arregla. Peor aún, los clientes que
+            # reaccionan a un 401 pidiendo un token nuevo convierten una caída de
+            # Cognito en una tormenta de peticiones sobre esta misma API.
+            if exc.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
+                raise
+            # 401/403: la credencial no vale para Cognito; puede ser un PASETO.
         except Exception:
             # Cualquier otro error de Cognito, intentar con PASETO
             pass
