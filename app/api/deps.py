@@ -21,7 +21,7 @@ internamente por OrganizationService.
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -39,6 +39,10 @@ from app.services.messaging.kafka_producer import (
 )
 from app.services.organization import OrganizationService
 from app.utils.paseto_token import decode_service_token
+
+if TYPE_CHECKING:  # pragma: no cover - solo para anotaciones
+    from app.services.scope_store import ScopeStore
+    from app.utils.data_token import DataTokenIssuer
 
 
 class BearerAuth(HTTPBearer):
@@ -120,6 +124,30 @@ def get_team_rules_kafka_producer() -> TeamRulesKafkaProducer:
     if _team_rules_kafka_producer is None:
         _team_rules_kafka_producer = TeamRulesKafkaProducer()
     return _team_rules_kafka_producer
+
+
+_data_token_issuer: Optional["DataTokenIssuer"] = None
+_scope_store: Optional["ScopeStore"] = None
+
+
+def get_data_token_issuer() -> "DataTokenIssuer":
+    """Emisor de data tokens (singleton: la clave se carga una vez)."""
+    global _data_token_issuer
+    if _data_token_issuer is None:
+        from app.utils.data_token import DataTokenIssuer
+
+        _data_token_issuer = DataTokenIssuer()
+    return _data_token_issuer
+
+
+def get_scope_store() -> "ScopeStore":
+    """Store de alcances en Valkey (singleton: reutiliza el pool de conexiones)."""
+    global _scope_store
+    if _scope_store is None:
+        from app.services.scope_store import ScopeStore, build_client
+
+        _scope_store = ScopeStore(build_client())
+    return _scope_store
 
 
 def close_rules_kafka_producer() -> None:

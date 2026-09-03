@@ -4,6 +4,7 @@ import hmac
 import logging
 import random
 from datetime import timedelta
+from typing import Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -11,7 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from app.api.deps import BearerAuth, get_current_user, get_current_user_full
+from app.api.deps import (
+    BearerAuth,
+    get_current_user,
+    get_current_user_full,
+    get_data_token_issuer,
+    get_scope_store,
+)
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.account import Account, AccountStatus
@@ -30,6 +37,7 @@ from app.schemas.user import (
     ChangePasswordRequest,
     ChangePasswordResponse,
     ConfirmEmailResponse,
+    DataTokenResponse,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     InternalTokenRequest,
@@ -44,6 +52,7 @@ from app.schemas.user import (
     UserLogin,
     UserLoginResponse,
 )
+from app.services.data_token_issuance import revoke_sessions_for_user
 from app.services.notifications import (
     send_password_reset_email,
     send_verification_email,
@@ -337,7 +346,12 @@ def get_my_account(
 # Login de usuario
 # ------------------------------------------
 @router.post("/login", response_model=UserLoginResponse, status_code=status.HTTP_200_OK)
-def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
+def login_user(
+    credentials: UserLogin,
+    db: Session = Depends(get_db),
+    issuer=Depends(get_data_token_issuer),
+    store=Depends(get_scope_store),
+):
     """
     Autentica un usuario con sus credenciales.
 
@@ -451,6 +465,48 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
         refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=expires_in,
+        data_token=_try_issue_data_token(db, user, issuer, store),
+    )
+
+
+def _try_issue_data_token(db, user, issuer, store) -> Optional[DataTokenResponse]:
+    """
+    Emite el data token para adjuntarlo al login, o `None` si no se puede.
+
+    Deliberadamente best effort: el plano de datos no debe poder impedir iniciar
+    sesión. Si Valkey está caído, el usuario entra igual y verá la aplicación sin
+    mapa en vez de no poder entrar; y el cliente reintentará por su cuenta contra
+    `POST /auth/data-token`, que sí devuelve 503 porque ahí el token es el único
+    producto de la llamada.
+    """
+    from app.services.access_control import subject_for_user
+    from app.services.data_token_issuance import issue_for_subject
+    from app.services.scope_store import (
+        RevocationIndexNotConfigured,
+        ScopeStoreUnavailable,
+    )
+    from app.utils.data_token import DataTokenKeyNotConfigured
+
+    try:
+        issued = issue_for_subject(
+            db,
+            subject=subject_for_user(user),
+            subject_id=user.id,
+            issuer=issuer,
+            store=store,
+        )
+    except (
+        DataTokenKeyNotConfigured,
+        ScopeStoreUnavailable,
+        RevocationIndexNotConfigured,
+    ) as exc:
+        logger.warning("Login sin data token adjunto: %s", exc)
+        return None
+
+    return DataTokenResponse(
+        token=issued.token,
+        expires_at=issued.expires_at,
+        expires_in=int((issued.expires_at - issued.issued_at).total_seconds()),
     )
 
 
@@ -1234,6 +1290,7 @@ def logout_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    store=Depends(get_scope_store),
 ):
     """
     Cierra la sesión del usuario actual en AWS Cognito.
@@ -1254,6 +1311,10 @@ def logout_user(
 
     Nota: Este endpoint requiere autenticación (Bearer token en el header Authorization)
     """
+    # Se revoca ANTES de llamar a Cognito: si Cognito falla, la sesión del plano
+    # de datos ya está cortada. Al revés, un fallo aquí dejaría un data token
+    # vivo tras un logout aparentemente correcto.
+    revoke_sessions_for_user(store, current_user.id)
 
     # 1️⃣ Obtener el access token del header Authorization
     access_token = credentials.credentials
@@ -1335,4 +1396,72 @@ def generate_internal_token(
         token=token,
         expires_at=expires_at,
         token_type="Bearer",
+    )
+
+
+# ------------------------------------------
+# Data token - Credencial del plano de datos (Fase 1)
+# ------------------------------------------
+@router.post(
+    "/data-token",
+    response_model=DataTokenResponse,
+    status_code=status.HTTP_200_OK,
+)
+def issue_data_token(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+    issuer=Depends(get_data_token_issuer),
+    store=Depends(get_scope_store),
+):
+    """
+    Emite una credencial de lectura para el plano de datos (siscom-api).
+
+    **Por qué un endpoint propio y no solo el login:** el alcance cambia en
+    caliente —se asigna una unidad, se abre una ventana de visibilidad— y
+    `/auth/refresh` renueva contra Cognito sin pasar por aquí. Si el data token
+    solo naciera en el login, caducaría a mitad de sesión sin forma de renovarlo
+    salvo volviendo a autenticarse.
+
+    **Qué lleva el token:** un `scope_ref` opaco y una ventana temporal. Nada de
+    identidad: siscom-api no puede aprender de él a qué cliente pertenece quien
+    lo presenta.
+
+    **Efecto secundario deliberado:** emitir revoca los data tokens anteriores
+    del mismo usuario. Estrechar permisos tiene que surtir efecto ya, no cuando
+    caduque el token anterior.
+
+    Responde 503 si falta la clave de firma, Valkey o el secreto del índice de
+    revocación: no se emiten credenciales que no se puedan revocar.
+    """
+    from app.services.access_control import subject_for_user
+    from app.services.data_token_issuance import issue_for_subject
+    from app.services.scope_store import (
+        RevocationIndexNotConfigured,
+        ScopeStoreUnavailable,
+    )
+    from app.utils.data_token import DataTokenKeyNotConfigured
+
+    try:
+        issued = issue_for_subject(
+            db,
+            subject=subject_for_user(current_user),
+            subject_id=current_user.id,
+            issuer=issuer,
+            store=store,
+        )
+    except (
+        DataTokenKeyNotConfigured,
+        ScopeStoreUnavailable,
+        RevocationIndexNotConfigured,
+    ) as exc:
+        logger.error("Data token no disponible: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El servicio de datos no está disponible temporalmente",
+        ) from exc
+
+    return DataTokenResponse(
+        token=issued.token,
+        expires_at=issued.expires_at,
+        expires_in=int((issued.expires_at - issued.issued_at).total_seconds()),
     )
