@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     get_current_user_full,
     get_current_user_id,
+    get_data_token_issuer,
+    get_scope_store,
     get_unit_devices_kafka_producer,
     get_user_units_kafka_producer,
 )
@@ -39,6 +42,11 @@ from app.schemas.vehicle_profile import (
     VehicleProfileOut,
     VehicleProfileUpdate,
 )
+from app.services.data_token_issuance import (
+    issue_share_token,
+    revoke_sessions_for_user,
+    revoke_shares_for_unit,
+)
 from app.services.messaging.control_events import (
     build_unit_device_event,
     build_user_unit_event,
@@ -48,10 +56,19 @@ from app.services.messaging.kafka_producer import (
     UnitDevicesKafkaProducer,
     UserUnitsKafkaProducer,
 )
+from app.services.scope_store import (
+    RevocationIndexNotConfigured,
+    ScopeStoreUnavailable,
+)
+from app.utils.data_token import DataTokenKeyNotConfigured
 from app.utils.datetime import utcnow
-from app.utils.paseto_token import generate_location_share_token
+from app.utils.paseto_token import (
+    ShareLocationKeyNotConfigured,
+    generate_location_share_token,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ============================================
@@ -169,6 +186,7 @@ def list_units(
     query = (
         db.query(
             Unit.id,
+            Unit.unit_ref,
             Unit.organization_id,
             Unit.name,
             func.coalesce(UnitProfile.description, Unit.description).label(
@@ -176,6 +194,7 @@ def list_units(
             ),
             Unit.deleted_at,
             Device.device_id,
+            Device.device_ref,
             Device.brand.label("device_brand"),
             Device.model.label("device_model"),
             UnitDevice.assigned_at,
@@ -220,11 +239,13 @@ def list_units(
     for row in results:
         unit = UnitWithDevice(
             id=row.id,
+            unit_ref=row.unit_ref,
             client_id=row.organization_id,
             name=row.name,
             description=row.description,
             deleted_at=row.deleted_at,
             device_id=row.device_id,
+            device_ref=row.device_ref,
             device_brand=row.device_brand,
             device_model=row.device_model,
             assigned_at=row.assigned_at,
@@ -406,15 +427,27 @@ def get_unit(
 
     total_devices = db.query(UnitDevice).filter(UnitDevice.unit_id == unit_id).count()
 
+    # Dispositivo actualmente asignado (si lo hay), para que el detalle no
+    # obligue al cliente a cruzarlo con el listado.
+    assigned = (
+        db.query(Device.device_id, Device.device_ref)
+        .join(UnitDevice, UnitDevice.device_id == Device.device_id)
+        .filter(UnitDevice.unit_id == unit_id, UnitDevice.unassigned_at.is_(None))
+        .first()
+    )
+
     # Construir respuesta
     detail = UnitDetail(
         id=unit.id,
+        unit_ref=unit.unit_ref,
         client_id=unit.client_id,
         name=unit.name,
         description=unit.description,
         deleted_at=unit.deleted_at,
         active_devices_count=active_devices,
         total_devices_count=total_devices,
+        device_id=assigned.device_id if assigned else None,
+        device_ref=assigned.device_ref if assigned else None,
     )
 
     return detail
@@ -1262,6 +1295,7 @@ def remove_user_from_unit(
     user_units_kafka_producer: UserUnitsKafkaProducer = Depends(
         get_user_units_kafka_producer
     ),
+    store=Depends(get_scope_store),
 ):
     """
     Revoca el acceso de un usuario a una unidad.
@@ -1324,6 +1358,9 @@ def remove_user_from_unit(
         key=str(revoked_user_id),
         endpoint="remove_user_from_unit",
     )
+
+    # Adelanta la caducidad del alcance del plano de datos. Best effort.
+    revoke_sessions_for_user(store, user_id)
 
     return {
         "message": "Acceso revocado exitosamente",
@@ -1463,6 +1500,8 @@ def share_unit_location(
     unit_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_full),
+    issuer=Depends(get_data_token_issuer),
+    store=Depends(get_scope_store),
 ):
     """
     Genera un token PASETO para compartir la ubicación de una unidad.
@@ -1479,16 +1518,19 @@ def share_unit_location(
     **Retorna:**
     - `token`: Token PASETO para compartir
     - `unit_id`: ID de la unidad
-    - `device_id`: ID del dispositivo asignado
+    - `unit_ref`: Identificador opaco de la unidad
+    - `device_id`: DEPRECATED, es el IMEI. Usar `device_ref`
+    - `device_ref`: Identificador opaco del dispositivo
     - `expires_at`: Fecha y hora de expiración
     - `share_url`: URL para compartir (si FRONTEND_URL está configurado)
     """
     # Verificar acceso a la unidad
-    check_unit_access(db, unit_id, current_user)
+    unit = check_unit_access(db, unit_id, current_user)
 
-    # Obtener el dispositivo activo asignado a la unidad
+    # Obtener el dispositivo activo asignado a la unidad, con su ref opaco
     active_assignment = (
-        db.query(UnitDevice)
+        db.query(UnitDevice.device_id, Device.device_ref)
+        .join(Device, Device.device_id == UnitDevice.device_id)
         .filter(UnitDevice.unit_id == unit_id, UnitDevice.unassigned_at.is_(None))
         .first()
     )
@@ -1499,12 +1541,46 @@ def share_unit_location(
             detail="La unidad no tiene un dispositivo asignado actualmente",
         )
 
-    # Generar el token PASETO con el device_id
-    token, expires_at = generate_location_share_token(
-        unit_id=unit_id,
-        device_id=active_assignment.device_id,
-        expires_in_minutes=30,
-    )
+    if settings.SHARE_LOCATION_USE_DATA_TOKEN:
+        # Formato nuevo: data token v4.public con alcance de un solo dispositivo
+        # en Valkey. Es lo que hace posible "dejar de compartir".
+        try:
+            issued = issue_share_token(
+                unit_ref=unit.unit_ref,
+                unit_id=unit_id,
+                device_ref=active_assignment.device_ref,
+                device_id=active_assignment.device_id,
+                issuer=issuer,
+                store=store,
+            )
+        except (
+            DataTokenKeyNotConfigured,
+            ScopeStoreUnavailable,
+            RevocationIndexNotConfigured,
+        ) as exc:
+            logger.error("Compartir ubicación no disponible: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Compartir ubicación no está disponible temporalmente",
+            ) from exc
+        token, expires_at = issued.token, issued.expires_at
+    else:
+        # Formato heredado (v4.local con clave dedicada) mientras siscom-api no
+        # sepa verificar el nuevo. No revoca: el enlace vive sus 30 minutos.
+        # Si falta la clave dedicada se responde 503 en vez de firmar con la
+        # clave de los tokens de servicio: compartirla con siscom-api le
+        # permitiría emitir credenciales `internal-*` contra la API interna.
+        try:
+            token, expires_at = generate_location_share_token(
+                unit_id=unit_id,
+                device_id=active_assignment.device_id,
+                expires_in_minutes=30,
+            )
+        except ShareLocationKeyNotConfigured as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Compartir ubicación no está disponible temporalmente",
+            ) from exc
 
     # Construir URL de compartir si está configurado FRONTEND_URL
     share_url = None
@@ -1514,7 +1590,39 @@ def share_unit_location(
     return ShareLocationResponse(
         token=token,
         unit_id=unit_id,
+        unit_ref=unit.unit_ref,
         device_id=active_assignment.device_id,
+        device_ref=active_assignment.device_ref,
         expires_at=expires_at,
         share_url=share_url,
     )
+
+
+@router.delete("/{unit_id}/share-location", status_code=status.HTTP_200_OK)
+def stop_sharing_unit_location(
+    unit_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_full),
+    store=Depends(get_scope_store),
+):
+    """
+    Apaga los enlaces de ubicación compartidos de una unidad.
+
+    Solo tiene efecto sobre enlaces emitidos con el formato nuevo (data token):
+    los del formato heredado no se pueden revocar, viven hasta caducar. Es
+    precisamente la carencia que motivó la migración.
+
+    Requiere: Acceso a la unidad (maestro o en user_units).
+    """
+    check_unit_access(db, unit_id, current_user)
+
+    try:
+        revoked = revoke_shares_for_unit(store, unit_id)
+    except (ScopeStoreUnavailable, RevocationIndexNotConfigured) as exc:
+        logger.error("No se pudo dejar de compartir: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El servicio de datos no está disponible temporalmente",
+        ) from exc
+
+    return {"revoked": revoked}

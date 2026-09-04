@@ -26,39 +26,48 @@ def secret_32_bytes() -> bytes:
 
 @pytest.fixture
 def paseto_secret_b64(secret_32_bytes) -> str:
+    """Clave de los tokens de SERVICIO (`internal-*`)."""
     return _b64_key(secret_32_bytes)
 
 
 @pytest.fixture
-def paseto_generator(monkeypatch, paseto_secret_b64):
-    """PasetoTokenGenerator con clave controlada (sin depender del .env)."""
+def share_secret_b64() -> str:
+    """Clave de los tokens de compartir ubicación. Distinta de la de servicio."""
+    return _b64_key(bytes(range(100, 132)))
+
+
+@pytest.fixture
+def _patched_keys(monkeypatch, paseto_secret_b64, share_secret_b64):
+    """Parchea ambas claves para no depender del .env."""
+    assert paseto_secret_b64 != share_secret_b64
     monkeypatch.setattr(
         "app.utils.paseto_token.settings.PASETO_SECRET_KEY",
         paseto_secret_b64,
     )
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64",
+        share_secret_b64,
+    )
+
+
+@pytest.fixture
+def paseto_generator(_patched_keys):
+    """PasetoTokenGenerator con claves controladas (sin depender del .env)."""
     from app.utils.paseto_token import PasetoTokenGenerator
 
     return PasetoTokenGenerator()
 
 
 @pytest.fixture
-def paseto_module_reloaded(monkeypatch, paseto_secret_b64):
-    """Módulo recargado para que paseto_generator singleton use la clave parcheada."""
-    monkeypatch.setattr(
-        "app.utils.paseto_token.settings.PASETO_SECRET_KEY",
-        paseto_secret_b64,
-    )
+def paseto_module_reloaded(_patched_keys):
+    """Módulo recargado para que el singleton use las claves parcheadas."""
     import app.utils.paseto_token as pt
 
     return importlib.reload(pt)
 
 
-def test_generator_raises_when_pyseto_rejects_key(monkeypatch):
+def test_generator_raises_when_pyseto_rejects_key(_patched_keys):
     """Si la clave resultante es inválida para v4.local, falla en Key.new."""
-    monkeypatch.setattr(
-        "app.utils.paseto_token.settings.PASETO_SECRET_KEY",
-        _b64_key(b"x" * 32),
-    )
     from app.utils.paseto_token import PasetoTokenGenerator
 
     with patch("app.utils.paseto_token.Key") as mock_key:
@@ -67,49 +76,55 @@ def test_generator_raises_when_pyseto_rejects_key(monkeypatch):
             PasetoTokenGenerator()
 
 
-def test_generator_pads_secret_shorter_than_32_bytes(monkeypatch):
-    raw_short = b"only-10-ch"  # 10 bytes
+def test_service_key_pads_secret_shorter_than_32_bytes(monkeypatch, share_secret_b64):
+    """El relleno histórico se conserva SOLO en la clave de servicio."""
     monkeypatch.setattr(
         "app.utils.paseto_token.settings.PASETO_SECRET_KEY",
-        _b64_key(raw_short),
+        _b64_key(b"only-10-ch"),
+    )
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", share_secret_b64
     )
     from app.utils.paseto_token import PasetoTokenGenerator
 
     gen = PasetoTokenGenerator()
-    unit_id = uuid4()
-    token, _exp = gen.generate_share_token(unit_id, "device-pad")
-    out = gen.decode_share_token(token)
+    token, _exp = gen.generate_service_token("gac", "GAC_ADMIN")
+    out = gen.decode_service_token(token)
     assert out is not None
-    assert out["unit_id"] == str(unit_id)
-    assert out["device_id"] == "device-pad"
+    assert out["service"] == "gac"
 
 
-def test_generator_truncates_secret_longer_than_32_bytes(monkeypatch):
-    raw_long = b"a" * 40
+def test_service_key_truncates_secret_longer_than_32_bytes(
+    monkeypatch, share_secret_b64
+):
     monkeypatch.setattr(
         "app.utils.paseto_token.settings.PASETO_SECRET_KEY",
-        _b64_key(raw_long),
+        _b64_key(b"a" * 40),
+    )
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", share_secret_b64
     )
     from app.utils.paseto_token import PasetoTokenGenerator
 
     gen = PasetoTokenGenerator()
-    unit_id = uuid4()
-    token, _exp = gen.generate_share_token(unit_id, "device-trunc")
-    assert gen.decode_share_token(token)["unit_id"] == str(unit_id)
+    token, _exp = gen.generate_service_token("gac", "GAC_ADMIN")
+    assert gen.decode_service_token(token)["role"] == "GAC_ADMIN"
 
 
-def test_two_generators_same_padded_secret_round_trip(monkeypatch):
-    """Dos instancias con la misma clave eficaz pueden decodificar tokens mutuamente."""
-    raw = b"short"
-    b64 = _b64_key(raw)
-    monkeypatch.setattr("app.utils.paseto_token.settings.PASETO_SECRET_KEY", b64)
+def test_two_generators_same_padded_secret_round_trip(monkeypatch, share_secret_b64):
+    """Dos instancias con la misma clave eficaz se decodifican mutuamente."""
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.PASETO_SECRET_KEY", _b64_key(b"short")
+    )
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", share_secret_b64
+    )
     from app.utils.paseto_token import PasetoTokenGenerator
 
     g1 = PasetoTokenGenerator()
     g2 = PasetoTokenGenerator()
-    uid = uuid4()
-    token, _ = g1.generate_share_token(uid, "d")
-    assert g2.decode_share_token(token)["unit_id"] == str(uid)
+    token, _ = g1.generate_service_token("gac", "GAC_ADMIN")
+    assert g2.decode_service_token(token)["service"] == "gac"
 
 
 def test_generate_share_token_rejects_empty_device_id(paseto_generator):
@@ -167,13 +182,13 @@ def test_decode_share_token_returns_none_for_tampered_token(paseto_generator):
 
 
 def test_decode_share_token_returns_none_when_wrong_key(
-    monkeypatch, paseto_generator, paseto_secret_b64
+    monkeypatch, paseto_generator, paseto_secret_b64, share_secret_b64
 ):
     uid = uuid4()
     token, _ = paseto_generator.generate_share_token(uid, "d")
     other = _b64_key(bytes(range(32, 64)))
-    assert other != paseto_secret_b64
-    monkeypatch.setattr("app.utils.paseto_token.settings.PASETO_SECRET_KEY", other)
+    assert other != share_secret_b64
+    monkeypatch.setattr("app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", other)
     from app.utils.paseto_token import PasetoTokenGenerator
 
     other_gen = PasetoTokenGenerator()
@@ -207,7 +222,7 @@ def test_decode_share_token_returns_none_without_exp_key(paseto_generator):
         "iat": datetime.now(timezone.utc).isoformat(),
     }
     token = pyseto.encode(
-        key=paseto_generator.key,
+        key=paseto_generator.share_key,
         payload=json.dumps(raw).encode("utf-8"),
     ).decode("utf-8")
     assert paseto_generator.decode_share_token(token) is None
@@ -262,9 +277,9 @@ def test_decode_service_token_accepts_each_builtin_scope_literal(paseto_generato
         import pyseto
 
         payload_bytes = json.dumps(raw_payload).encode("utf-8")
-        token = pyseto.encode(key=paseto_generator.key, payload=payload_bytes).decode(
-            "utf-8"
-        )
+        token = pyseto.encode(
+            key=paseto_generator.service_key, payload=payload_bytes
+        ).decode("utf-8")
         out = paseto_generator.decode_service_token(token)
         assert out is not None, scope
         assert out["scope"] == scope
@@ -282,9 +297,9 @@ def test_decode_service_token_flexible_scope_for_gac_internal_prefix(paseto_gene
     import pyseto
 
     payload_bytes = json.dumps(raw_payload).encode("utf-8")
-    token = pyseto.encode(key=paseto_generator.key, payload=payload_bytes).decode(
-        "utf-8"
-    )
+    token = pyseto.encode(
+        key=paseto_generator.service_key, payload=payload_bytes
+    ).decode("utf-8")
     assert paseto_generator.decode_service_token(token) is not None
 
 
@@ -302,7 +317,7 @@ def test_decode_service_token_rejects_unknown_scope_without_gac_internal_rule(
     import pyseto
 
     token = pyseto.encode(
-        key=paseto_generator.key,
+        key=paseto_generator.service_key,
         payload=json.dumps(raw_payload).encode("utf-8"),
     ).decode("utf-8")
     assert paseto_generator.decode_service_token(token) is None
@@ -320,7 +335,7 @@ def test_decode_service_token_rejects_bad_scope_for_non_gac_service(paseto_gener
     import pyseto
 
     token = pyseto.encode(
-        key=paseto_generator.key,
+        key=paseto_generator.service_key,
         payload=json.dumps(raw_payload).encode("utf-8"),
     ).decode("utf-8")
     assert paseto_generator.decode_service_token(token) is None
@@ -350,7 +365,7 @@ def test_decode_service_token_passes_when_scope_missing_but_exp_valid(paseto_gen
     import pyseto
 
     token = pyseto.encode(
-        key=paseto_generator.key,
+        key=paseto_generator.service_key,
         payload=json.dumps(raw_payload).encode("utf-8"),
     ).decode("utf-8")
     out = paseto_generator.decode_service_token(token)
@@ -363,7 +378,7 @@ def test_decode_service_token_returns_none_without_exp_key(paseto_generator):
 
     raw = {"service": "gac", "role": "GAC_ADMIN", "scope": "internal-gac-admin"}
     token = pyseto.encode(
-        key=paseto_generator.key,
+        key=paseto_generator.service_key,
         payload=json.dumps(raw).encode("utf-8"),
     ).decode("utf-8")
     assert paseto_generator.decode_service_token(token) is None
@@ -374,33 +389,6 @@ def test_decode_service_token_returns_none_on_decode_error(paseto_generator):
 
     with patch.object(pt.pyseto, "decode", side_effect=ValueError("bad")):
         assert paseto_generator.decode_service_token("t") is None
-
-
-def test_decode_any_token_accepts_share_and_service_tokens(paseto_generator):
-    uid = uuid4()
-    share_t, _ = paseto_generator.generate_share_token(uid, "d")
-    svc_t, _ = paseto_generator.generate_service_token("gac", "GAC_ADMIN")
-
-    s1 = paseto_generator.decode_any_token(share_t)
-    s2 = paseto_generator.decode_any_token(svc_t)
-    assert s1 is not None and s1["scope"] == "public-location-share"
-    assert s2 is not None and s2["scope"] == "internal-gac-admin"
-
-
-def test_decode_any_token_returns_none_on_failure(paseto_generator):
-    import app.utils.paseto_token as pt
-
-    with patch.object(pt.pyseto, "decode", side_effect=OSError("x")):
-        assert paseto_generator.decode_any_token("v4.local.x") is None
-
-
-def test_decode_any_token_returns_none_on_bad_json(paseto_generator):
-    import app.utils.paseto_token as pt
-
-    decoded = MagicMock()
-    decoded.payload = b"{{"
-    with patch.object(pt.pyseto, "decode", return_value=decoded):
-        assert paseto_generator.decode_any_token("t") is None
 
 
 def test_module_helpers_round_trip_after_reload(paseto_module_reloaded):
@@ -442,3 +430,173 @@ def test_module_singleton_matches_fresh_generator_same_secret(
 
     tok2, _ = fresh.generate_share_token(uuid4(), "d-sg")
     assert mod.decode_location_share_token(tok2) is not None
+
+
+# ---------------------------------------------------------------------------
+# Separación de claves (paso 0 de Fase 1)
+#
+# Estos tests fijan la propiedad de seguridad, no la implementación: quien
+# tenga la clave de compartir ubicación NO debe poder firmar ni verificar
+# tokens de servicio internos, y viceversa.
+# ---------------------------------------------------------------------------
+
+
+def test_share_and_service_keys_are_distinct(paseto_generator):
+    assert paseto_generator.share_key is not paseto_generator.service_key
+
+
+def test_share_token_is_not_verifiable_with_the_service_key(paseto_generator):
+    """
+    El núcleo del paso 0: siscom-api recibe solo la clave de compartir, así que
+    un token de compartir no puede validarse ni emitirse con la de servicio.
+    """
+    import pyseto
+
+    token, _ = paseto_generator.generate_share_token(uuid4(), "dev-x")
+    with pytest.raises(pyseto.DecryptError):
+        pyseto.decode(keys=paseto_generator.service_key, token=token)
+
+
+def test_service_token_is_not_verifiable_with_the_share_key(paseto_generator):
+    """
+    La dirección que cierra la escalada: quien tenga la clave de compartir no
+    puede leer —ni por tanto falsificar— tokens `internal-*`.
+    """
+    import pyseto
+
+    token, _ = paseto_generator.generate_service_token("gac", "GAC_ADMIN")
+    with pytest.raises(pyseto.DecryptError):
+        pyseto.decode(keys=paseto_generator.share_key, token=token)
+
+
+def test_token_forged_with_share_key_is_rejected_as_service_token(paseto_generator):
+    """
+    Simula a siscom-api intentando emitir un token administrativo con la única
+    clave que posee. Debe ser rechazado.
+    """
+    import pyseto
+
+    forged_payload = {
+        "token_id": str(uuid4()),
+        "service": "gac",
+        "role": "GAC_ADMIN",
+        "scope": "internal-gac-admin",
+        "iat": datetime.now(timezone.utc).isoformat(),
+        "exp": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    }
+    forged = pyseto.encode(
+        key=paseto_generator.share_key,
+        payload=json.dumps(forged_payload).encode("utf-8"),
+    ).decode("utf-8")
+
+    assert paseto_generator.decode_service_token(forged) is None
+
+
+def test_missing_share_key_raises_instead_of_falling_back(
+    monkeypatch, paseto_secret_b64
+):
+    """Sin clave de compartir se falla; NUNCA se degrada a la de servicio."""
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.PASETO_SECRET_KEY", paseto_secret_b64
+    )
+    monkeypatch.setattr("app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", None)
+    from app.utils.paseto_token import (
+        PasetoTokenGenerator,
+        ShareLocationKeyNotConfigured,
+    )
+
+    gen = PasetoTokenGenerator()
+
+    # Los tokens de servicio siguen funcionando: la falta del secreto degrada
+    # solo compartir ubicación, no la API entera.
+    assert gen.decode_service_token(gen.generate_service_token("gac", "X")[0])
+
+    with pytest.raises(ShareLocationKeyNotConfigured):
+        gen.generate_share_token(uuid4(), "dev-x")
+
+
+@pytest.mark.parametrize(
+    "bad_key, reason",
+    [
+        (_b64_key(b"\x00" * 32), "todo ceros (el valor de .env.example)"),
+        (_b64_key(b"too-short"), "menos de 32 bytes"),
+        (_b64_key(b"a" * 40), "más de 32 bytes"),
+        ("no-es-base64!!", "no es base64"),
+    ],
+)
+def test_invalid_share_key_is_rejected_at_construction(
+    monkeypatch, paseto_secret_b64, bad_key, reason
+):
+    """
+    La clave de compartir se valida de forma estricta: nada de rellenar con
+    ceros en silencio, que es lo que enmascaraba una clave débil.
+    """
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.PASETO_SECRET_KEY", paseto_secret_b64
+    )
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", bad_key
+    )
+    from app.utils.paseto_token import PasetoTokenGenerator
+
+    with pytest.raises(ValueError):
+        PasetoTokenGenerator()
+
+
+def test_decode_any_token_no_longer_exists(paseto_generator):
+    """
+    Aceptaba cualquier token válido sin mirar el scope, así que un token de
+    compartir pasaba por uno de servicio. Se elimina en vez de heredarse.
+    """
+    assert not hasattr(paseto_generator, "decode_any_token")
+
+    import app.utils.paseto_token as pt
+
+    assert not hasattr(pt, "decode_any_token")
+
+
+def test_padding_warning_names_the_interoperability_consequence(
+    monkeypatch, share_secret_b64, caplog
+):
+    """
+    El relleno no solo baja la entropía: hace que un verificador que NO rellena
+    derive una clave distinta, así que los tokens no validan aunque los dos lados
+    tengan la misma cadena configurada. Ese es el fallo caro, y el aviso tiene
+    que nombrarlo — si alguien reescribe el texto y deja solo lo de la entropía,
+    este test cae.
+    """
+    import logging
+
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.PASETO_SECRET_KEY", _b64_key(b"corta")
+    )
+    monkeypatch.setattr(
+        "app.utils.paseto_token.settings.SHARE_LOCATION_KEY_B64", share_secret_b64
+    )
+    from app.utils.paseto_token import PasetoTokenGenerator
+
+    with caplog.at_level(logging.WARNING, logger="app.utils.paseto_token"):
+        PasetoTokenGenerator()
+
+    message = " ".join(r.getMessage() for r in caplog.records).lower()
+    assert "distinta" in message
+    assert "no validan" in message
+
+
+def test_padding_produces_a_different_key_than_no_padding():
+    """
+    Fija el mecanismo del fallo: con la MISMA cadena de configuración, rellenar y
+    no rellenar dan claves efectivas distintas. Es lo que rompe compartir
+    ubicación entre servicios que derivan distinto.
+    """
+    import base64
+
+    from app.utils.paseto_token import _V4_LOCAL_KEY_BYTES
+
+    raw = base64.b64decode(_b64_key(b"veintiun-bytes-justos"))
+    assert len(raw) < _V4_LOCAL_KEY_BYTES
+
+    con_relleno = raw.ljust(_V4_LOCAL_KEY_BYTES, b"\0")
+    sin_relleno = raw
+
+    assert con_relleno != sin_relleno

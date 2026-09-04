@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     get_current_organization_id,
     get_current_user_id,
+    get_scope_store,
     get_unit_devices_kafka_producer,
 )
 from app.db.session import get_db
@@ -15,6 +16,7 @@ from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.schemas.unit_device import UnitDeviceCreate, UnitDeviceDetail, UnitDeviceOut
+from app.services.data_token_issuance import revoke_shares_for_unit_best_effort
 from app.services.messaging.control_events import (
     build_unit_device_event,
     publish_control_event,
@@ -76,13 +78,39 @@ def list_unit_devices(
         db.query(Unit.id).filter(Unit.organization_id == organization_id).subquery()
     )
 
-    query = db.query(UnitDevice).filter(UnitDevice.unit_id.in_(org_units))
+    # Se proyecta con JOIN en lugar de devolver el ORM directamente porque los
+    # identificadores opacos viven en `units` y `devices`, no en la tabla puente.
+    query = (
+        db.query(
+            UnitDevice.id,
+            UnitDevice.unit_id,
+            Unit.unit_ref,
+            UnitDevice.device_id,
+            Device.device_ref,
+            UnitDevice.assigned_at,
+            UnitDevice.unassigned_at,
+        )
+        .join(Unit, Unit.id == UnitDevice.unit_id)
+        .join(Device, Device.device_id == UnitDevice.device_id)
+        .filter(UnitDevice.unit_id.in_(org_units))
+    )
 
     if active_only:
         query = query.filter(UnitDevice.unassigned_at.is_(None))
 
-    assignments = query.order_by(UnitDevice.assigned_at.desc()).all()
-    return assignments
+    rows = query.order_by(UnitDevice.assigned_at.desc()).all()
+    return [
+        UnitDeviceOut(
+            id=row.id,
+            unit_id=row.unit_id,
+            unit_ref=row.unit_ref,
+            device_id=row.device_id,
+            device_ref=row.device_ref,
+            assigned_at=row.assigned_at,
+            unassigned_at=row.unassigned_at,
+        )
+        for row in rows
+    ]
 
 
 @router.post("", response_model=UnitDeviceOut, status_code=status.HTTP_201_CREATED)
@@ -273,7 +301,9 @@ def get_unit_device(
     detail = UnitDeviceDetail(
         id=assignment.id,
         unit_id=assignment.unit_id,
+        unit_ref=unit.unit_ref if unit else None,
         device_id=assignment.device_id,
+        device_ref=device.device_ref if device else None,
         assigned_at=assignment.assigned_at,
         unassigned_at=assignment.unassigned_at,
         unit_name=unit.name if unit else None,
@@ -294,6 +324,7 @@ def delete_unit_device(
     unit_devices_kafka_producer: UnitDevicesKafkaProducer = Depends(
         get_unit_devices_kafka_producer
     ),
+    store=Depends(get_scope_store),
 ):
     """
     Desasigna un dispositivo de una unidad.
@@ -373,6 +404,12 @@ def delete_unit_device(
         key=device.device_id,
         endpoint="delete_unit_device",
     )
+
+    # El dispositivo ya no pertenece a esta unidad, así que los enlaces de
+    # ubicación compartidos de la unidad apuntan a algo que ya no le corresponde.
+    # Se apagan de inmediato en vez de esperar a que caduquen: si el dispositivo
+    # se reasigna a otra organización, ese enlace cruzaría la frontera.
+    revoke_shares_for_unit_best_effort(store, assignment.unit_id)
 
     return {
         "message": "Dispositivo desasignado exitosamente",

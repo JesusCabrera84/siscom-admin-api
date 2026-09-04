@@ -35,6 +35,16 @@ class Unit(SQLModel, table=True):
             nullable=False,
         ),
     )
+    # Identificador opaco de la unidad, disjunto de `id`, para direccionar la
+    # unidad desde el plano de datos sin exponer la clave primaria interna.
+    unit_ref: UUID = Field(
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            nullable=False,
+            unique=True,
+            server_default=text("gen_random_uuid()"),
+        )
+    )
     name: str = Field(sa_column=Column(Text, nullable=False))
     description: Optional[str] = Field(
         default=None, sa_column=Column(Text, nullable=True)

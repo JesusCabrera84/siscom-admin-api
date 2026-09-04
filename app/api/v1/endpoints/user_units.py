@@ -4,12 +4,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user_full, get_user_units_kafka_producer
+from app.api.deps import (
+    get_current_user_full,
+    get_scope_store,
+    get_user_units_kafka_producer,
+)
 from app.db.session import get_db
 from app.models.unit import Unit
 from app.models.user import User
 from app.models.user_unit import UserUnit
 from app.schemas.user_unit import UserUnitCreate, UserUnitDetail, UserUnitOut
+from app.services.data_token_issuance import revoke_sessions_for_user
 from app.services.messaging.control_events import (
     build_user_unit_event,
     publish_control_event,
@@ -93,6 +98,7 @@ def list_user_units(
             id=assignment.id,
             user_id=assignment.user_id,
             unit_id=assignment.unit_id,
+            unit_ref=unit.unit_ref if unit else None,
             granted_by=assignment.granted_by,
             granted_at=assignment.granted_at,
             role=assignment.role,
@@ -229,6 +235,7 @@ def delete_user_unit(
     user_units_kafka_producer: UserUnitsKafkaProducer = Depends(
         get_user_units_kafka_producer
     ),
+    store=Depends(get_scope_store),
 ):
     """
     Revoca el acceso de un usuario a una unidad.
@@ -277,6 +284,11 @@ def delete_user_unit(
         key=str(revoked_user_id),
         endpoint="delete_user_unit",
     )
+
+    # El permiso ya está retirado en Postgres; esto adelanta el momento en que el
+    # plano de datos se entera. Best effort: si Valkey no responde, el alcance
+    # viejo caduca solo y no tiene sentido fallar una operación ya completada.
+    revoke_sessions_for_user(store, revoked_user_id)
 
     return {
         "message": "Acceso revocado exitosamente",
