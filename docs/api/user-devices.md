@@ -155,38 +155,35 @@ Con esa configuración, solicitudes con `platform=ios` intentarán registrar end
 
 ## Publicación de Eventos en Kafka
 
-Al completar exitosamente las operaciones, se publica un evento en Kafka al tópico configurado por la variable de entorno `KAFKA_USER_DEVICES_UPDATES_TOPIC`.
+Al completar exitosamente las operaciones, se publica un evento en Kafka al tópico configurado por `KAFKA_USER_DEVICES_UPDATES_TOPIC` (default `user-devices-updates`). La **key** es el UUID de la fila (`user_devices.id`), no el token push.
 
 Si el envío a Kafka falla, el endpoint **no falla**: se registra el error en logs y la respuesta HTTP se mantiene exitosa.
+
+El payload usa el envelope de control-plane (`event_id`, `event_type`, `entity`, `organization_id`, `data`). **No** incluye `unit_id`: quién recibe el push lo resuelve `alert-distributor` con masters ∪ `user_units`.
 
 ### Evento para altas/cambios (`register`)
 
 ```json
 {
-  "type": "UPSERT",
-  "user_id": "uuid",
-  "device_id": "string",
-  "endpoint_arn": "arn:aws:sns:us-east-1:123456789012:endpoint/APNS/app/...",
-  "unit_id": "uuid",
-  "is_active": true,
-  "updated_at": "2026-04-13T20:10:00Z"
+  "event_id": "uuid",
+  "event_type": "UPSERT",
+  "entity": "user_device",
+  "timestamp": "2026-09-03T18:04:00Z",
+  "organization_id": "uuid",
+  "data": {
+    "id": "uuid",
+    "user_id": "uuid",
+    "device_token": "string",
+    "platform": "ios",
+    "endpoint_arn": "arn:aws:sns:us-east-1:123456789012:endpoint/APNS/app/...",
+    "is_active": true,
+    "updated_at": "2026-09-03T18:04:00Z"
+  }
 }
 ```
 
 ### Evento para desactivación (`deactivate`)
 
-```json
-{
-  "type": "DELETE",
-  "user_id": "uuid",
-  "device_id": "string",
-  "endpoint_arn": "arn:aws:sns:us-east-1:123456789012:endpoint/APNS/app/...",
-  "unit_id": "uuid",
-  "is_active": false,
-  "updated_at": "2026-04-13T20:10:00Z"
-}
-```
-
-`unit_id` se toma de la asignación más reciente del usuario en `user_units`. Si el usuario no tiene unidades asignadas, se envía `null`.
+Mismo envelope con `"event_type": "DELETE"` y `"is_active": false`.
 
 `endpoint_arn` se publica con el valor almacenado en `user_devices.endpoint_arn` al momento del evento.

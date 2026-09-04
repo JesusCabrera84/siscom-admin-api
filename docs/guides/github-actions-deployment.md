@@ -123,6 +123,10 @@ Ve a: **Settings → Environments → `test` → Environment variables**
 - `DB_NAME`: Nombre de la base de datos. Ejemplo: `siscom_admin`
 - `COGNITO_REGION`: Región de AWS Cognito. Ejemplo: `us-east-1`
 - `ALLOWED_ORIGINS`: Orígenes CORS permitidos. Ejemplo: `https://admin.geminislabs.com,https://nexus.geminislabs.com`
+- `KAFKA_UNIT_DEVICES_UPDATES_TOPIC`: Tópico de asignaciones unidad-dispositivo. Default: `unit-devices-updates`
+- `KAFKA_USER_UNITS_UPDATES_TOPIC`: Tópico de grants usuario-unidad. Default: `user-units-updates`
+
+Antes de deploy: los tópicos y ACLs tienen que existir en Redpanda, y **event-processor** / **alert-distributor** ya tienen que estar consumiendo esos nombres. Si las vars no están en el environment `test`, el workflow escribe los defaults.
 
 `ALLOWED_ORIGINS` acepta una lista separada por comas o un JSON array, por ejemplo:
 

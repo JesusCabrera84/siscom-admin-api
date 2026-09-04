@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     KAFKA_RULES_UPDATES_TOPIC: str = "alert-rules-updates"
     KAFKA_GEOFENCES_UPDATES_TOPIC: str = "geofences-updates"
     KAFKA_USER_DEVICES_UPDATES_TOPIC: str = "user-devices-updates"
+    KAFKA_UNIT_DEVICES_UPDATES_TOPIC: str = "unit-devices-updates"
+    KAFKA_USER_UNITS_UPDATES_TOPIC: str = "user-units-updates"
     KAFKA_MOBILITY_TOPIC: str = "mobility-locations-raw"
     KAFKA_TEAM_RULES_TOPIC: str = "team-rules-updates"
     KAFKA_RULES_UPDATES_GROUP_ID: str = "alert-rules-updates-group"

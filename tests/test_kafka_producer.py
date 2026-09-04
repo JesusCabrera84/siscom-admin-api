@@ -9,7 +9,9 @@ from app.services.messaging.kafka_producer import (
     GeofencesKafkaProducer,
     MobilityKafkaProducer,
     RulesKafkaProducer,
+    UnitDevicesKafkaProducer,
     UserDevicesKafkaProducer,
+    UserUnitsKafkaProducer,
 )
 
 
@@ -23,6 +25,12 @@ def kafka_settings(monkeypatch):
     monkeypatch.setattr(kp_mod.settings, "KAFKA_RULES_UPDATES_TOPIC", "rules-topic")
     monkeypatch.setattr(kp_mod.settings, "KAFKA_RULES_UPDATES_GROUP_ID", "rules-group")
     monkeypatch.setattr(kp_mod.settings, "KAFKA_USER_DEVICES_UPDATES_TOPIC", "ud-topic")
+    monkeypatch.setattr(
+        kp_mod.settings, "KAFKA_UNIT_DEVICES_UPDATES_TOPIC", "unit-dev-topic"
+    )
+    monkeypatch.setattr(
+        kp_mod.settings, "KAFKA_USER_UNITS_UPDATES_TOPIC", "user-units-topic"
+    )
     monkeypatch.setattr(kp_mod.settings, "KAFKA_GEOFENCES_UPDATES_TOPIC", "gf-topic")
     monkeypatch.setattr(kp_mod.settings, "KAFKA_MOBILITY_TOPIC", "mobility-topic")
 
@@ -138,3 +146,23 @@ def test_mobility_publish_success_path(monkeypatch, kafka_settings):
             "lon": -100.39,
         },
     )
+
+
+def test_unit_devices_publish_success_path(monkeypatch, kafka_settings):
+    future = MagicMock()
+    future.get.return_value = None
+    mock_inner = MagicMock()
+    mock_inner.send.return_value = future
+    monkeypatch.setattr(kp_mod, "KafkaProducer", MagicMock(return_value=mock_inner))
+
+    prod = UnitDevicesKafkaProducer()
+    assert prod.publish_update({"event_type": "UPSERT"}, key="0848072989") is True
+    mock_inner.send.assert_called_once()
+
+
+def test_user_units_publish_failure_returns_false(monkeypatch, kafka_settings):
+    monkeypatch.setattr(
+        kp_mod, "KafkaProducer", MagicMock(side_effect=RuntimeError("boom"))
+    )
+    prod = UserUnitsKafkaProducer()
+    assert prod.publish_update({"event_type": "DELETE"}) is False

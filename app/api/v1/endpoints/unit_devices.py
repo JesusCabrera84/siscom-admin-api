@@ -5,12 +5,21 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_organization_id, get_current_user_id
+from app.api.deps import (
+    get_current_organization_id,
+    get_current_user_id,
+    get_unit_devices_kafka_producer,
+)
 from app.db.session import get_db
 from app.models.device import Device, DeviceEvent
 from app.models.unit import Unit
 from app.models.unit_device import UnitDevice
 from app.schemas.unit_device import UnitDeviceCreate, UnitDeviceDetail, UnitDeviceOut
+from app.services.messaging.control_events import (
+    build_unit_device_event,
+    publish_control_event,
+)
+from app.services.messaging.kafka_producer import UnitDevicesKafkaProducer
 from app.utils.datetime import utcnow
 
 router = APIRouter()
@@ -82,6 +91,9 @@ def create_unit_device(
     organization_id: UUID = Depends(get_current_organization_id),
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    unit_devices_kafka_producer: UnitDevicesKafkaProducer = Depends(
+        get_unit_devices_kafka_producer
+    ),
 ):
     """
     Asigna un dispositivo a una unidad.
@@ -210,6 +222,19 @@ def create_unit_device(
 
     db.refresh(unit_device)
 
+    publish_control_event(
+        unit_devices_kafka_producer,
+        build_unit_device_event(
+            event_type="UPSERT",
+            device_id=device.device_id,
+            organization_id=organization_id,
+            unit_id=assignment.unit_id,
+            is_active=True,
+        ),
+        key=device.device_id,
+        endpoint="create_unit_device",
+    )
+
     return unit_device
 
 
@@ -266,6 +291,9 @@ def delete_unit_device(
     organization_id: UUID = Depends(get_current_organization_id),
     user_id: UUID = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    unit_devices_kafka_producer: UnitDevicesKafkaProducer = Depends(
+        get_unit_devices_kafka_producer
+    ),
 ):
     """
     Desasigna un dispositivo de una unidad.
@@ -330,6 +358,21 @@ def delete_unit_device(
     )
 
     db.commit()
+
+    publish_control_event(
+        unit_devices_kafka_producer,
+        build_unit_device_event(
+            event_type="UPSERT",
+            device_id=device.device_id,
+            organization_id=None,
+            unit_id=None,
+            previous_unit_id=assignment.unit_id,
+            previous_organization_id=organization_id,
+            is_active=False,
+        ),
+        key=device.device_id,
+        endpoint="delete_unit_device",
+    )
 
     return {
         "message": "Dispositivo desasignado exitosamente",

@@ -11,6 +11,7 @@ from app.api.deps import (
     get_current_organization_id,
     get_current_user_full,
     get_current_user_id,
+    get_unit_devices_kafka_producer,
 )
 from app.db.session import get_db
 from app.models.device import Device, DeviceEvent
@@ -28,6 +29,11 @@ from app.schemas.device import (
     DeviceWithProfileOut,
     SimKoreProfileOut,
 )
+from app.services.messaging.control_events import (
+    build_unit_device_event,
+    publish_control_event,
+)
+from app.services.messaging.kafka_producer import UnitDevicesKafkaProducer
 from app.utils.datetime import utcnow
 
 router = APIRouter()
@@ -633,6 +639,9 @@ def update_device_status(
     status_update: DeviceStatusUpdate,
     db: Session = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
+    unit_devices_kafka_producer: UnitDevicesKafkaProducer = Depends(
+        get_unit_devices_kafka_producer
+    ),
 ):
     """
     Actualiza el estado del dispositivo siguiendo las reglas de negocio.
@@ -655,6 +664,7 @@ def update_device_status(
 
     old_status = device.status
     new_status = status_update.new_status
+    assignment_event = None
 
     # ============================================
     # Validaciones según el nuevo estado
@@ -737,7 +747,15 @@ def update_device_status(
             .first()
         )
 
+        previous_unit_id = None
+        previous_organization_id = None
         if existing_assignment:
+            previous_unit_id = existing_assignment.unit_id
+            previous_unit = (
+                db.query(Unit).filter(Unit.id == existing_assignment.unit_id).first()
+            )
+            if previous_unit:
+                previous_organization_id = previous_unit.organization_id
             # Desasignar de la unidad anterior
             existing_assignment.unassigned_at = utcnow()
             db.add(existing_assignment)
@@ -754,6 +772,15 @@ def update_device_status(
         device.last_assignment_at = utcnow()
 
         event_details = f"Dispositivo asignado a unidad {unit.name}"
+        assignment_event = build_unit_device_event(
+            event_type="UPSERT",
+            device_id=device.device_id,
+            organization_id=unit.organization_id,
+            unit_id=unit.id,
+            previous_unit_id=previous_unit_id,
+            previous_organization_id=previous_organization_id,
+            is_active=True,
+        )
 
     elif new_status == "devuelto":
         # Desasignar de cualquier unidad activa
@@ -767,7 +794,15 @@ def update_device_status(
             .first()
         )
 
+        previous_unit_id = None
+        previous_organization_id = None
         if active_assignment:
+            previous_unit_id = active_assignment.unit_id
+            previous_unit = (
+                db.query(Unit).filter(Unit.id == active_assignment.unit_id).first()
+            )
+            if previous_unit:
+                previous_organization_id = previous_unit.organization_id
             active_assignment.unassigned_at = utcnow()
             db.add(active_assignment)
 
@@ -776,6 +811,15 @@ def update_device_status(
         device.status = "devuelto"
 
         event_details = "Dispositivo devuelto al inventario"
+        assignment_event = build_unit_device_event(
+            event_type="UPSERT",
+            device_id=device.device_id,
+            organization_id=None,
+            unit_id=None,
+            previous_unit_id=previous_unit_id,
+            previous_organization_id=previous_organization_id,
+            is_active=False,
+        )
 
     elif new_status == "inactivo":
         # Baja definitiva
@@ -820,6 +864,14 @@ def update_device_status(
 
     db.commit()
     db.refresh(device)
+
+    if assignment_event:
+        publish_control_event(
+            unit_devices_kafka_producer,
+            assignment_event,
+            key=device.device_id,
+            endpoint="update_device_status",
+        )
 
     return device
 

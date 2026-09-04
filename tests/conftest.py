@@ -22,6 +22,12 @@ from app.api.deps import (
     get_current_organization_id,
     get_current_user_full,
     get_current_user_id,
+    get_geofences_kafka_producer,
+    get_mobility_kafka_producer,
+    get_rules_kafka_producer,
+    get_unit_devices_kafka_producer,
+    get_user_devices_kafka_producer,
+    get_user_units_kafka_producer,
 )
 from app.db.session import get_db
 from app.main import app
@@ -77,6 +83,30 @@ def _create_test_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+
+class _SilentKafkaProducer:
+    def publish_update(self, payload=None, key=None):
+        return True
+
+    def publish_rule_update(self, payload=None, key=None):
+        return True
+
+    def publish_location(self, payload=None, key=None):
+        return True
+
+    def close(self):
+        return None
+
+
+def _stub_kafka_producers():
+    producer = _SilentKafkaProducer()
+    app.dependency_overrides[get_user_devices_kafka_producer] = lambda: producer
+    app.dependency_overrides[get_unit_devices_kafka_producer] = lambda: producer
+    app.dependency_overrides[get_user_units_kafka_producer] = lambda: producer
+    app.dependency_overrides[get_geofences_kafka_producer] = lambda: producer
+    app.dependency_overrides[get_rules_kafka_producer] = lambda: producer
+    app.dependency_overrides[get_mobility_kafka_producer] = lambda: producer
 
 
 @pytest.fixture(autouse=True)
@@ -227,6 +257,7 @@ def client(db_session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+    _stub_kafka_producers()
 
     with TestClient(app) as test_client:
         yield test_client
@@ -386,6 +417,7 @@ def authenticated_client(client, test_organization_data, test_user_data):
     app.dependency_overrides[get_current_user_full] = override_get_current_user_full
     app.dependency_overrides[get_current_user_id] = override_get_current_user_id
     app.dependency_overrides[get_auth_for_gac_admin] = override_get_auth_for_gac_admin
+    _stub_kafka_producers()
 
     yield client
 
