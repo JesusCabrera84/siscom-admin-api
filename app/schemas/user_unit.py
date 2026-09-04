@@ -50,6 +50,7 @@ class UserUnitOut(BaseModel):
     id: UUID
     user_id: UUID
     unit_id: UUID
+    unit_ref: Optional[UUID] = None
     granted_by: Optional[UUID] = None
     granted_at: datetime
     role: str
@@ -74,6 +75,7 @@ class UserUnitDetail(BaseModel):
     id: UUID
     user_id: UUID
     unit_id: UUID
+    unit_ref: Optional[UUID] = None
     granted_by: Optional[UUID] = None
     granted_at: datetime
     role: str

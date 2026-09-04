@@ -42,8 +42,21 @@ class Device(SQLModel, table=True):
         ),
     )
 
-    # device_id es ahora PRIMARY KEY
+    # device_id es ahora PRIMARY KEY. OJO: es el IMEI (la migración 005 renombró
+    # la columna `imei`, no creó un identificador nuevo). Para direccionar el
+    # dispositivo fuera de este servicio se usa `device_ref`.
     device_id: str = Field(sa_column=Column(Text, primary_key=True))
+
+    # Identificador opaco, sin relación con el hardware ni con claves internas.
+    # Es el único que viaja al plano de datos (siscom-api) y a las URLs.
+    device_ref: UUID = Field(
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            nullable=False,
+            unique=True,
+            server_default=text("gen_random_uuid()"),
+        )
+    )
 
     brand: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     model: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))

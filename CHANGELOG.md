@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Soft foundations (PR-2): `.devcontainer/`, `docs/security/threat-model.md`, GitHub issue templates, process ADRs (002, 003)
 - Quality gates (PR-3): `CODEOWNERS`, `dependabot.yml`, `docs/GOVERNANCE.md`, OSV-Scanner, `osv-scanner.toml`
 - Coverage floor (65% on `app/`) via `pyproject.toml`
+- Fase 1 — aislamiento del plano de datos:
+  - `devices.device_ref` y `units.unit_ref`: identificadores opacos (UUIDv4) para direccionar dispositivos y unidades sin exponer el IMEI. `device_id` **es** el IMEI (lo renombró la migración 005), así que hoy acaba en los logs de acceso de uvicorn y del ALB y en cabeceras `Referer`. Las columnas se añaden; `device_id` y `units.id` siguen existiendo y funcionando (migración `025`)
+  - `app/utils/data_token.py`: emisión de data tokens PASETO **v4.public** (Ed25519). admin-api firma, siscom-api solo verifica — asimétrico a propósito: con v4.local el verificador también podría firmar
+  - `app/services/scope_store.py`: el alcance se materializa en Valkey (`dt:scope:<ref>`), con TTL por encima del token. Las claves del índice de revocación por propietario se derivan por HMAC, de modo que Valkey nunca revela de quién es un alcance
+  - `POST /auth/data-token` y data token adjunto al login. El plano de datos no puede impedir iniciar sesión: sin Valkey el login sigue funcionando y el cliente reintenta contra ese endpoint
+  - Autorización temporal: el alcance lleva ventanas `[from, to)`; una petición parcialmente cubierta se recorta al rango autorizado en vez de rechazarse, y `to: null` significa ventana abierta (datos en vivo autorizados)
+  - Revocación: `DELETE /units/{id}/share-location` invalida los enlaces emitidos con el formato nuevo
+  - ADR-005 documenta el diseño y la secuencia de despliegue
+
 - `scripts/gitleaks-scan.sh`, `scripts/pip-audit-scan.sh`, `scripts/osv-scan.sh`, `scripts/setup.sh`
 - `.pre-commit-config.yaml` (Ruff, Black, hygiene hooks)
 - `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/RELEASE.md`
@@ -40,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth: las peticiones sin header `Authorization` (o con esquema distinto de Bearer) responden `401` con `WWW-Authenticate: Bearer` en lugar del `403` por defecto de `HTTPBearer`. Los clientes iOS/Android disparan el refresh de token solo con `401`
 - `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
 - User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
+- Auth: una caída de Cognito (JWKS inalcanzable y sin caché) ya no se presenta como `401`. En los endpoints de doble autenticación el error 5xx se propaga en vez de caer al camino PASETO y acabar respondiendo `401`, que mandaba al cliente a reautenticarse contra un problema que ninguna credencial arregla — y convertía la caída en una tormenta de peticiones sobre esta API
 
 ### Notes
 
@@ -49,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gitleaks + Semgrep + pip-audit + OSV-Scanner in CI `security` job
 - `POST /api/v1/mobility/locations` y `/batch` exigen JWT y validan que el `device_id` pertenezca a un dispositivo activo del usuario autenticado. Antes aceptaban cualquier `device_id` sin autenticación, lo que permitía inyectar ubicaciones de terceros al tópico de Kafka
+- PASETO: los tokens de compartir ubicación se firman con `SHARE_LOCATION_KEY_B64`, una clave dedicada, en lugar de con `PASETO_SECRET_KEY`. El verificador de esos tokens vive en siscom-api; entregarle la clave de servicio le permitía firmar tokens `internal-*` y llamar a la API interna como administrador. Sin la clave nueva configurada, `/units/{id}/share-location` responde `503` en vez de degradar a la clave de servicio (ver ADR-004)
+- `decode_any_token` se elimina: probaba las dos claves contra el mismo token, de modo que un token de compartir ubicación podía acabar aceptado donde se esperaba uno de servicio
+- `scripts/paseto_key_fingerprint.py` imprime la huella SHA-256 (12 hex) del material de clave **efectivo**, para comparar entre servicios sin transmitir la clave
+- Telemetría: el acceso a un dispositivo deja de ser un booleano y pasa a ser un conjunto de rangos temporales autorizados. Un dispositivo reasignado a otra organización deja de ser legible por la anterior fuera de la ventana en que estuvo asignado
+- El resolver de alcance es explícito por sujeto (`ScopeSubject`): `accessible_device_ids`, que decidía a partir del usuario implícito, se elimina
 
 ## [1.24.0] - 2026-08-25
 

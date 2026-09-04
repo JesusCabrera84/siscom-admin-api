@@ -112,8 +112,8 @@ def api_client(client, master_user):
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_full] = lambda: master_user
-    app.dependency_overrides[get_current_organization_id] = (
-        lambda: master_user.organization_id
+    app.dependency_overrides[get_current_organization_id] = lambda: (
+        master_user.organization_id
     )
     app.dependency_overrides[get_current_user_id] = lambda: master_user.id
 
@@ -242,91 +242,196 @@ class TestTelemetryAccessControl:
         )
         return mock_db
 
+    @staticmethod
+    def _refs(**concesiones):
+        """AccessibleRefs con las concesiones dadas: internal_id -> ventanas."""
+        from uuid import uuid4
+
+        from app.services.access_control import AccessibleRefs, Grant
+
+        return AccessibleRefs(
+            units={},
+            devices={
+                uuid4(): Grant(internal_id=internal_id, windows=windows)
+                for internal_id, windows in concesiones.items()
+            },
+        )
+
     def test_validate_device_access_passes_for_accessible_device(self):
+        from app.services.access_control import TimeWindow
         from app.services.telemetry import validate_device_access
 
         user = _make_user(is_master=True)
-        with patch(
-            "app.services.telemetry._get_accessible_device_ids",
-            return_value=["DEV-001", "DEV-002"],
-        ):
-            # No debe lanzar excepción
-            validate_device_access(MagicMock(), user, "DEV-001")
+        refs = self._refs(**{"DEV-001": (TimeWindow(),)})
+
+        with patch("app.services.telemetry.accessible_refs", return_value=refs):
+            rangos = validate_device_access(
+                MagicMock(),
+                user,
+                "DEV-001",
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 2, 1, tzinfo=timezone.utc),
+            )
+
+        assert rangos  # ventana abierta: todo el rango pedido está autorizado
 
     def test_validate_device_access_raises_404_for_inaccessible(self):
         from fastapi import HTTPException
 
+        from app.services.access_control import TimeWindow
         from app.services.telemetry import validate_device_access
 
         user = _make_user(is_master=False)
-        with patch(
-            "app.services.telemetry._get_accessible_device_ids",
-            return_value=["DEV-ALLOWED"],
-        ):
-            with pytest.raises(HTTPException) as exc_info:
-                validate_device_access(MagicMock(), user, "DEV-FORBIDDEN")
-            assert exc_info.value.status_code == 404
+        refs = self._refs(**{"DEV-ALLOWED": (TimeWindow(),)})
 
-    def test_validate_batch_raises_404_if_any_device_missing(self):
+        with patch("app.services.telemetry.accessible_refs", return_value=refs):
+            with pytest.raises(HTTPException) as exc_info:
+                validate_device_access(
+                    MagicMock(),
+                    user,
+                    "DEV-FORBIDDEN",
+                    datetime(2026, 1, 1, tzinfo=timezone.utc),
+                    datetime(2026, 2, 1, tzinfo=timezone.utc),
+                )
+        assert exc_info.value.status_code == 404
+
+    def test_access_outside_the_window_is_404_not_an_empty_series(self):
+        """
+        Pedir un rango entero posterior a la marcha del equipo no es "sin datos":
+        es "no tienes permiso ahí". Devolver una serie vacía confundiría la
+        ausencia de permiso con la ausencia de datos.
+        """
         from fastapi import HTTPException
 
-        from app.services.telemetry import validate_batch_device_access
+        from app.services.access_control import TimeWindow
+        from app.services.telemetry import validate_device_access
 
         user = _make_user(is_master=True)
-        with patch(
-            "app.services.telemetry._get_accessible_device_ids",
-            return_value=["DEV-001"],
-        ):
-            with pytest.raises(HTTPException) as exc_info:
-                validate_batch_device_access(
-                    MagicMock(), user, ["DEV-001", "DEV-FORBIDDEN"]
+        refs = self._refs(
+            **{
+                "DEV-001": (
+                    TimeWindow(
+                        start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                        end=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                    ),
                 )
-            assert exc_info.value.status_code == 404
+            }
+        )
 
-    def test_validate_batch_passes_when_all_accessible(self):
-        from app.services.telemetry import validate_batch_device_access
+        with patch("app.services.telemetry.accessible_refs", return_value=refs):
+            with pytest.raises(HTTPException) as exc_info:
+                validate_device_access(
+                    MagicMock(),
+                    user,
+                    "DEV-001",
+                    datetime(2026, 6, 1, tzinfo=timezone.utc),
+                    datetime(2026, 7, 1, tzinfo=timezone.utc),
+                )
+        assert exc_info.value.status_code == 404
+
+    def test_a_partially_covered_range_is_clipped_not_rejected(self):
+        """Enero–diciembre con el equipo hasta marzo devuelve enero–marzo."""
+        from app.services.access_control import TimeWindow
+        from app.services.telemetry import validate_device_access
 
         user = _make_user(is_master=True)
-        with patch(
-            "app.services.telemetry._get_accessible_device_ids",
-            return_value=["DEV-001", "DEV-002"],
-        ):
-            # No debe lanzar excepción
-            validate_batch_device_access(MagicMock(), user, ["DEV-001", "DEV-002"])
+        fin = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        refs = self._refs(
+            **{
+                "DEV-001": (
+                    TimeWindow(
+                        start=datetime(2026, 1, 1, tzinfo=timezone.utc), end=fin
+                    ),
+                )
+            }
+        )
 
-    def test_master_queries_all_org_devices(self):
-        from app.services.telemetry import _get_accessible_device_ids
+        with patch("app.services.telemetry.accessible_refs", return_value=refs):
+            rangos = validate_device_access(
+                MagicMock(),
+                user,
+                "DEV-001",
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 12, 31, tzinfo=timezone.utc),
+            )
+
+        assert rangos == [(datetime(2026, 1, 1, tzinfo=timezone.utc), fin)]
+
+    def test_batch_rejects_the_whole_request_if_any_is_unauthorised(self):
+        from fastapi import HTTPException
+
+        from app.services.access_control import TimeWindow
+        from app.services.telemetry import _authorized_ranges_for_batch
 
         user = _make_user(is_master=True)
+        refs = self._refs(**{"DEV-001": (TimeWindow(),)})
 
-        mock_db = MagicMock()
-        mock_rows = [("DEV-001",), ("DEV-002",)]
-        # master path: query().join().filter().distinct().all()
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value
-        ) = mock_rows
+        with patch("app.services.telemetry.accessible_refs", return_value=refs):
+            with pytest.raises(HTTPException) as exc_info:
+                _authorized_ranges_for_batch(
+                    MagicMock(),
+                    user,
+                    ["DEV-001", "DEV-AJENO"],
+                    datetime(2026, 1, 1, tzinfo=timezone.utc),
+                    datetime(2026, 2, 1, tzinfo=timezone.utc),
+                )
+        assert exc_info.value.status_code == 404
 
-        result = _get_accessible_device_ids(mock_db, user)
+    def test_batch_passes_when_all_are_authorised(self):
+        from app.services.access_control import TimeWindow
+        from app.services.telemetry import _authorized_ranges_for_batch
 
-        # Verifica que usó la rama master (join sobre Unit)
-        assert mock_db.query.called
-        assert "DEV-001" in result
-        assert "DEV-002" in result
+        user = _make_user(is_master=True)
+        refs = self._refs(**{"DEV-001": (TimeWindow(),), "DEV-002": (TimeWindow(),)})
 
-    def test_regular_user_queries_via_user_units(self):
-        from app.services.telemetry import _get_accessible_device_ids
+        with patch("app.services.telemetry.accessible_refs", return_value=refs):
+            rangos = _authorized_ranges_for_batch(
+                MagicMock(),
+                user,
+                ["DEV-001", "DEV-002"],
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 2, 1, tzinfo=timezone.utc),
+            )
+
+        assert set(rangos) == {"DEV-001", "DEV-002"}
+
+    def test_a_master_becomes_an_organization_wide_subject(self):
+        """
+        La resolución vive en `access_control` con el sujeto explícito; aquí solo
+        se comprueba que telemetría traduce el usuario a su sujeto y delega.
+        """
+        import app.services.telemetry as tel_mod
+        from app.services.access_control import AccessibleRefs
+
+        user = _make_user(is_master=True)
+        visto = {}
+
+        def fake_refs(db, subject):
+            visto["subject"] = subject
+            return AccessibleRefs(units={}, devices={})
+
+        with patch.object(tel_mod, "accessible_refs", fake_refs):
+            tel_mod.authorized_ranges(MagicMock(), user, "X", None, None)
+
+        assert visto["subject"].is_organization_wide
+        assert visto["subject"].organization_id == user.organization_id
+
+    def test_a_regular_user_becomes_a_user_scoped_subject(self):
+        import app.services.telemetry as tel_mod
+        from app.services.access_control import AccessibleRefs
 
         user = _make_user(is_master=False)
+        visto = {}
 
-        mock_db = MagicMock()
-        mock_rows = [("DEV-001",)]
-        # regular path: query().filter().distinct().all()
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.distinct.return_value.all.return_value
-        ) = mock_rows
+        def fake_refs(db, subject):
+            visto["subject"] = subject
+            return AccessibleRefs(units={}, devices={})
 
-        _get_accessible_device_ids(mock_db, user)
-        assert mock_db.query.called
+        with patch.object(tel_mod, "accessible_refs", fake_refs):
+            tel_mod.authorized_ranges(MagicMock(), user, "X", None, None)
+
+        assert not visto["subject"].is_organization_wide
+        assert visto["subject"].user_id == user.id
 
 
 # ===========================================================================

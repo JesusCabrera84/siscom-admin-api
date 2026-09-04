@@ -275,3 +275,66 @@ def test_require_capability_raises_when_disabled(monkeypatch):
 def test_preconfigured_gac_admin_dependency_is_factory():
     """Smoke: la dependencia preconfigurada es callable."""
     assert callable(get_auth_for_gac_admin)
+
+
+# ---------------------------------------------------------------------------
+# Un fallo de infraestructura no puede disfrazarse de credencial inválida
+# ---------------------------------------------------------------------------
+
+
+def test_cognito_outage_surfaces_as_503_not_401():
+    """
+    Si Cognito es inalcanzable y no hay JWKS en caché, `verify_cognito_token`
+    lanza 503. Ese 503 NO puede acabar convertido en 401 al caer al camino
+    PASETO: un 401 le dice al cliente que su credencial es mala y lo manda a
+    reautenticarse contra un problema que ninguna credencial arregla. Los
+    clientes que reaccionan a un 401 pidiendo un token nuevo convierten además
+    una caída de Cognito en una tormenta de peticiones sobre esta misma API.
+    """
+    from unittest.mock import patch
+
+    from fastapi import HTTPException, status
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from app.api.deps import get_auth_cognito_or_paseto
+
+    dep = get_auth_cognito_or_paseto(required_service="gac", required_role="GAC_ADMIN")
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="no-es-paseto")
+    caida = HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="No se pudo verificar la autenticación",
+    )
+
+    with patch("app.api.deps.verify_cognito_token", side_effect=caida):
+        with pytest.raises(HTTPException) as exc_info:
+            dep(credentials=creds, db=None)
+
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+def test_invalid_cognito_credential_still_falls_through_to_paseto():
+    """
+    La otra mitad: un 401 de Cognito SÍ debe seguir cayendo al camino PASETO, o
+    los tokens de servicio dejarían de funcionar. El corte es por clase de
+    error, no por que haya error.
+    """
+    from unittest.mock import patch
+
+    from fastapi import HTTPException, status
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from app.api.deps import get_auth_cognito_or_paseto
+    from app.utils.paseto_token import generate_service_token
+
+    token, _ = generate_service_token("gac", "GAC_ADMIN")
+    dep = get_auth_cognito_or_paseto(required_service="gac", required_role="GAC_ADMIN")
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+    credencial_mala = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+    )
+
+    with patch("app.api.deps.verify_cognito_token", side_effect=credencial_mala):
+        result = dep(credentials=creds, db=None)
+
+    assert result.auth_type == "paseto"
+    assert result.role == "GAC_ADMIN"

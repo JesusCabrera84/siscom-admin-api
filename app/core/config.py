@@ -46,8 +46,61 @@ class Settings(BaseSettings):
     # reCAPTCHA v3 - Secret key para validación
     RECAPTCHA_SECRET_KEY: Optional[str] = None
 
-    # PASETO - Token para compartir ubicación
+    # PASETO - Clave de tokens de SERVICIO interno (GAC/Nexus/App admin).
+    # NO usar para tokens de compartir ubicación: firma credenciales
+    # administrativas y no debe salir de este servicio.
     PASETO_SECRET_KEY: str
+
+    # Clave dedicada a los tokens de compartir ubicación (v4.local, 32 bytes
+    # base64). Se separa de PASETO_SECRET_KEY porque el verificador de estos
+    # tokens vive en siscom-api: compartir la clave de servicio le permitiría
+    # firmar tokens `internal-*` y llamar a la API interna como administrador.
+    # Si no está configurada, /units/{id}/share-location responde 503 en lugar
+    # de degradar a la clave de servicio.
+    SHARE_LOCATION_KEY_B64: Optional[str] = None
+
+    # ---------------------------------------------------------------------
+    # Data token del plano de datos (Fase 1)
+    #
+    # PASETO v4.public (Ed25519): admin-api FIRMA, siscom-api solo VERIFICA.
+    # Asimétrico a propósito — con v4.local el verificador también podría
+    # firmar, que es justo la escalada que este diseño elimina.
+    # ---------------------------------------------------------------------
+    # Clave PRIVADA Ed25519: base64 del PEM PKCS8 en UNA línea. El heredoc que
+    # escribe el .env en el despliegue (deploy.yml) rompe con valores multilínea.
+    DATA_TOKEN_PRIVATE_KEY_B64: Optional[str] = None
+    # Identificador de clave; viaja en el footer del token (que va en claro y
+    # autenticado) para poder rotar sin cortar servicio.
+    DATA_TOKEN_KEY_ID: str = "v1"
+    # Vida máxima del token. Es un techo: si el alcance caduca antes —una ventana
+    # horaria de team que cierra— se emite hasta ese límite y no más.
+    DATA_TOKEN_MAX_TTL_SECONDS: int = 600
+    # Suelo, para no emitir tokens inservibles justo antes de un límite.
+    DATA_TOKEN_MIN_TTL_SECONDS: int = 30
+    # Audiencia; siscom-api debe rechazar cualquier otra.
+    DATA_TOKEN_AUDIENCE: str = "siscom-api"
+    # Secreto (base64, 32 bytes) con el que se derivan las claves del índice
+    # inverso de revocación. El índice relaciona usuario → scope_refs vivos, así
+    # que su clave se deriva por HMAC para que no sea invertible: aunque la ACL
+    # de Valkey esté mal desplegada y siscom-api pueda leerla, no aprende de quién
+    # es. Sin este secreto no se puede revocar, y sin poder revocar no se emite.
+    DATA_TOKEN_INDEX_SECRET_B64: Optional[str] = None
+
+    # Vida de un enlace de compartir ubicación. Más larga que la de un data token
+    # de sesión porque el destinatario es una persona que abre un enlace, no un
+    # cliente que sabe refrescar.
+    SHARE_TOKEN_TTL_SECONDS: int = 1800
+    # Interruptor de la migración de compartir ubicación a v4.public. Explícito y
+    # no deducido de si hay claves configuradas: el cambio de formato tiene que
+    # ocurrir DESPUÉS de que siscom-api sepa verificar el formato nuevo, y esa
+    # condición no es observable desde aquí. Ver ADR-005.
+    SHARE_LOCATION_USE_DATA_TOKEN: bool = False
+
+    # Valkey (plano de datos). Sin esto no hay dónde materializar el alcance.
+    VALKEY_URL: Optional[str] = None
+    # Margen del TTL de la clave sobre el del token, para que el alcance nunca
+    # expire por debajo de un token todavía válido.
+    VALKEY_SCOPE_TTL_MARGIN_SECONDS: int = 300
 
     # KORE Wireless
     KORE_CLIENT_ID: Optional[str] = None

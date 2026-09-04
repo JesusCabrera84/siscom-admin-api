@@ -143,7 +143,9 @@ class DeviceStatusUpdate(BaseModel):
 class DeviceOut(BaseModel):
     """Schema de salida para dispositivos"""
 
+    # DEPRECATED: es el IMEI. Usar `device_ref` para direccionar el dispositivo.
     device_id: str
+    device_ref: Optional[UUID] = None
     brand: Optional[str] = None
     model: Optional[str] = None
     firmware_version: Optional[str] = None
@@ -165,6 +167,7 @@ class DeviceOut(BaseModel):
         json_schema_extra = {
             "example": {
                 "device_id": "864537040123456",
+                "device_ref": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
                 "brand": "Suntech",
                 "model": "ST300",
                 "firmware_version": "1.0.17",
@@ -210,6 +213,7 @@ class DeviceWithProfileOut(DeviceOut):
         json_schema_extra = {
             "example": {
                 "device_id": "864537040123456",
+                "device_ref": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
                 "brand": "Suntech",
                 "model": "ST300",
                 "firmware_version": "1.0.17",

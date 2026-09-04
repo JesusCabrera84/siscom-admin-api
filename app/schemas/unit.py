@@ -74,6 +74,8 @@ class UnitOut(UnitBase):
     """Schema de salida para unidad"""
 
     id: UUID
+    # Identificador opaco: el único que debe viajar al plano de datos.
+    unit_ref: Optional[UUID] = None
     client_id: UUID
     deleted_at: Optional[datetime] = None
 
@@ -82,6 +84,7 @@ class UnitOut(UnitBase):
         json_schema_extra = {
             "example": {
                 "id": "abc12345-e89b-12d3-a456-426614174000",
+                "unit_ref": "9f1c7b52-3a41-4f9e-b0d2-7c5e8a1b4d63",
                 "client_id": "def45678-e89b-12d3-a456-426614174000",
                 "name": "Camión #45",
                 "description": "Camión de reparto zona norte",
@@ -94,10 +97,14 @@ class UnitWithDevice(UnitBase):
     """Schema de unidad con información del dispositivo asignado"""
 
     id: UUID
+    unit_ref: Optional[UUID] = None
     client_id: UUID
     deleted_at: Optional[datetime] = None
     # Información del dispositivo asignado (null si no tiene)
+    # DEPRECATED: `device_id` es el IMEI. Usar `device_ref` para direccionar el
+    # dispositivo; `device_id` se mantiene mientras migran las apps móviles.
     device_id: Optional[str] = None
+    device_ref: Optional[UUID] = None
     device_brand: Optional[str] = None
     device_model: Optional[str] = None
     assigned_at: Optional[datetime] = None
@@ -116,11 +123,13 @@ class UnitWithDevice(UnitBase):
         json_schema_extra = {
             "example": {
                 "id": "abc12345-e89b-12d3-a456-426614174000",
+                "unit_ref": "9f1c7b52-3a41-4f9e-b0d2-7c5e8a1b4d63",
                 "client_id": "def45678-e89b-12d3-a456-426614174000",
                 "name": "Camión #45",
                 "description": "Camión de reparto zona norte",
                 "deleted_at": None,
                 "device_id": "864537040123456",
+                "device_ref": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
                 "device_brand": "Suntech",
                 "device_model": "ST300",
                 "assigned_at": "2025-11-15T10:30:00Z",
@@ -144,6 +153,14 @@ class UnitDetail(UnitOut):
     total_devices_count: int = Field(
         default=0, description="Total de dispositivos (histórico)"
     )
+    # Dispositivo actualmente asignado. Antes había que sacarlo del listado
+    # `GET /units`; se expone aquí para que el detalle sea autosuficiente.
+    device_id: Optional[str] = Field(
+        default=None, description="DEPRECATED: IMEI del dispositivo. Usar device_ref"
+    )
+    device_ref: Optional[UUID] = Field(
+        default=None, description="Identificador opaco del dispositivo asignado"
+    )
 
     class Config:
         from_attributes = True
@@ -153,9 +170,12 @@ class UnitDetail(UnitOut):
                 "client_id": "def45678-e89b-12d3-a456-426614174000",
                 "name": "Camión #45",
                 "description": "Camión de reparto zona norte",
+                "unit_ref": "9f1c7b52-3a41-4f9e-b0d2-7c5e8a1b4d63",
                 "deleted_at": None,
                 "active_devices_count": 2,
                 "total_devices_count": 3,
+                "device_id": "864537040123456",
+                "device_ref": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
             }
         }
 
@@ -165,7 +185,15 @@ class ShareLocationResponse(BaseModel):
 
     token: str = Field(..., description="Token PASETO para compartir ubicación")
     unit_id: UUID = Field(..., description="ID de la unidad")
-    device_id: str = Field(..., description="ID del dispositivo asignado")
+    unit_ref: Optional[UUID] = Field(
+        None, description="Identificador opaco de la unidad"
+    )
+    device_id: str = Field(
+        ..., description="DEPRECATED: ID del dispositivo (IMEI). Usar device_ref"
+    )
+    device_ref: Optional[UUID] = Field(
+        None, description="Identificador opaco del dispositivo"
+    )
     expires_at: datetime = Field(
         ..., description="Fecha y hora de expiración del token"
     )
@@ -178,7 +206,9 @@ class ShareLocationResponse(BaseModel):
             "example": {
                 "token": "v4.local.xxxxxxxxxxxxx",
                 "unit_id": "abc12345-e89b-12d3-a456-426614174000",
+                "unit_ref": "9f1c7b52-3a41-4f9e-b0d2-7c5e8a1b4d63",
                 "device_id": "864537040123456",
+                "device_ref": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
                 "expires_at": "2025-12-03T15:30:00Z",
                 "share_url": "https://app.example.com/share/v4.local.xxxxxxxxxxxxx",
             }
