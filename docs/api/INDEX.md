@@ -283,6 +283,7 @@ Gestión de permisos usuario-unidad.
 **Endpoints:**
 - `GET /api/v1/user-units` - Listar asignaciones usuario-unidad
 - `POST /api/v1/user-units` - Asignar usuario a unidad
+- `DELETE /api/v1/user-units/{assignment_id}` - Revocar acceso
 
 ### [unit-profiles.md](./unit-profiles.md)
 Gestión de perfiles de unidades (vehículos, personas, assets).
@@ -542,8 +543,12 @@ POST   /api/v1/units/{unit_id}/share-location
 GET    /api/v1/unit-devices
 POST   /api/v1/unit-devices
 GET    /api/v1/unit-devices/{assignment_id}
+DELETE /api/v1/unit-devices/{assignment_id}
 GET    /api/v1/user-units
 POST   /api/v1/user-units
+DELETE /api/v1/user-units/{assignment_id}
+POST   /api/v1/units/{unit_id}/users
+DELETE /api/v1/units/{unit_id}/users/{user_id}
 
 # Commands & Trips
 POST   /api/v1/commands

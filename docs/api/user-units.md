@@ -411,3 +411,28 @@ Estos endpoints son equivalentes pero organizados jerárquicamente. La elección
 
 - **Usar `/user-units/`** cuando se gestiona desde la perspectiva de permisos globales
 - **Usar `/units/{id}/users`** cuando se gestiona desde la perspectiva de una unidad específica
+
+---
+
+## Publicación de Eventos en Kafka
+
+Tras el `COMMIT` de `POST` o `DELETE` (tanto `/api/v1/user-units` como `/api/v1/units/{unit_id}/users`), se publica un evento al tópico `KAFKA_USER_UNITS_UPDATES_TOPIC` (default `user-units-updates`). Key: `user_id`.
+
+Si Kafka falla, el HTTP **no** falla: se loguea `Fallo publicando evento de control`.
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "UPSERT",
+  "entity": "user_unit",
+  "timestamp": "2026-09-03T17:22:11Z",
+  "organization_id": "uuid",
+  "data": {
+    "user_id": "uuid",
+    "unit_id": "uuid",
+    "role": "viewer"
+  }
+}
+```
+
+`DELETE` usa `"event_type": "DELETE"`. Los masters **no** generan filas ni eventos: el distributor los resuelve por `users.is_master`.
