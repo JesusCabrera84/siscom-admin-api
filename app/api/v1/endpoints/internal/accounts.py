@@ -95,11 +95,11 @@ def list_all_accounts(
     owner_subq = (
         db.query(
             AccountUser.account_id,
-            User.email.label("owner_email"),
+            func.min(User.email).label("owner_email"),
         )
         .join(User, User.id == AccountUser.user_id)
         .filter(AccountUser.role == AccountRole.OWNER.value)
-        .distinct(AccountUser.account_id)
+        .group_by(AccountUser.account_id)
         .subquery()
     )
 

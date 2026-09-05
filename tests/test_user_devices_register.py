@@ -7,8 +7,12 @@ from app.api.v1.endpoints import user_devices as user_devices_endpoint
 from app.main import app
 
 
-class _FakeUserDevicesProducer:
+class _CapturingUserDevicesProducer:
+    def __init__(self):
+        self.calls = []
+
     def publish_update(self, payload, key=None):
+        self.calls.append((payload, key))
         return True
 
 
@@ -19,9 +23,8 @@ def test_user_devices_register_returns_device_id(authenticated_client, monkeypat
         lambda device_token, platform, endpoint_arn=None: ("arn:aws:sns:test", False),
     )
 
-    app.dependency_overrides[get_user_devices_kafka_producer] = (
-        lambda: _FakeUserDevicesProducer()
-    )
+    producer = _CapturingUserDevicesProducer()
+    app.dependency_overrides[get_user_devices_kafka_producer] = lambda: producer
 
     payload = {
         "device_token": "test-token-123",
@@ -35,5 +38,14 @@ def test_user_devices_register_returns_device_id(authenticated_client, monkeypat
     assert data.get("id") is not None
     UUID(data["id"])
     assert data["device_token"] == payload["device_token"]
+
+    assert len(producer.calls) == 1
+    kafka_payload, key = producer.calls[0]
+    assert kafka_payload["entity"] == "user_device"
+    assert kafka_payload["event_type"] == "UPSERT"
+    assert kafka_payload["data"]["id"] == data["id"]
+    assert kafka_payload["data"]["device_token"] == payload["device_token"]
+    assert "unit_id" not in kafka_payload["data"]
+    assert key == data["id"]
 
     app.dependency_overrides.clear()

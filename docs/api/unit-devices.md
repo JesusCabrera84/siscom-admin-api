@@ -524,3 +524,30 @@ El endpoint `POST /api/v1/units/{unit_id}/device` tiene lógica adicional:
 - Solo usuarios maestros pueden gestionar asignaciones
 - No se permite modificar asignaciones de otros clientes
 - Los UUIDs son no predecibles y seguros
+
+---
+
+## Publicación de Eventos en Kafka
+
+Tras el `COMMIT` de una asignación o desasignación (`POST /api/v1/units/{id}/device`, `POST /api/v1/unit-devices`, `DELETE /api/v1/unit-devices/{id}`, `PATCH /api/v1/devices/{imei}/status` en `asignado`/`devuelto`, o crear unidad con dispositivo), se publica al tópico `KAFKA_UNIT_DEVICES_UPDATES_TOPIC` (default `unit-devices-updates`). Key: IMEI / `device_id`.
+
+Si Kafka falla, el HTTP **no** falla.
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "UPSERT",
+  "entity": "unit_device",
+  "timestamp": "2026-09-03T17:14:50Z",
+  "organization_id": "uuid",
+  "data": {
+    "device_id": "0848072989",
+    "unit_id": "uuid",
+    "previous_unit_id": "uuid",
+    "previous_organization_id": "uuid",
+    "is_active": true
+  }
+}
+```
+
+Al devolver / desasignar, `organization_id` y `unit_id` van `null`, `is_active` es `false`, y `previous_*` apunta a la unidad que se soltó.

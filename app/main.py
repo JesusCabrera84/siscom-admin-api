@@ -1,13 +1,17 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore[attr-defined]
+from fastapi.responses import JSONResponse
 
 from app.api.deps import (
     close_geofences_kafka_producer,
     close_mobility_kafka_producer,
     close_rules_kafka_producer,
+    close_unit_devices_kafka_producer,
     close_user_devices_kafka_producer,
+    close_user_units_kafka_producer,
 )
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -16,6 +20,7 @@ from app.services.health import check_kafka_accessibility
 from app.startup import print_startup_banner
 
 setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -33,6 +38,8 @@ async def lifespan(_: FastAPI):
     close_rules_kafka_producer()
     close_geofences_kafka_producer()
     close_user_devices_kafka_producer()
+    close_unit_devices_kafka_producer()
+    close_user_units_kafka_producer()
     close_mobility_kafka_producer()
 
 
@@ -69,6 +76,25 @@ async def limit_body_size(request: Request, call_next):
             )
 
     return await call_next(request)
+
+
+@app.middleware("http")
+async def unhandled_exception_to_json(request: Request, call_next):
+    """
+    Captura excepciones no manejadas por dentro de CORSMiddleware.
+    Starlette pone ServerErrorMiddleware por fuera de CORS; un 500 crudo
+    llega al browser sin Access-Control-Allow-Origin y se reporta como CORS.
+    """
+    try:
+        return await call_next(request)
+    except Exception:
+        logger.exception(
+            "Unhandled exception on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
 
 
 app.add_middleware(
