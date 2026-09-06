@@ -107,3 +107,54 @@ def check_kafka_accessibility() -> bool:
             },
         )
         return False
+
+
+def check_database() -> "tuple[bool, str | None]":
+    """Comprueba que la base responde de verdad.
+
+    Devuelve (ok, detalle_del_error). No propaga la excepcion: el endpoint de
+    salud debe poder informar de un fallo, no morir por el.
+
+    Existe porque /health devolvia un diccionario estatico: daba verde con la
+    base inservible, y el bucle de espera del despliegue lo tomaba como senal
+    de exito. Un healthcheck que no puede fallar no informa de nada.
+    """
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True, None
+    except Exception as exc:  # noqa: BLE001 - cualquier fallo es un fallo de salud
+        logger.warning("Health check de base de datos fallo: %s", exc)
+        return False, str(exc)
+
+
+def get_schema_revision() -> "str | None":
+    """Revision de alembic aplicada, si la tabla existe.
+
+    Devuelve None cuando alembic_version no existe, que es hoy el caso en
+    produccion: el esquema lo creo database-siscom y nadie stampeo la linea
+    base. Exponerlo en /health convierte esa ambiguedad en algo observable
+    desde fuera, y permite verificar tras un despliegue que la migracion
+    realmente corrio.
+    """
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    try:
+        with engine.connect() as conn:
+            existe = conn.execute(
+                text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
+            ).scalar()
+            if not existe:
+                return None
+            return conn.execute(
+                text("SELECT version_num FROM alembic_version LIMIT 1")
+            ).scalar()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("No se pudo leer alembic_version: %s", exc)
+        return None
