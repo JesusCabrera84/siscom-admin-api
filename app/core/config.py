@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     DB_PASSWORD: str
     DB_NAME: str
 
+    # Credencial exclusiva de migraciones. El usuario de runtime (DB_USER) solo
+    # tiene DML; alembic necesita DDL. Separarlos evita que la aplicacion pueda
+    # alterar el esquema en caliente. Si no se define, alembic cae a DB_USER y
+    # se comporta como hasta ahora: no rompe el despliegue por no tenerla.
+    DB_MIGRATION_USER: Optional[str] = None
+    DB_MIGRATION_PASSWORD: Optional[str] = None
+
     # AWS Credentials - Opcionales si usas IAM Role en EC2
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
