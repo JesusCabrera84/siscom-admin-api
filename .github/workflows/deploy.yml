@@ -106,7 +106,42 @@ jobs:
           port: ${{ secrets.EC2_SSH_PORT }}
           envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,AWS_REGION,SNS_PLATFORM_APPLICATION_ARN_IOS,SNS_PLATFORM_APPLICATION_ARN_ANDROID,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,ALLOWED_ORIGINS,CONTACT_EMAIL,RECAPTCHA_SECRET_KEY,PASETO_SECRET_KEY,SHARE_LOCATION_KEY_B64,DATA_TOKEN_PRIVATE_KEY_B64,DATA_TOKEN_KEY_ID,DATA_TOKEN_INDEX_SECRET_B64,VALKEY_URL,SHARE_LOCATION_USE_DATA_TOKEN,KORE_CLIENT_ID,KORE_CLIENT_SECRET,KORE_API,KORE_API_AUTH,KORE_API_SMS,KAFKA_BROKERS,KAFKA_RULES_UPDATES_TOPIC,KAFKA_GEOFENCES_UPDATES_TOPIC,KAFKA_USER_DEVICES_UPDATES_TOPIC,KAFKA_UNIT_DEVICES_UPDATES_TOPIC,KAFKA_USER_UNITS_UPDATES_TOPIC,KAFKA_MOBILITY_TOPIC,KAFKA_TEAM_RULES_TOPIC,KAFKA_RULES_UPDATES_GROUP_ID,KAFKA_SASL_USERNAME,KAFKA_SASL_PASSWORD,KAFKA_SASL_MECHANISM,KAFKA_SECURITY_PROTOCOL
           script: |
+            # Sin esto, un paso que falla no aborta el script: el despliegue
+            # sigue adelante y termina imprimiendo "completado exitosamente".
+            # Es lo que permitio que una migracion fallida pasara inadvertida.
+            # Se usa -e y pipefail, pero NO -u: varias variables del .env son
+            # legitimamente vacias y -u abortaria por ellas.
+            set -eo pipefail
+
             cd /home/${{ secrets.EC2_USERNAME }}/siscom-admin-api
+
+            # Vuelve a la imagen anterior si el contenedor nuevo no levanta.
+            # Solo revierte CODIGO: el esquema ya migrado se queda como esta,
+            # y por eso las migraciones deben ser compatibles hacia atras
+            # (expand/contract). Si no lo fueran, hay que revertirlas a mano
+            # con 'alembic downgrade', y el script lo dice.
+            rollback_to_previous() {
+              echo "⏪ Revirtiendo a la imagen anterior..."
+              if docker image inspect siscom-admin-api:rollback >/dev/null 2>&1; then
+                docker tag siscom-admin-api:rollback siscom-admin-api:latest
+                docker-compose -f docker-compose.prod.yml up -d --remove-orphans || true
+                echo "⏪ Codigo revertido a la imagen anterior."
+                echo "⚠️  El ESQUEMA no se revierte solo. Si la migracion de este"
+                echo "    despliegue no es compatible con la imagen anterior,"
+                echo "    revierte a mano: alembic downgrade <revision>"
+              else
+                echo "⚠️  No hay imagen :rollback disponible; el servicio queda caido."
+              fi
+            }
+
+            # Guardar la imagen actual para poder volver a ella si el
+            # despliegue falla. Es el rollback de codigo.
+            if docker image inspect siscom-admin-api:latest >/dev/null 2>&1; then
+              docker tag siscom-admin-api:latest siscom-admin-api:rollback
+              echo "🔖 Imagen anterior etiquetada como :rollback"
+            else
+              echo "ℹ️  No hay imagen previa: este despliegue no tendra rollback de codigo"
+            fi
 
             # Cargar la nueva imagen
             echo "📦 Cargando nueva imagen Docker..."
@@ -165,13 +200,40 @@ jobs:
             KAFKA_SECURITY_PROTOCOL=${KAFKA_SECURITY_PROTOCOL}
             EOF
 
-            # Ejecutar migraciones antes de levantar el nuevo contenedor
+            # Ejecutar migraciones antes de levantar el nuevo contenedor.
+            #
+            # Se hace ANTES de tocar el contenedor en marcha: si la migracion
+            # falla, se aborta aqui y el servicio anterior sigue sirviendo
+            # intacto. Ese es el rollback de esquema mas barato que hay.
+            echo "🗄️ Revision de esquema ANTES de migrar:"
+            PREV_REVISION=$(docker run --rm \
+              --network siscom-network \
+              --env-file .env \
+              siscom-admin-api:latest \
+              alembic current 2>/dev/null | tail -1 || echo "desconocida")
+            echo "   ${PREV_REVISION:-ninguna}"
+
             echo "🗄️ Ejecutando migraciones Alembic..."
+            if ! docker run --rm \
+              --network siscom-network \
+              --env-file .env \
+              siscom-admin-api:latest \
+              alembic upgrade head; then
+              echo "❌ ERROR: las migraciones fallaron."
+              echo "   El contenedor anterior NO se ha tocado y sigue sirviendo."
+              echo "   Revision previa: ${PREV_REVISION:-ninguna}"
+              echo "   Para revertir un esquema ya modificado:"
+              echo "     docker run --rm --network siscom-network --env-file .env \\"
+              echo "       siscom-admin-api:latest alembic downgrade <revision>"
+              exit 1
+            fi
+
+            echo "🗄️ Revision de esquema DESPUES de migrar:"
             docker run --rm \
               --network siscom-network \
               --env-file .env \
               siscom-admin-api:latest \
-              alembic upgrade head
+              alembic current 2>/dev/null | tail -1 || true
 
             # Detener y eliminar el contenedor existente de forma robusta
             echo "🛑 Deteniendo contenedores anteriores..."
@@ -214,6 +276,7 @@ jobs:
               echo ""
               echo "Logs del contenedor (si existe):"
               docker logs ${CONTAINER_NAME} 2>&1 || echo "No se pudo obtener logs"
+              rollback_to_previous
               exit 1
             fi
 
@@ -226,6 +289,7 @@ jobs:
                 echo "❌ ERROR: El contenedor se detuvo inesperadamente"
                 echo "Logs del contenedor:"
                 docker logs --tail 100 ${CONTAINER_NAME}
+                rollback_to_previous
                 exit 1
               fi
 
@@ -240,6 +304,7 @@ jobs:
                 echo "❌ ERROR: Contenedor está unhealthy"
                 echo "Logs del contenedor:"
                 docker logs --tail 50 ${CONTAINER_NAME}
+                rollback_to_previous
                 exit 1
               elif [ "$STATUS" = "no_health_check" ]; then
                 echo "⚠️ No hay health check configurado, asumiendo que está OK"
@@ -255,6 +320,7 @@ jobs:
               echo "Estado actual: $(docker inspect --format="{{.State.Status}}" ${CONTAINER_NAME})"
               echo "Logs del contenedor:"
               docker logs --tail 50 ${CONTAINER_NAME}
+              rollback_to_previous
               exit 1
             fi
 
@@ -263,6 +329,7 @@ jobs:
             if docker logs ${CONTAINER_NAME} 2>&1 | grep -q "Application startup failed"; then
               echo "❌ ERROR: La aplicación falló al iniciar"
               docker logs --tail 50 ${CONTAINER_NAME}
+              rollback_to_previous
               exit 1
             fi
 
@@ -283,6 +350,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
           script: |
+            set -eo pipefail
+
             echo "=== Verificación Final del Deployment ==="
             echo ""
 
@@ -339,12 +408,23 @@ jobs:
 
             # Verificar que el health endpoint responde
             echo "5. Verificando health endpoint:"
-            CONTAINER_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' siscom-admin-api)
-            if curl -f -s http://localhost:8100/health > /dev/null 2>&1 || curl -f -s http://$CONTAINER_IP:8100/health > /dev/null 2>&1; then
-              echo "✅ Health endpoint responde correctamente"
-            else
-              echo "⚠️  Warning: No se pudo verificar el health endpoint (puede ser normal si hay firewall)"
-            fi
+            # /health ya consulta la base: un 200 aqui significa que la API
+            # responde Y que la base es alcanzable. Por eso dejo de ser un
+            # warning y pasa a abortar el despliegue.
+            HEALTH_BODY=$(docker exec siscom-admin-api python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8100/health').read().decode())" 2>&1) || {
+              echo "❌ ERROR: /health no responde 200"
+              echo "$HEALTH_BODY"
+              exit 1
+            }
+            echo "✅ Health endpoint responde: $HEALTH_BODY"
+
+            # La revision de esquema deja constancia de con que version del
+            # esquema quedo corriendo esta imagen. 'null' significa que alembic
+            # aun no gestiona esta base (linea base sin reconciliar).
+            echo "$HEALTH_BODY" | grep -q '"database": *"ok"' || {
+              echo "❌ ERROR: la API responde pero la base no es alcanzable"
+              exit 1
+            }
             echo ""
 
             echo "🎉 Deployment verificado exitosamente!"
