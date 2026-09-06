@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Deuda de migraciones — diagnóstico, harness y protecciones (no incluye la reconciliación en sí):
+  - `docker-compose.db.yml` + `scripts/db-local.sh`: Postgres local con la misma imagen que producción (`timescale/timescaledb:2.15.1-pg15`) para probar migraciones y DDL antes de tocar producción. Incluye `restore` de un dump productivo y `anonymize`. Es prerrequisito de la Fase 2: `ltree` y los índices GIST de `account_path` no se pueden probar en SQLite, que es contra lo que corren hoy los tests
+  - `scripts/alembic-probe.py`: sonda **de solo lectura** que, para cada revisión, comprueba si su efecto ya está presente en el esquema vivo, y dice si el historial es reconciliable con un solo `alembic stamp` o necesita una migración de línea base. Es el paso que falta correr contra producción
+  - `tests/test_migrations_chain.py`: integridad de la cadena en cada PR — cabeza única, base única, sin huérfanos ni ciclos, todas las revisiones alcanzables desde la cabeza, `downgrade()` con cuerpo real, y prefijo de fichero coherente con el orden de la cadena. Antes nada en CI miraba las migraciones
+  - `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD`: credencial de migraciones separada de la de runtime, que solo tiene DML. Alembic la usa cuando existe y cae a `DB_USER` cuando no, así que no rompe el despliegue actual
+  - `docs/runbooks/reconciliar-historial-alembic.md`: el diagnóstico medido y el procedimiento
+
+### Changed
+
+- `/health` consulta la base de datos y expone `schema_revision` (la revisión de alembic aplicada, o `null` si `alembic_version` no existe). Devuelve **503** cuando la base no responde. Antes era un diccionario estático: el healthcheck de Docker y el bucle de espera del despliegue daban verde con la base inservible
+- `deploy.yml` — `set -eo pipefail` en los dos scripts remotos: sin él, un paso que fallaba no abortaba el despliegue, que terminaba imprimiendo "completado exitosamente". Además:
+  - las migraciones corren **antes** de tocar el contenedor en marcha y abortan el despliegue si fallan, dejando el servicio anterior sirviendo intacto
+  - la imagen anterior se etiqueta `:rollback` y se restaura si el contenedor nuevo no levanta o no llega a *healthy*
+  - se registra la revisión de esquema antes y después de migrar
+  - la verificación del endpoint `/health` deja de ser un *warning* y aborta el despliegue
+
 - Control plane de notificaciones: la API publica a Kafka **después del commit** cuando cambia una asignación unidad-dispositivo, un grant `user_units` o un token push. Tópicos nuevos: `KAFKA_UNIT_DEVICES_UPDATES_TOPIC` (`unit-devices-updates`) y `KAFKA_USER_UNITS_UPDATES_TOPIC` (`user-units-updates`). Cubre `POST/DELETE` de `/user-units`, `/units/{id}/users`, `/units/{id}/device`, `/unit-devices`, `PATCH /devices/{imei}/status` (asignado/devuelto) y register/deactivate de `/user-devices`
 - `GET /internal/accounts` deja de usar `DISTINCT ON` (Postgres-only): el owner se resuelve con `GROUP BY` + `min(email)` para que el query sea válido en SQLite (CI) y en Postgres
 - Middleware HTTP que convierte excepciones no manejadas en JSON `{"detail":"Internal server error"}` **dentro** de CORS, para que un 500 no se reporte en el browser como error de CORS
