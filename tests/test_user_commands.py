@@ -57,6 +57,9 @@ def test_user_command_returns_explicit_error_for_unsupported_device_model(
 
     db_session.add(unit)
     db_session.add(device)
+    # Hay FK de commands.device_id a devices: sin flush, SQLAlchemy puede
+    # insertar el comando primero. SQLite no aplicaba la FK y lo permitia.
+    db_session.flush()
     db_session.add(assignment)
     db_session.commit()
 
@@ -100,6 +103,9 @@ def test_engine_stop_creates_and_sends_command_via_kore(
 
     db_session.add(unit)
     db_session.add(device)
+    # Hay FK de commands.device_id a devices: sin flush, SQLAlchemy puede
+    # insertar el comando primero. SQLite no aplicaba la FK y lo permitia.
+    db_session.flush()
     db_session.add(assignment)
     db_session.add(sim_profile)
     db_session.commit()
@@ -195,6 +201,9 @@ def test_engine_resume_accepts_suntech_st4330(
 
     db_session.add(unit)
     db_session.add(device)
+    # Hay FK de commands.device_id a devices: sin flush, SQLAlchemy puede
+    # insertar el comando primero. SQLite no aplicaba la FK y lo permitia.
+    db_session.flush()
     db_session.add(assignment)
     db_session.add(sim_profile)
     db_session.commit()
@@ -265,6 +274,9 @@ def test_engine_resume_rejects_suntech_st449(
 
     db_session.add(unit)
     db_session.add(device)
+    # Hay FK de commands.device_id a devices: sin flush, SQLAlchemy puede
+    # insertar el comando primero. SQLite no aplicaba la FK y lo permitia.
+    db_session.flush()
     db_session.add(assignment)
     db_session.commit()
 
@@ -324,6 +336,9 @@ def test_list_user_commands_by_unit_only_returns_user_commands_source(
 
     db_session.add(unit)
     db_session.add(device)
+    # Hay FK de commands.device_id a devices: sin flush, SQLAlchemy puede
+    # insertar el comando primero. SQLite no aplicaba la FK y lo permitia.
+    db_session.flush()
     db_session.add(assignment)
     db_session.add(command_user)
     db_session.add(command_other)
@@ -365,6 +380,9 @@ def test_sync_user_command_rejects_non_user_command_source(
     )
 
     db_session.add(device)
+    # Hay FK de commands.device_id a devices: sin flush, SQLAlchemy puede
+    # insertar el comando primero. SQLite no aplicaba la FK y lo permitia.
+    db_session.flush()
     db_session.add(command_other)
     db_session.commit()
     db_session.refresh(command_other)

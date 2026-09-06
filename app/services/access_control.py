@@ -115,10 +115,10 @@ def _aware(moment: Optional[datetime]) -> Optional[datetime]:
     """
     Normaliza a UTC consciente de zona.
 
-    PostgreSQL devuelve `TIMESTAMP WITH TIME ZONE`, pero otros motores —SQLite en
-    los tests, y cualquier fila escrita antes de que la columna llevara zona—
-    devuelven fechas ingenuas. Comparar unas con otras lanza `TypeError`, así que
-    normalizar en la frontera evita que el fallo aparezca solo con datos reales.
+    PostgreSQL devuelve `TIMESTAMP WITH TIME ZONE`, pero cualquier fila escrita
+    antes de que la columna llevara zona devuelve una fecha ingenua. Comparar
+    unas con otras lanza `TypeError`, así que normalizar en la frontera evita
+    que el fallo aparezca solo con datos reales.
     """
     if moment is None:
         return None

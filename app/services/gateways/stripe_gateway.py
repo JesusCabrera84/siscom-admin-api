@@ -156,7 +156,12 @@ class StripeGateway:
 
     @staticmethod
     def _advisory_xact_lock(db: Session, *parts: str) -> None:
-        """Serializa operaciones de cobro por cuenta. No-op en SQLite de tests."""
+        """Serializa operaciones de cobro por cuenta.
+
+        Evita que dos checkouts simultáneos de la misma cuenta creen el primer
+        pago a la vez — una fila que aún no existe, así que no hay
+        `SELECT … FOR UPDATE` que la proteja.
+        """
         advisory_xact_lock(db, *parts)
 
     @staticmethod

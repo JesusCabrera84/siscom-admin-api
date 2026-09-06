@@ -17,12 +17,13 @@ def advisory_xact_lock(db: Session, *parts: str) -> None:
     Toma un lock de transacción derivado de `parts`.
 
     Se libera al terminar la transacción, así que no hay que soltarlo a mano ni
-    puede quedarse colgado si el proceso muere. En SQLite (tests) no hace nada:
-    las pruebas corren en serie sobre una sola conexión.
+    puede quedarse colgado si el proceso muere.
+
+    Antes esto no se ejecutaba bajo test —había un `return` temprano si el
+    dialecto no era PostgreSQL, y los tests corrían en SQLite—, así que la
+    protección contra el doble cobro no tenía ninguna cobertura. Ahora los tests
+    usan PostgreSQL y el lock se toma también ahí.
     """
-    bind = db.get_bind()
-    if bind.dialect.name != "postgresql":
-        return
     raw = "|".join(str(p) for p in parts)
     lock_id = int.from_bytes(
         hashlib.sha256(raw.encode()).digest()[:8], "big", signed=True

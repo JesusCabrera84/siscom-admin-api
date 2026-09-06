@@ -2,14 +2,19 @@
 
 import os
 
-from tests.sqlite_dialect import register_sqlite_dialect_compat
-
+# Los tests corren contra un PostgreSQL real, no contra SQLite: el esquema de
+# este sistema es especifico de Postgres (JSONB, ARRAY, UUID, server_defaults,
+# locks consultivos) y un motor sustituto solo puede probarlo falseandolo.
+# Ver §20 del documento de arquitectura.
+#
+# Los valores por defecto apuntan al harness local (docker-compose.db.yml).
+# En CI los pisa el servicio de Postgres del workflow.
 _TEST_ENV_DEFAULTS = {
-    "DB_HOST": "localhost",
-    "DB_PORT": "5432",
-    "DB_USER": "test",
-    "DB_PASSWORD": "test",
-    "DB_NAME": "test",
+    "DB_HOST": os.getenv("TEST_DB_HOST", "localhost"),
+    "DB_PORT": os.getenv("TEST_DB_PORT", "55432"),
+    "DB_USER": os.getenv("TEST_DB_USER", "postgres"),
+    "DB_PASSWORD": os.getenv("TEST_DB_PASSWORD", "postgres"),
+    "DB_NAME": os.getenv("TEST_DB_NAME", "siscom_test"),
     "COGNITO_REGION": "us-east-1",
     "COGNITO_USER_POOL_ID": "us-east-1_testpool",
     "COGNITO_CLIENT_ID": "test-client-id",
@@ -37,4 +42,3 @@ def apply_test_env_defaults() -> None:
 
 def bootstrap_test_runtime() -> None:
     apply_test_env_defaults()
-    register_sqlite_dialect_compat()
