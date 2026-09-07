@@ -69,6 +69,20 @@ def _register_all_table_models() -> None:
     )
 
 
+def _assert_es_base_de_tests() -> None:
+    """Impide que el borrado de esquemas caiga sobre una base que no sea de tests.
+
+    El fixture hace DROP SCHEMA ... CASCADE, que no perdona. El nombre debe
+    delatar que es desechable.
+    """
+    nombre = settings.DB_NAME or ""
+    if "test" not in nombre.lower():
+        raise RuntimeError(
+            f"DB_NAME={nombre!r} no parece una base de tests y el harness borra "
+            f"esquemas enteros. Usa TEST_DB_NAME (por defecto 'siscom_test')."
+        )
+
+
 def _ensure_database_exists() -> None:
     """Crea la base de tests si no existe. Idempotente."""
     admin = create_engine(_ADMIN_URL, isolation_level="AUTOCOMMIT")
@@ -92,6 +106,17 @@ def _ensure_database_exists() -> None:
         admin.dispose()
 
 
+def _reset_schemas(engine) -> None:
+    """Deja los esquemas vacios, sin depender de lo que la metadata conozca."""
+    esquemas = {"public"} | {
+        t.schema for t in SQLModel.metadata.tables.values() if t.schema
+    }
+    with engine.connect() as conn:
+        for esquema in sorted(esquemas):
+            conn.execute(text(f'DROP SCHEMA IF EXISTS "{esquema}" CASCADE'))
+        conn.commit()
+
+
 def _create_schemas(engine) -> None:
     """Crea los esquemas de PostgreSQL que declaran los modelos.
 
@@ -101,9 +126,9 @@ def _create_schemas(engine) -> None:
     asi que las pruebas se ejecutaban contra una tabla en otro sitio y con otro
     nombre que el codigo de produccion nunca toca.
     """
-    esquemas = {t.schema for t in SQLModel.metadata.tables.values() if t.schema}
-    if not esquemas:
-        return
+    esquemas = {"public"} | {
+        t.schema for t in SQLModel.metadata.tables.values() if t.schema
+    }
     with engine.connect() as conn:
         for esquema in sorted(esquemas):
             conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{esquema}"'))
@@ -152,24 +177,49 @@ def _engine():
     se revierte al terminar. Antes se hacia create_all + drop_all de 73 tablas
     *por cada test*, que en Postgres seria inviable.
     """
+    _assert_es_base_de_tests()
     _ensure_database_exists()
     _register_all_table_models()
 
-    engine = create_engine(DATABASE_URL, future=True)
-    with engine.connect() as conn:
-        # gen_random_uuid() es nativo desde PG13; pgcrypto cubre versiones
-        # anteriores y no estorba en las nuevas.
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
-        conn.commit()
+    # El reseteo va con un engine EFIMERO, y no es un detalle de estilo.
+    #
+    # Recrear `public` invalida el `search_path` de cualquier conexion que el
+    # pool tuviera abierta de antes: al reusarla, Postgres responde
+    # `no schema has been selected to create in`. Con un engine propio que se
+    # desecha, el engine de la sesion nace despues y todas sus conexiones
+    # resuelven el search_path sobre el esquema nuevo.
+    #
+    # Y se borran los esquemas enteros, no `SQLModel.metadata.drop_all()`:
+    # `drop_all` solo tira lo que la metadata conoce, asi que una tabla de una
+    # corrida anterior cuyo modelo ya se borro se queda huerfana, y basta con
+    # que tenga una FK para que el siguiente `drop_all` falle en cascada. Paso
+    # de verdad al eliminar `device_services`: su FK a `payments` impedia tirar
+    # `payments`.
+    preparador = create_engine(DATABASE_URL, future=True)
+    try:
+        _reset_schemas(preparador)
+        _create_schemas(preparador)
+        with preparador.connect() as conn:
+            # Despues de recrear los esquemas, no antes: una extension necesita
+            # un esquema donde vivir, y sin `public` falla con
+            # `no schema has been selected to create in`.
+            # gen_random_uuid() es nativo desde PG13; pgcrypto cubre versiones
+            # anteriores y no estorba en las nuevas.
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+            conn.commit()
+    finally:
+        preparador.dispose()
 
-    _create_schemas(engine)
-    SQLModel.metadata.drop_all(bind=engine)
+    engine = create_engine(DATABASE_URL, future=True)
     _create_enum_types(engine)
     SQLModel.metadata.create_all(bind=engine)
     try:
         yield engine
     finally:
-        SQLModel.metadata.drop_all(bind=engine)
+        # No se borra al terminar: el reseteo del arranque ya garantiza pizarra
+        # limpia, y dejar la base sin `public` la deja inservible para la
+        # siguiente corrida. Ademas, conservar el esquema ayuda a inspeccionar
+        # un fallo despues de que la bateria termine.
         engine.dispose()
 
 
