@@ -10,7 +10,6 @@ from sqlmodel import Field, Index, Relationship, SQLModel
 from app.utils.datetime import utcnow
 
 if TYPE_CHECKING:
-    from app.models.device_service import DeviceService
     from app.models.organization import Organization
     from app.models.sim_card import SimCard
     from app.models.unit_device import UnitDevice
@@ -103,7 +102,6 @@ class Device(SQLModel, table=True):
 
     # Relationships
     organization: Optional["Organization"] = Relationship(back_populates="devices")
-    device_services: List["DeviceService"] = Relationship(back_populates="device")
     device_events: List["DeviceEvent"] = Relationship(
         back_populates="device",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},

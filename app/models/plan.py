@@ -19,7 +19,6 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.models.capability import PlanCapability
-    from app.models.device_service import DeviceService
     from app.models.subscription import Subscription
 
 
@@ -71,5 +70,4 @@ class Plan(SQLModel, table=True):
 
     # Relationships
     subscriptions: List["Subscription"] = Relationship(back_populates="plan")
-    device_services: List["DeviceService"] = Relationship(back_populates="plan")
     plan_capabilities: List["PlanCapability"] = Relationship(back_populates="plan")
