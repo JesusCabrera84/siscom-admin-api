@@ -2,6 +2,7 @@ from app.db.base import Base
 from app.core.config import settings
 
 from logging.config import fileConfig
+from urllib.parse import quote_plus
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -26,7 +27,23 @@ target_metadata = Base
 # ... etc.
 
 # Override sqlalchemy.url with our DATABASE_URL
-DATABASE_URL = f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+#
+# Alembic usa la credencial de migraciones cuando existe. El usuario de runtime
+# solo tiene DML, asi que un `alembic upgrade` con DB_USER falla en cuanto la
+# migracion toca DDL. Sin DB_MIGRATION_USER definido se cae a DB_USER, que es el
+# comportamiento historico.
+_MIGRATION_USER = settings.DB_MIGRATION_USER or settings.DB_USER
+_MIGRATION_PASSWORD = (
+    settings.DB_MIGRATION_PASSWORD
+    if settings.DB_MIGRATION_USER
+    else settings.DB_PASSWORD
+)
+
+DATABASE_URL = (
+    f"postgresql+psycopg2://{quote_plus(_MIGRATION_USER)}:"
+    f"{quote_plus(_MIGRATION_PASSWORD or '')}@"
+    f"{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+)
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
