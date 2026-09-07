@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Comprobación de deriva entre migraciones y modelos en CI** (`scripts/verificar-deriva.py` + `tests/schema/`). Parte del snapshot del esquema **productivo**, lo stampea, corre `alembic upgrade head` y compara el resultado contra `SQLModel.metadata`. Falla el PR si algo no cuadra.
+  - **No se puede hacer con `create_all()`**: comparar la metadata contra una base construida desde esa misma metadata es tautológico y siempre sale vacío. Solo dice algo cuando el esquema viene de otro sitio
+  - El snapshot corresponde a `025_device_and_unit_refs`, **antes** de la `026`, para que `upgrade head` ejecute migraciones de verdad en vez de ser un no-op
+  - Verificado que sabe fallar: con una columna inventada en un modelo devuelve código 1 y la nombra; sin deriva, 0
+  - `tests/schema/README.md` documenta las cinco limitaciones del snapshot —viene de un export gráfico, no de `pg_dump`— y cómo refrescarlo
+
+### Added
+
 - Deuda de migraciones — diagnóstico, harness y protecciones (no incluye la reconciliación en sí):
   - `docker-compose.db.yml` + `scripts/db-local.sh`: Postgres local con la misma imagen que producción (`timescale/timescaledb:2.15.1-pg15`) para probar migraciones y DDL antes de tocar producción. Incluye `restore` de un dump productivo y `anonymize`. Es prerrequisito de la Fase 2: `ltree` y los índices GIST de `account_path` no se pueden probar en SQLite, que es contra lo que corren hoy los tests
   - `scripts/alembic-probe.py`: sonda **de solo lectura** que, para cada revisión, comprueba si su efecto ya está presente en el esquema vivo, y dice si el historial es reconciliable con un solo `alembic stamp` o necesita una migración de línea base. Es el paso que falta correr contra producción

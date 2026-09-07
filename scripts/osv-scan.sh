@@ -35,7 +35,10 @@ install_osv_scanner() {
 
 	mkdir -p "$BIN_DIR"
 	asset="osv-scanner_${platform}_${arch}"
-	curl -sSfL "https://github.com/google/osv-scanner/releases/download/${VERSION}/${asset}" -o "$BIN"
+	# Con reintentos: una descarga cortada tumbaba el job de seguridad entero
+	# por un motivo ajeno a lo que ese job comprueba.
+	curl -sSfL --retry 3 --retry-delay 2 --retry-all-errors \
+		"https://github.com/google/osv-scanner/releases/download/${VERSION}/${asset}" -o "$BIN"
 	chmod +x "$BIN"
 }
 
