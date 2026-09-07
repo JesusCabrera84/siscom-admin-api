@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **El `set -eo pipefail` del despliegue rompía las comprobaciones que endurecía.** `docker ps | grep -q NOMBRE`: `grep -q` sale al primer match, el productor recibe `SIGPIPE` y termina con 141, y `pipefail` da el pipeline por fallido **aunque `grep` haya encontrado lo que buscaba**. En el despliegue de `v1.27.0` el contenedor levantó bien (`Up 5 seconds`) y el script lo dio por caído, revirtiendo la imagen sin necesidad. Nueve comprobaciones tenían esa forma; ahora usan `docker ps -q --filter "name=^X$"` y here-strings (`<<<`) en vez de pipes, y están probadas contra contenedores reales con `pipefail` activo, no solo con `bash -n`
+
 - **Reconciliación del esquema (migración `026`).** Medida contra el DDL de producción del 5-6 de septiembre, no deducida. La sonda dio 21 de 25 revisiones presentes con huecos en `004`, `021`, `022` y `024`: no monótono, así que ningún `alembic stamp` único deja el historial correcto. Repara, con endpoints vivos afectados:
   - `api_idempotency_requests` (mig. `021`) — `POST /payment-intent` inserta ahí la reserva de idempotencia antes de llamar a Stripe. Sin la tabla, el endpoint de cobro falla
   - `account_tax_profiles` (mig. `024`) — timbrado CFDI

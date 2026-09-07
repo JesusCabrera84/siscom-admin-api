@@ -118,6 +118,15 @@ jobs:
             # Es lo que permitio que una migracion fallida pasara inadvertida.
             # Se usa -e y pipefail, pero NO -u: varias variables del .env son
             # legitimamente vacias y -u abortaria por ellas.
+            #
+            # CUIDADO con pipefail y `productor | grep -q`: grep -q sale al
+            # primer match, el productor recibe SIGPIPE y termina con 141, y
+            # pipefail da el pipeline por fallido AUNQUE grep haya encontrado lo
+            # que buscaba. Eso rompio el despliegue de v1.27.0: el contenedor
+            # habia levantado bien y el script lo dio por caido, revirtiendo la
+            # imagen sin necesidad.
+            # Por eso las comprobaciones usan `docker ps -q --filter` y
+            # here-strings (<<<) en vez de pipes.
             set -eo pipefail
 
             cd /home/${{ secrets.EC2_USERNAME }}/siscom-admin-api
@@ -267,7 +276,8 @@ jobs:
             docker-compose -f docker-compose.prod.yml down || true
 
             # Forzar detención de contenedor por nombre si existe
-            if docker ps -a | grep -q ${CONTAINER_NAME}; then
+            # Sin pipe a proposito: ver la nota de `set -eo pipefail` arriba.
+            if [ -n "$(docker ps -aq --filter "name=^${CONTAINER_NAME}$")" ]; then
               echo "Deteniendo contenedor ${CONTAINER_NAME}..."
               docker stop ${CONTAINER_NAME} || true
               docker rm ${CONTAINER_NAME} || true
@@ -294,7 +304,7 @@ jobs:
             sleep 5
 
             # Verificar que el contenedor se creó correctamente
-            if ! docker ps | grep -q ${CONTAINER_NAME}; then
+            if [ -z "$(docker ps -q --filter "name=^${CONTAINER_NAME}$")" ]; then
               echo "❌ ERROR: El contenedor ${CONTAINER_NAME} no está corriendo"
               echo "Contenedores activos:"
               docker ps -a
@@ -310,7 +320,7 @@ jobs:
             CONTAINER_HEALTHY=false
             for i in {1..30}; do
               # Verificar que el contenedor sigue corriendo
-              if ! docker ps | grep -q ${CONTAINER_NAME}; then
+              if [ -z "$(docker ps -q --filter "name=^${CONTAINER_NAME}$")" ]; then
                 echo "❌ ERROR: El contenedor se detuvo inesperadamente"
                 echo "Logs del contenedor:"
                 docker logs --tail 100 ${CONTAINER_NAME}
@@ -351,7 +361,8 @@ jobs:
 
             # Verificar logs en busca de errores críticos
             echo "🔍 Verificando logs en busca de errores..."
-            if docker logs ${CONTAINER_NAME} 2>&1 | grep -q "Application startup failed"; then
+            ARRANQUE_LOGS=$(docker logs ${CONTAINER_NAME} 2>&1 || true)
+            if grep -q "Application startup failed" <<< "$ARRANQUE_LOGS"; then
               echo "❌ ERROR: La aplicación falló al iniciar"
               docker logs --tail 50 ${CONTAINER_NAME}
               rollback_to_previous
@@ -382,7 +393,7 @@ jobs:
 
             # Verificar que el contenedor está corriendo
             echo "1. Estado del contenedor:"
-            if ! docker ps | grep siscom-admin-api; then
+            if [ -z "$(docker ps -q --filter "name=^siscom-admin-api$")" ]; then
               echo "❌ ERROR: El contenedor siscom-admin-api no está corriendo"
               exit 1
             fi
@@ -410,19 +421,19 @@ jobs:
             echo "4. Verificando logs recientes:"
             RECENT_LOGS=$(docker logs --tail 50 siscom-admin-api 2>&1)
 
-            if echo "$RECENT_LOGS" | grep -q "Application startup failed"; then
+            if grep -q "Application startup failed" <<< "$RECENT_LOGS"; then
               echo "❌ ERROR: Aplicación falló al iniciar"
               echo "$RECENT_LOGS"
               exit 1
             fi
 
-            if echo "$RECENT_LOGS" | grep -q "ModuleNotFoundError"; then
+            if grep -q "ModuleNotFoundError" <<< "$RECENT_LOGS"; then
               echo "❌ ERROR: Módulo faltante"
               echo "$RECENT_LOGS"
               exit 1
             fi
 
-            if echo "$RECENT_LOGS" | grep -E "ERROR.*Exiting" | grep -v "test"; then
+            if grep -qE "ERROR.*Exiting" <<< "$RECENT_LOGS"; then
               echo "❌ ERROR: Error crítico encontrado en logs"
               echo "$RECENT_LOGS"
               exit 1
@@ -446,7 +457,7 @@ jobs:
             # La revision de esquema deja constancia de con que version del
             # esquema quedo corriendo esta imagen. 'null' significa que alembic
             # aun no gestiona esta base (linea base sin reconciliar).
-            echo "$HEALTH_BODY" | grep -q '"database": *"ok"' || {
+            grep -q '"database": *"ok"' <<< "$HEALTH_BODY" || {
               echo "❌ ERROR: la API responde pero la base no es alcanzable"
               exit 1
             }
