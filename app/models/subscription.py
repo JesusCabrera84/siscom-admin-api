@@ -21,7 +21,7 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Text, tex
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Index, Relationship, SQLModel
 
-from app.utils.datetime import utcnow
+from app.utils.datetime import as_naive_utc, utcnow
 
 if TYPE_CHECKING:
     from app.models.organization import Organization
@@ -199,15 +199,21 @@ class Subscription(SQLModel, table=True):
             SubscriptionStatus.PAST_DUE,
         ]:
             return False
-        if self.grace_until and self.grace_until > now:
+        # `grace_until` es TIMESTAMP WITH TIME ZONE y `expires_at` no, asi que
+        # comparar cualquiera de las dos contra `utcnow()` —naive— sin
+        # normalizar lanza TypeError. Ver as_naive_utc().
+        grace = as_naive_utc(self.grace_until)
+        if grace and grace > now:
             return True
-        if self.expires_at and self.expires_at < now:
+        expira = as_naive_utc(self.expires_at)
+        if expira and expira < now:
             return False
         return True
 
     def days_until_expiration(self) -> Optional[int]:
         """Retorna días hasta la expiración, o None si no expira."""
-        if not self.expires_at:
+        expira = as_naive_utc(self.expires_at)
+        if not expira:
             return None
-        delta = self.expires_at - utcnow()
+        delta = expira - utcnow()
         return max(0, delta.days)

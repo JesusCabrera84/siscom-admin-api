@@ -1,4 +1,3 @@
-import json
 from uuid import uuid4
 
 import pytest
@@ -305,9 +304,12 @@ def test_create_alert_rule_normalizes_config(authenticated_client, kafka_stub_pr
     }
     assert data["config"] == expected_config
 
-    # Verifica orden determinista de llaves top-level y en objeto anidado.
-    assert list(data["config"].keys()) == ["a", "m", "z"]
-    assert list(data["config"]["a"].keys()) == ["k1"]
+    # Se comprueba el contenido, no el orden de las claves: JSONB no lo
+    # preserva. Esta asercion pasaba antes con SQLite y aqui coincidiria por
+    # casualidad —"a", "m" y "z" miden lo mismo— pero se romperia sola en
+    # cuanto alguien anadiera una clave mas larga.
+    assert set(data["config"].keys()) == {"a", "m", "z"}
+    assert set(data["config"]["a"].keys()) == {"k1"}
 
 
 def test_update_alert_rule_normalizes_only_when_config_is_sent(
@@ -363,11 +365,19 @@ def test_update_alert_rule_normalizes_only_when_config_is_sent(
         "z": "last",
     }
 
-    # Mantiene orden de listas, pero ordena claves de objetos internos.
-    serialized = json.dumps(updated_config, ensure_ascii=False)
-    assert (
-        serialized == '{"a": {"keep": true}, "list": [{"x": 1, "y": 2}], "z": "last"}'
-    )
+    # El orden de las LISTAS sí se conserva: es parte del dato.
+    assert updated_config["list"] == [{"x": 1, "y": 2}]
+
+    # El orden de las CLAVES no se comprueba, y no es un descuido: la columna es
+    # JSONB, que normaliza el objeto al almacenarlo y lo devuelve con su propio
+    # orden (por longitud de clave y luego bytes). Ninguna aplicacion puede
+    # garantizar orden de claves leyendo de JSONB. Antes se afirmaba lo
+    # contrario y pasaba solo porque los tests corrian sobre SQLite, que guarda
+    # el JSON como texto literal.
+    #
+    # Nada de produccion depende de ese orden: el unico hash canonico
+    # (idempotency_service.canonical_request_hash) ordena en Python con
+    # sort_keys=True antes de serializar, asi que no le afecta.
 
 
 def test_alert_rule_write_endpoints_publish_kafka_events(

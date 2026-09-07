@@ -14,6 +14,30 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def as_naive_utc(moment: Optional[datetime]) -> Optional[datetime]:
+    """
+    Normaliza a UTC *naive*, el mismo dominio que devuelve ``utcnow()``.
+
+    Existe porque el esquema mezcla los dos tipos: hay columnas
+    ``TIMESTAMP WITHOUT TIME ZONE`` —``subscriptions.expires_at``— y columnas
+    ``TIMESTAMP WITH TIME ZONE`` —``subscriptions.grace_until``—. Compararlas
+    entre sí, o contra ``utcnow()``, lanza
+    ``TypeError: can't compare offset-naive and offset-aware datetimes``.
+
+    Con SQLite el fallo era invisible: todo volvía naive. Contra PostgreSQL
+    aparece en cuanto una suscripción entra en gracia, que es justo el camino
+    que el código de cobranza recorre.
+
+    Normalizar hacia naive, y no hacia aware, es lo coherente con ``utcnow()``,
+    que es naive a propósito y documentado.
+    """
+    if moment is None:
+        return None
+    if moment.tzinfo is None:
+        return moment
+    return moment.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def add_days(base_date: Optional[datetime] = None, days: int = 0) -> datetime:
     """
     Agrega días a una fecha base.
