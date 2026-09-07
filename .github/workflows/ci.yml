@@ -72,6 +72,22 @@ jobs:
           PASETO_SECRET_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
         run: pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
 
+      - name: Comprobar deriva entre migraciones y modelos
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: "5432"
+          TEST_DB_USER: postgres
+          TEST_DB_PASSWORD: postgres
+          TEST_DB_NAME: siscom_test
+        run: |
+          # Parte del esquema real de produccion, aplica las migraciones y
+          # comprueba que el resultado contiene lo que los modelos esperan.
+          #
+          # No se puede hacer con la base que construye `create_all()`: comparar
+          # la metadata contra una base hecha desde esa misma metadata siempre
+          # sale vacio. Ver tests/schema/README.md.
+          python scripts/verificar-deriva.py
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
