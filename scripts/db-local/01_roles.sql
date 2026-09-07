@@ -13,9 +13,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- timescale/timescaledb:2.15.1-pg15). initdb/05_fuel.sql llama a
 -- create_hypertable(), asi que sin esta extension el esquema no carga entero.
 CREATE EXTENSION IF NOT EXISTS timescaledb;
--- Fase 2 necesitará ltree para account_path. Se crea desde ya para que
--- el local pueda probar la migración de tenancy sin cambiar el harness.
-CREATE EXTENSION IF NOT EXISTS ltree;
 
 -- Usuario de RUNTIME: solo DML. Es el que usa la aplicación.
 DO $$

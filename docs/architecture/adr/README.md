@@ -26,6 +26,7 @@ Cada ADR sigue esta estructura:
 | [ADR-003](./003-zero-cost-ci-security.md) | Tooling de seguridad en CI sin costo | Aceptado | 2026-06-24 |
 | [ADR-004](./004-separacion-claves-paseto.md) | Separación de claves PASETO (servicio interno vs. compartir ubicación) | Propuesto (secuencia superada por ADR-005) | 2026-08-20 |
 | [ADR-005](./005-data-token-plano-de-datos.md) | Data token del plano de datos (PASETO v4.public + Valkey) | Propuesto | 2026-08-21 |
+| [ADR-006](./006-camino-materializado-en-uuid.md) | El camino materializado del árbol de cuentas va en `uuid[]`, no en `ltree` | Aceptado | 2026-09-07 |
 
 ## Crear un nuevo ADR
 
