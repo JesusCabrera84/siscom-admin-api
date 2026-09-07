@@ -34,7 +34,9 @@ install_gitleaks() {
 	esac
 
 	mkdir -p "$BIN_DIR"
-	curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_${platform}_${arch}.tar.gz" \
+	# Con reintentos, por el mismo motivo que en osv-scan.sh.
+	curl -sSfL --retry 3 --retry-delay 2 --retry-all-errors \
+		"https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_${platform}_${arch}.tar.gz" \
 		| tar -xz -C "$BIN_DIR" gitleaks
 	chmod +x "$BIN"
 }
