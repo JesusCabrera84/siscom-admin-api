@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD`: credencial de migraciones separada de la de runtime, que solo tiene DML. Alembic la usa cuando existe y cae a `DB_USER` cuando no, así que no rompe el despliegue actual
   - `docs/runbooks/reconciliar-historial-alembic.md`: el diagnóstico medido y el procedimiento
 
+### Removed
+
+- **`device_services` y todo lo que colgaba de él.** La migración `006` borra esa tabla a propósito y producción no la tiene: aquí producción tenía razón y lo que sobraba era el código. Verificado antes de borrar que **ningún cliente lo usa** — se buscaron las cuatro rutas (`v1/services`, `/services/active`, `/services/confirm-payment`, `/services/{id}/cancel`) en `nexus-web-page`, `geminis-labs-web-page`, `gac-web`, `apple/INexus` y `android`: cero coincidencias en los cinco.
+  - Fuera: `endpoints/services.py` (4 rutas legacy, el propio archivo se declaraba "⚠️ NO USAR"), `models/device_service.py`, `schemas/device_service.py`, `services/billing.py` y `services/device_activation.py` (solo alcanzables desde `services.py`), y `services/subscriptions.py` completo — sus cinco funciones tenían **cero llamadores**
+  - Fuera también sus tres tests y la prueba de humo de `/services/active` en `test_auth.py`
+  - Limpiadas las relaciones en `models/plan.py` y `models/device.py`, los exports de ambos `__init__.py`, y el `include_router` de `api/v1/router.py`
+  - **No se tocan las migraciones `006` ni `026`**: son historia
+  - `mobility_devices.py` y `mobility_device_service.py` **no** se tocan: `MobilityDeviceService` es otra clase
+
 ### Fixed
 
 - **El `set -eo pipefail` del despliegue rompía las comprobaciones que endurecía.** `docker ps | grep -q NOMBRE`: `grep -q` sale al primer match, el productor recibe `SIGPIPE` y termina con 141, y `pipefail` da el pipeline por fallido **aunque `grep` haya encontrado lo que buscaba**. En el despliegue de `v1.27.0` el contenedor levantó bien (`Up 5 seconds`) y el script lo dio por caído, revirtiendo la imagen sin necesidad. Nueve comprobaciones tenían esa forma; ahora usan `docker ps -q --filter "name=^X$"` y here-strings (`<<<`) en vez de pipes, y están probadas contra contenedores reales con `pipefail` activo, no solo con `bash -n`

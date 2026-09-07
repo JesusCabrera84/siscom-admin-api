@@ -53,12 +53,6 @@ def test_devices_my_devices_endpoint_without_auth(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_services_endpoint_without_auth(client):
-    """GET /services/active requiere autenticación."""
-    response = client.get("/api/v1/services/active")
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-
 def test_verify_email_existing_cognito_user_sends_email_attribute(
     client, db_session, test_user_data
 ):

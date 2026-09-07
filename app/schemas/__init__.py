@@ -75,12 +75,6 @@ from app.schemas.device import (
 )
 
 # Device Services
-from app.schemas.device_service import (
-    DeviceServiceConfirmPayment,
-    DeviceServiceCreate,
-    DeviceServiceOut,
-    DeviceServiceWithDetails,
-)
 from app.schemas.mobility_device import MobilityDeviceCreateIn, MobilityDeviceOut
 from app.schemas.mobility_location import MobilityLocationIn, MobilityLocationOut
 
@@ -208,10 +202,6 @@ __all__ = [
     "SubscriptionCancelRequest",
     "SubscriptionRenewRequest",
     # Device Services
-    "DeviceServiceCreate",
-    "DeviceServiceOut",
-    "DeviceServiceConfirmPayment",
-    "DeviceServiceWithDetails",
     # Payments
     "PaymentBase",
     "PaymentCreate",
