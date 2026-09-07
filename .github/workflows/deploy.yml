@@ -63,6 +63,13 @@ jobs:
           DB_USER: ${{ vars.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ vars.DB_NAME }}
+          # Credencial exclusiva de migraciones. Alembic la usa cuando esta
+          # definida y cae a DB_USER cuando no, asi que el despliegue no se
+          # rompe mientras el rol no exista todavia en la base.
+          # El usuario es variable (no es secreto: es un nombre de rol) y la
+          # contrasena es secret, igual que DB_USER / DB_PASSWORD.
+          DB_MIGRATION_USER: ${{ vars.DB_MIGRATION_USER }}
+          DB_MIGRATION_PASSWORD: ${{ secrets.DB_MIGRATION_PASSWORD }}
           COGNITO_REGION: ${{ vars.COGNITO_REGION }}
           COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
           COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
@@ -104,7 +111,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT }}
-          envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,AWS_REGION,SNS_PLATFORM_APPLICATION_ARN_IOS,SNS_PLATFORM_APPLICATION_ARN_ANDROID,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,ALLOWED_ORIGINS,CONTACT_EMAIL,RECAPTCHA_SECRET_KEY,PASETO_SECRET_KEY,SHARE_LOCATION_KEY_B64,DATA_TOKEN_PRIVATE_KEY_B64,DATA_TOKEN_KEY_ID,DATA_TOKEN_INDEX_SECRET_B64,VALKEY_URL,SHARE_LOCATION_USE_DATA_TOKEN,KORE_CLIENT_ID,KORE_CLIENT_SECRET,KORE_API,KORE_API_AUTH,KORE_API_SMS,KAFKA_BROKERS,KAFKA_RULES_UPDATES_TOPIC,KAFKA_GEOFENCES_UPDATES_TOPIC,KAFKA_USER_DEVICES_UPDATES_TOPIC,KAFKA_UNIT_DEVICES_UPDATES_TOPIC,KAFKA_USER_UNITS_UPDATES_TOPIC,KAFKA_MOBILITY_TOPIC,KAFKA_TEAM_RULES_TOPIC,KAFKA_RULES_UPDATES_GROUP_ID,KAFKA_SASL_USERNAME,KAFKA_SASL_PASSWORD,KAFKA_SASL_MECHANISM,KAFKA_SECURITY_PROTOCOL
+          envs: IMAGE_NAME,CONTAINER_NAME,PROJECT_NAME,AWS_REGION,SNS_PLATFORM_APPLICATION_ARN_IOS,SNS_PLATFORM_APPLICATION_ARN_ANDROID,DB_HOST,DB_PORT,DB_USER,DB_PASSWORD,DB_NAME,DB_MIGRATION_USER,DB_MIGRATION_PASSWORD,COGNITO_REGION,COGNITO_USER_POOL_ID,COGNITO_CLIENT_ID,COGNITO_CLIENT_SECRET,DEFAULT_USER_PASSWORD,SES_FROM_EMAIL,SES_REGION,FRONTEND_URL,ALLOWED_ORIGINS,CONTACT_EMAIL,RECAPTCHA_SECRET_KEY,PASETO_SECRET_KEY,SHARE_LOCATION_KEY_B64,DATA_TOKEN_PRIVATE_KEY_B64,DATA_TOKEN_KEY_ID,DATA_TOKEN_INDEX_SECRET_B64,VALKEY_URL,SHARE_LOCATION_USE_DATA_TOKEN,KORE_CLIENT_ID,KORE_CLIENT_SECRET,KORE_API,KORE_API_AUTH,KORE_API_SMS,KAFKA_BROKERS,KAFKA_RULES_UPDATES_TOPIC,KAFKA_GEOFENCES_UPDATES_TOPIC,KAFKA_USER_DEVICES_UPDATES_TOPIC,KAFKA_UNIT_DEVICES_UPDATES_TOPIC,KAFKA_USER_UNITS_UPDATES_TOPIC,KAFKA_MOBILITY_TOPIC,KAFKA_TEAM_RULES_TOPIC,KAFKA_RULES_UPDATES_GROUP_ID,KAFKA_SASL_USERNAME,KAFKA_SASL_PASSWORD,KAFKA_SASL_MECHANISM,KAFKA_SECURITY_PROTOCOL
           script: |
             # Sin esto, un paso que falla no aborta el script: el despliegue
             # sigue adelante y termina imprimiendo "completado exitosamente".
@@ -162,6 +169,8 @@ jobs:
             DB_USER=${DB_USER}
             DB_PASSWORD=${DB_PASSWORD}
             DB_NAME=${DB_NAME}
+            DB_MIGRATION_USER=${DB_MIGRATION_USER}
+            DB_MIGRATION_PASSWORD=${DB_MIGRATION_PASSWORD}
             COGNITO_REGION=${COGNITO_REGION}
             COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
             COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
@@ -205,6 +214,22 @@ jobs:
             # Se hace ANTES de tocar el contenedor en marcha: si la migracion
             # falla, se aborta aqui y el servicio anterior sigue sirviendo
             # intacto. Ese es el rollback de esquema mas barato que hay.
+            # Secrets y variables son dos secciones distintas de la misma
+            # pantalla de GitHub, y poner una entrada en la equivocada NO da
+            # error: interpola cadena vacia. Se anuncia con que usuario va a
+            # migrar alembic para que eso sea visible en el log.
+            if [ -n "${DB_MIGRATION_USER}" ]; then
+              echo "🔑 Migraciones con credencial dedicada: ${DB_MIGRATION_USER}"
+              if [ -z "${DB_MIGRATION_PASSWORD}" ]; then
+                echo "❌ ERROR: DB_MIGRATION_USER definido pero DB_MIGRATION_PASSWORD vacio."
+                echo "   Suele significar que la contrasena se guardo como variable"
+                echo "   en vez de como secret. Alembic fallaria al autenticar."
+                exit 1
+              fi
+            else
+              echo "🔑 Sin DB_MIGRATION_USER: alembic migrara como ${DB_USER} (sin DDL)."
+            fi
+
             echo "🗄️ Revision de esquema ANTES de migrar:"
             PREV_REVISION=$(docker run --rm \
               --network siscom-network \

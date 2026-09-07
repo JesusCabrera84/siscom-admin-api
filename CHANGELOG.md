@@ -16,8 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD`: credencial de migraciones separada de la de runtime, que solo tiene DML. Alembic la usa cuando existe y cae a `DB_USER` cuando no, así que no rompe el despliegue actual
   - `docs/runbooks/reconciliar-historial-alembic.md`: el diagnóstico medido y el procedimiento
 
+### Fixed
+
+- **Reconciliación del esquema (migración `026`).** Medida contra el DDL de producción del 5-6 de septiembre, no deducida. La sonda dio 21 de 25 revisiones presentes con huecos en `004`, `021`, `022` y `024`: no monótono, así que ningún `alembic stamp` único deja el historial correcto. Repara, con endpoints vivos afectados:
+  - `api_idempotency_requests` (mig. `021`) — `POST /payment-intent` inserta ahí la reserva de idempotencia antes de llamar a Stripe. Sin la tabla, el endpoint de cobro falla
+  - `account_tax_profiles` (mig. `024`) — timbrado CFDI
+  - `plan_products` — la usa `internal/plans.py` con un `JOIN`; no la crea ninguna migración, estaba solo en `initdb/02_schema.sql`
+  - Siete columnas: `subscriptions.grace_until` y `renewal_last_error`, `invitations.role`, `organization_capabilities.reason` y `expires_at`, `order_items.created_at`, `trip_events.value`
+  - `gateway_event_status += 'processing'`
+  - **Es idempotente objeto por objeto, no por migración**: la `022` está *parcialmente* aplicada (tiene `dunning_last_attempt` y `dunning_next_attempt`, le faltan las otras dos), así que reejecutarla entera fallaría
+  - No toca `device_services` —la mig. `006` la borra a propósito y el sobrante es el modelo— ni `unified_sim_profiles`, que sí existe en producción
+  - Ensayada contra una réplica del esquema productivo: aplica, revierte, reaplica, y es no-op sobre un esquema ya reparado
+- `docs/RELEASE.md` decía que revertir una liberación era redesplegar el tag anterior. **Eso falla cuando la liberación trae una migración**: alembic aborta con `Can't locate revision identified by ...` porque esa revisión no existe en la historia del código viejo. Ahora documenta los dos pasos reales, en orden, y aclara que el primero —revertir la imagen— basta casi siempre, porque las migraciones son aditivas por política (expand/contract)
+- `scripts/nota-de-migracion.py`: genera la nota de migración y rollback de una liberación —qué revisiones añade y el `downgrade` exacto— derivándola del repositorio, para que no pueda envejecer. La plantilla de PR la pide como obligatoria, aunque sea para decir que no hay migraciones
+- `scripts/alembic-probe.py` buscaba en `public` tablas que las migraciones `016`–`019` crean en los esquemas `team` y `mobility`, así que daba cuatro revisiones por ausentes cuando sí estaban aplicadas. El veredicto real es 21/25, no 17/25
+
 ### Changed
 
+- `deploy.yml` propaga `DB_MIGRATION_USER` (variable) y `DB_MIGRATION_PASSWORD` (secret) en los tres sitios que hacen falta: el bloque `env:`, la lista `envs:` del `ssh-action` —el que se olvida— y el heredoc del `.env`. Anuncia en el log con qué usuario va a migrar, y aborta si el usuario está definido pero la contraseña sale vacía, que es el síntoma de haberla guardado como variable en vez de como secret
 - `/health` consulta la base de datos y expone `schema_revision` (la revisión de alembic aplicada, o `null` si `alembic_version` no existe). Devuelve **503** cuando la base no responde. Antes era un diccionario estático: el healthcheck de Docker y el bucle de espera del despliegue daban verde con la base inservible
 - `deploy.yml` — `set -eo pipefail` en los dos scripts remotos: sin él, un paso que fallaba no abortaba el despliegue, que terminaba imprimiendo "completado exitosamente". Además:
   - las migraciones corren **antes** de tocar el contenedor en marcha y abortan el despliegue si fallan, dejando el servicio anterior sirviendo intacto

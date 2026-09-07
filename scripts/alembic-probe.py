@@ -105,10 +105,15 @@ MARKERS = [
         "column",
         ("subscriptions", "active_units"),
     ),
-    ("016_team_core", "tabla teams", "table", ("teams",)),
-    ("017_team_invites", "tabla team_invites", "table", ("team_invites",)),
-    ("018_emergency_events", "tabla emergency_events", "table", ("emergency_events",)),
-    ("019_mobility_devices", "tabla mobility_devices", "table", ("mobility_devices",)),
+    ("016_team_core", "tabla team.teams", "table", ("team.teams",)),
+    ("017_team_invites", "tabla team.invites", "table", ("team.invites",)),
+    (
+        "018_emergency_events",
+        "tabla team.emergency_events",
+        "table",
+        ("team.emergency_events",),
+    ),
+    ("019_mobility_devices", "tabla mobility.devices", "table", ("mobility.devices",)),
     ("020_user_devices", "tabla user_devices", "table", ("user_devices",)),
     (
         "021_api_idempotency",
@@ -159,7 +164,13 @@ def connect():
 
 
 def has_table(cur, table):
-    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (f"public.{table}",))
+    """Acepta 'tabla' (asume public) o 'esquema.tabla'.
+
+    Las migraciones 016-019 crean en los esquemas `team` y `mobility`, no en
+    `public`: asumir public daba esas cuatro por ausentes cuando si existen.
+    """
+    calificada = table if "." in table else f"public.{table}"
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (calificada,))
     return cur.fetchone()[0]
 
 
@@ -219,9 +230,10 @@ def main():
     print(f"Usuario: {os.environ['DB_USER']}\n")
 
     cur.execute(
-        "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'"
+        "SELECT count(*) FROM information_schema.tables"
+        " WHERE table_schema IN ('public', 'team', 'mobility', 'api_platform')"
     )
-    print(f"Tablas en public: {cur.fetchone()[0]}")
+    print(f"Tablas (public/team/mobility/api_platform): {cur.fetchone()[0]}")
 
     # Sin las tablas nucleo esto no es el esquema de admin-api: diagnosticar
     # revision por revision sobre una base vacia da un veredicto sin sentido,
