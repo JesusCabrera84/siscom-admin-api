@@ -18,6 +18,17 @@ que la introdujo, en vez de descubrirse meses despues por un dump pedido a mano:
 tres tablas ausentes con endpoint vivo —una de ellas la del cobro— y siete
 columnas que impedian consultar tres modelos centrales.
 
+La maquinaria de la base desechable vive en `tests/esquema_desechable.py`, que
+comparte con los tests que ejercitan objetos que solo crean las migraciones.
+
+LO QUE ESTA COMPROBACION NO PRUEBA
+==================================
+Solo mira en una direccion: que el esquema contenga lo que los modelos esperan.
+Una migracion que cree tablas que ningun modelo declara —el caso de la rebanada
+A de la Fase 2, que es esquema sin modelos a proposito— pasa por aqui sin que
+se revise nada suyo salvo que aplique sin error. Para eso estan los tests que
+la ejercitan.
+
 Uso:
     ./scripts/db-local.sh up
     python scripts/verificar-deriva.py
@@ -26,11 +37,10 @@ Sale con codigo 1 si hay deriva.
 """
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect
 
 # El script vive en scripts/, así que la raíz del repo no está en el path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -41,7 +51,10 @@ bootstrap_test_runtime()
 
 from sqlmodel import SQLModel  # noqa: E402
 
-from app.core.config import settings  # noqa: E402
+from tests import esquema_desechable as desechable  # noqa: E402
+from tests.esquema_desechable import ESQUEMAS  # noqa: E402
+
+BASE_DERIVA = os.getenv("DRIFT_DB_NAME", "siscom_drift")
 
 
 def _registrar_modelos() -> None:
@@ -62,107 +75,12 @@ def _registrar_modelos() -> None:
     )
 
 
-DIR_SNAPSHOT = Path(__file__).resolve().parents[1] / "tests" / "schema"
-BASE_DERIVA = os.getenv("DRIFT_DB_NAME", "siscom_drift")
-
-# El snapshot refleja el esquema productivo del 5/09/2026, anterior a la 026.
-# Stamparlo aqui hace que `upgrade head` ejecute de verdad las migraciones
-# posteriores, que es lo que se quiere probar.
-REVISION_DEL_SNAPSHOT = os.getenv("DRIFT_STAMP", "025_device_and_unit_refs")
-
-ESQUEMAS = ("public", "api_platform", "team", "mobility")
-
-
-def _url(base: str) -> str:
-    return (
-        f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}"
-        f"@{settings.DB_HOST}:{settings.DB_PORT}/{base}"
-    )
-
-
-def _recrear_base() -> None:
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    try:
-        with admin.connect() as conn:
-            conn.execute(text(f'DROP DATABASE IF EXISTS "{BASE_DERIVA}" WITH (FORCE)'))
-            conn.execute(text(f'CREATE DATABASE "{BASE_DERIVA}"'))
-    finally:
-        admin.dispose()
-
-
-def _psql(fichero: Path) -> list[str]:
-    r = subprocess.run(
-        [
-            "psql",
-            "-q",
-            "-X",
-            "-h",
-            settings.DB_HOST,
-            "-p",
-            str(settings.DB_PORT),
-            "-U",
-            settings.DB_USER,
-            "-d",
-            BASE_DERIVA,
-            "-f",
-            str(fichero),
-        ],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "PGPASSWORD": settings.DB_PASSWORD or ""},
-    )
-    return [
-        ln for ln in r.stderr.split("\n") if ln.startswith("psql:") and "ERROR" in ln
-    ]
-
-
-def _cargar_snapshot() -> None:
-    """Carga los fragmentos, en dos pasadas.
-
-    El export vino de una herramienta grafica y no ordena por dependencias:
-    dentro de un mismo fichero hay indices y restricciones que referencian
-    tablas creadas mas abajo. Una sola pasada deja fuera tres tablas de `team`.
-
-    La primera pasada se hace en silencio y la segunda es la que informa: un
-    error de verdad sobrevive a las dos, mientras que uno de orden desaparece.
-    """
-    fragmentos = sorted(DIR_SNAPSHOT.glob("*.sql"))
-    if not fragmentos:
-        sys.exit(f"No hay snapshot en {DIR_SNAPSHOT}")
-
-    for f in fragmentos:  # primera pasada, silenciosa
-        _psql(f)
-
-    for f in fragmentos:
-        # Ruido conocido del snapshot: objetos que ya existen por la primera
-        # pasada, y referencias a _timescaledb_functions que aqui no aplican.
-        benigno = ("already exists", "_timescaledb_functions")
-        errores = _psql(f)
-        reales = [e for e in errores if not any(b in e for b in benigno)]
-        estado = "ok" if not reales else f"{len(reales)} errores"
-        if errores and not reales:
-            estado = f"ok ({len(errores)} avisos conocidos)"
-        print(f"  {f.name:<22} {estado}")
-        for e in reales[:3]:
-            print(f"      {e[:120]}")
-
-
-def _alembic(*args: str) -> int:
-    entorno = {**os.environ, "DB_NAME": BASE_DERIVA}
-    entorno.pop("DB_MIGRATION_USER", None)  # el usuario de la base local ya tiene DDL
-    # `python -m alembic`, no `alembic`: el binario puede no estar en el PATH
-    # (venv sin activar, CI, etc.).
-    return subprocess.run(
-        [sys.executable, "-m", "alembic", *args], env=entorno
-    ).returncode
-
-
 def _comparar() -> int:
     _registrar_modelos()
     if not SQLModel.metadata.tables:
         print("No se registro ningun modelo: la comparacion no probaria nada.")
         return 1
-    eng = create_engine(_url(BASE_DERIVA))
+    eng = create_engine(desechable.url(BASE_DERIVA))
     try:
         insp = inspect(eng)
         existentes = {}
@@ -208,19 +126,13 @@ def _comparar() -> int:
 
 
 def main() -> int:
+    from app.core.config import settings
+
     print(f"Base desechable: {BASE_DERIVA} en {settings.DB_HOST}:{settings.DB_PORT}")
-    _recrear_base()
-
-    print("\n1. Cargando el snapshot del esquema productivo")
-    _cargar_snapshot()
-
-    print(f"\n2. alembic stamp {REVISION_DEL_SNAPSHOT}")
-    if _alembic("stamp", REVISION_DEL_SNAPSHOT) != 0:
-        return 1
-
-    print("\n3. alembic upgrade head")
-    if _alembic("upgrade", "head") != 0:
-        print("\nLas migraciones fallaron sobre el esquema real de produccion.")
+    try:
+        desechable.preparar(BASE_DERIVA)
+    except RuntimeError as exc:
+        print(f"\n{exc}")
         return 1
 
     print("\n4. Comparando modelos contra el esquema migrado")
