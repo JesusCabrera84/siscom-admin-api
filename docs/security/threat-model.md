@@ -95,7 +95,7 @@ volvía a investigarla desde cero.
   seguir coincidiendo:
   - `osv-scanner.toml` → `[[IgnoredVulns]] id = "GHSA-wj6h-64fc-37mp"`
   - `scripts/pip-audit-scan.sh` → `--ignore-vuln PYSEC-2026-1325`
-  - La alerta de Dependabot, descartada como *vulnerable code not actually used*
+  - La alerta de Dependabot (#18), descartada el 8/09/2026 con motivo `not_used`
 - **Qué la cerraría de verdad**: quitar `python-jose`. Se usa para exactamente
   una llamada, y `PyJWT` + `cryptography` hace la misma verificación RS256 sin
   arrastrar `ecdsa`. Es un cambio en el camino de verificación de tokens, así
