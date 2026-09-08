@@ -13,6 +13,8 @@ pip install -r requirements.txt >/dev/null
 # lateral fuera de alcance del proyecto. No aplica a este servicio: `app/core/security.py`
 # solo hace `jwt.decode` con `algorithms=["RS256"]` — no firmamos, no generamos llaves y
 # no usamos ECDH, y la verificación de firmas no está afectada por esta vulnerabilidad.
-# Mismo riesgo ya aceptado para OSV en `osv-scanner.toml`.
+# Mismo riesgo ya aceptado para OSV en `osv-scanner.toml` y en la alerta de
+# Dependabot. El registro con el razonamiento completo y la condicion que lo
+# invalidaria vive en `docs/security/threat-model.md`, seccion Riesgos aceptados.
 exec pip-audit -r requirements.txt --desc on \
   --ignore-vuln PYSEC-2026-1325

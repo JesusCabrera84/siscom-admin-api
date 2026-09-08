@@ -16,4 +16,4 @@ reason = "pip is not pinned in requirements.txt; false positive from pip-* tooli
 # PYSEC-2026-1325 and is silenced in `scripts/pip-audit-scan.sh` with this reasoning.
 [[IgnoredVulns]]
 id = "GHSA-wj6h-64fc-37mp"
-reason = "ecdsa via python-jose; no fix available (CVE-2024-23342); not reachable — RS256 verification only"
+reason = "ecdsa via python-jose; no fix available (CVE-2024-23342); not reachable — RS256 verification only. Full record: docs/security/threat-model.md, Riesgos aceptados"

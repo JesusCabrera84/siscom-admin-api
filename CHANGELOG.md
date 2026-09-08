@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CodeQL pasa a advanced setup y cubre `develop`** (`.github/workflows/codeql.yml`). El default setup analiza únicamente la rama por defecto y los PRs que la apuntan, y en este repositorio el trabajo real pasa por `develop` — los tags `v1.27.0` y `v1.27.1` se cortaron directamente sobre esa rama, así que fue código desplegado a producción sin que CodeQL lo hubiera mirado nunca. El workflow reproduce la configuración que ya había (lenguajes `actions` y `python`, suite `default`, threat model `remote`, corrida semanal); lo único que cambia es que ahora corre en las mismas ramas que `ci.yml`
+  - El caso que lo destapó: la fuga de `/health` entró en `1.27.0` el 5/09 y se marcó el 7/09, al abrir el primer PR contra `master` desde entonces. Esos dos días son el hueco
+  - Los demás escáneres —Gitleaks, Semgrep, pip-audit y OSV— **ya cubrían las dos ramas** vía `ci.yml`. Lo que faltaba en `develop` era el análisis de flujo de datos de CodeQL, que es justo el que encontró la fuga: Semgrep no la marcó
+  - **Requiere desactivar el default setup antes de mergear**, porque los dos modos no conviven: con el default activo, este workflow falla
+
+### Security
+
+- **Registro de riesgos aceptados en `docs/security/threat-model.md`.** La excepción de `ecdsa` (`GHSA-wj6h-64fc-37mp` / `CVE-2024-23342` / `PYSEC-2026-1325` — Minerva, sin versión corregida) estaba repartida entre `osv-scanner.toml` y `scripts/pip-audit-scan.sh`, y Dependabot no la conocía: la misma decisión, tomada dos veces, seguía apareciendo como alerta alta sin atender. Ahora hay un solo registro con el razonamiento, los tres sitios donde vive la excepción y **la condición que la invalidaría** — que se firme con ECDSA o se acepte ES256 en `jwt.decode`
+  - No aplica a este servicio: Minerva ataca el *firmado* ECDSA sobre P-256, y `app/core/security.py` hace una sola llamada, `jwt.decode(..., algorithms=["RS256"])`. RS256 es RSA
+  - Lo que cerraría el asunto de raíz es quitar `python-jose` —`PyJWT` + `cryptography` verifica RS256 sin arrastrar `ecdsa`—, pero toca el camino de verificación de tokens y merece su propio PR
+
+---
+
 > **Nota.** Lo que sigue arrastra entradas de varias versiones ya liberadas que
 > nunca se movieron a su sección. Se dejan aquí a propósito: atribuirlas exigiría
 > saber qué salió en cada tag anterior a `1.25.0`, y adivinarlo produciría un
