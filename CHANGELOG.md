@@ -7,51 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **Fase 2, rebanada B — el código de tenancy.** Modelos SQLModel encima de lo que creó la migración `027`, resolución de capabilities comerciales con techo descendente, y `GET /tenant-config`. **No trae migraciones**: es la mitad *contract* del expand/contract, código que empieza a usar columnas que llevan días en producción
-  - `app/models/tenancy.py` (`TenantDomain`, `TenantBranding`), `AccountCapability` en `capability.py` junto a sus hermanas, y `Account` gana `parent_account_id`, `account_type` y `account_path`
-  - **Al existir los modelos, el comparador de deriva empieza por fin a cubrir la `027`.** Verificado: 63 tablas revisadas, sin deriva
-  - **`account_path` lo siguen manteniendo los triggers.** El modelo lo declara para poder leerlo, pero escribirlo desde la aplicación no tiene efecto: el trigger `BEFORE` lo recalcula desde el camino del padre. Está dicho en el módulo y en los tests, porque el harness normal construye el esquema con `create_all()` y ahí **no hay triggers** — de esos tests no se puede concluir que escribirlo a mano funcione
-
-- **`app/services/account_capabilities.py` — el techo descendente.** Camina el `account_path` de la raíz a la hoja: `min` para enteros, `AND` para booleanos. Mero Mero no puede darle a Empresa 500 más de lo que Geminis le dio a Mero Mero, y eso es lo que hace delegable la reventa (§4)
-  - **Sin fila no significa cero, significa que no restringe.** Es §17 —«vacío no es sin límite»— en el sitio donde más daño haría: si «sin fila» fuera cero, el sistema denegaría todo hasta configurar cada cuenta una por una; si fuera «sin límite», un descendiente sin fila escaparía del techo de su ancestro
-  - **El valor por defecto no entra en el plegado**, solo se usa cuando no hay ninguna fila en todo el camino. Si entrara, conceder 5 000 subcuentas daría `min(default, 5000)` = 0 y el permiso otorgado no serviría de nada
-  - `limitado_por` dice **qué cuenta impone el techo**, comparando el valor propio contra el efectivo en vez del orden en que se plegaron: con `A(5) → B(10) → C(3)` quien manda es C, y atribuir el recorte al de A sobre B sería una explicación falsa
-  - En `text` no hay techo —un texto no tiene orden— y gana el más cercano a la hoja. Queda documentado con un test para que, cuando se definan los modos de `self_signup_mode`, la decisión sea consciente
-  - `validar_limite` trata el **0 como cero**, al revés que el servicio de organización, donde `<= 0` es «ilimitado». Es deliberado: los defaults de aquí valen 0 para que una cuenta sin permiso explícito no pueda revender ni reclamar dominios
-
-- **`GET /tenant-config`** — qué marca corresponde al `Host` de la petición. Público y sin autenticación por diseño: lo consume el `hooks.server.js` de nexus-web-page antes de que exista sesión, para que el primer HTML salga ya con la marca correcta y no con la de Geminis durante 200–800 ms — que es además lo que arruina el unfurl de WhatsApp, donde el crawler no ejecuta JavaScript
-  - **El Host resuelve apariencia y nunca autoriza.** Por ahí no sale un solo dato de cliente, **ni siquiera el `account_id`** de la marca: el endpoint es enumerable por diseño y ese id es el que después aparece en el predicado de aislamiento. Hay un test que lo fija
-  - Solo sirve dominios `VERIFIED`. Uno en `PENDING` lo puede reclamar cualquiera hasta que demuestre control por DNS, y servir su marca antes permitiría suplantar a un partner apuntando un CNAME
-  - Un Host desconocido responde **200 con la marca genérica**, no 404: el fallo más probable —un dominio recién dado de alta— dejaría si no la aplicación sin pintar en vez de pintarla neutra
-  - `Vary: Host` además de `Cache-Control`. Sin él una caché intermedia serviría la marca de un partner a otro
-
-### Fixed
-
-- **`OrganizationCapability.is_expired()` lanzaba `TypeError` con cualquier override que tuviera fecha de caducidad.** `expires_at` es `TIMESTAMP WITH TIME ZONE` —la columna la añadió la migración `026`— y `utcnow()` devuelve naive a propósito, así que compararlas sin normalizar da `can't compare offset-naive and offset-aware datetimes`. Está en el **camino central de resolución de capabilities**: la petición entera reventaba. Se salvaba solo porque la columna es del 7/09 y todavía no hay filas que la usen
-  - Es **el mismo fallo que tenía `Subscription.is_active()`**, y se arregla igual, con `as_naive_utc()` en la frontera de comparación
-  - **Por qué los tests no lo veían**: `test_organization_capability_is_expired` construye la fecha en Python, donde sale naive, así que pasaba en verde mientras el código reventaba con un valor real leído de Postgres. Es la lección de §20 en pequeño — un test que no puede fallar por la razón por la que falla producción no informa de nada. Se añade el caso *aware*
-  - Lo encontró un test de la rebanada B al copiar ese mismo `is_expired()` para `AccountCapability`
-
-
-- **CodeQL pasa a advanced setup y cubre `develop`** (`.github/workflows/codeql.yml`). El default setup analiza únicamente la rama por defecto y los PRs que la apuntan, y en este repositorio el trabajo real pasa por `develop` — los tags `v1.27.0` y `v1.27.1` se cortaron directamente sobre esa rama, así que fue código desplegado a producción sin que CodeQL lo hubiera mirado nunca. El workflow reproduce la configuración que ya había (lenguajes `actions` y `python`, suite `default`, threat model `remote`, corrida semanal); lo único que cambia es que ahora corre en las mismas ramas que `ci.yml`
-  - El caso que lo destapó: la fuga de `/health` entró en `1.27.0` el 5/09 y se marcó el 7/09, al abrir el primer PR contra `master` desde entonces. Esos dos días son el hueco
-  - Los demás escáneres —Gitleaks, Semgrep, pip-audit y OSV— **ya cubrían las dos ramas** vía `ci.yml`. Lo que faltaba en `develop` era el análisis de flujo de datos de CodeQL, que es justo el que encontró la fuga: Semgrep no la marcó
-  - **Requiere desactivar el default setup antes de mergear**, porque los dos modos no conviven: con el default activo, este workflow falla
-
-### Security
-
-- **Registro de riesgos aceptados en `docs/security/threat-model.md`.** La excepción de `ecdsa` (`GHSA-wj6h-64fc-37mp` / `CVE-2024-23342` / `PYSEC-2026-1325` — Minerva, sin versión corregida) estaba repartida entre `osv-scanner.toml` y `scripts/pip-audit-scan.sh`, y Dependabot no la conocía: la misma decisión, tomada dos veces, seguía apareciendo como alerta alta sin atender. Ahora hay un solo registro con el razonamiento, los tres sitios donde vive la excepción y **la condición que la invalidaría** — que se firme con ECDSA o se acepte ES256 en `jwt.decode`
-  - No aplica a este servicio: Minerva ataca el *firmado* ECDSA sobre P-256, y `app/core/security.py` hace una sola llamada, `jwt.decode(..., algorithms=["RS256"])`. RS256 es RSA
-  - Lo que cerraría el asunto de raíz es quitar `python-jose` —`PyJWT` + `cryptography` verifica RS256 sin arrastrar `ecdsa`—, pero toca el camino de verificación de tokens y merece su propio PR
-
----
-
 > **Nota.** Lo que sigue arrastra entradas de varias versiones ya liberadas que
 > nunca se movieron a su sección. Se dejan aquí a propósito: atribuirlas exigiría
 > saber qué salió en cada tag anterior a `1.25.0`, y adivinarlo produciría un
-> historial falso. Las de `1.25.0`, `1.26.0`, `1.27.0`, `1.27.1` y `1.28.0` sí se
+> historial falso. Las de `1.25.0`, `1.26.0`, `1.27.0`, `1.27.1`, `1.28.0` y `1.29.0`
+> sí se
 > repartieron, derivadas de `git log <tag-anterior>..<tag>`.
 
 
@@ -110,6 +70,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - El resolver de alcance es explícito por sujeto (`ScopeSubject`): `accessible_device_ids`, que decidía a partir del usuario implícito, se elimina
 
 
+
+
+## [1.29.0] - 2026-09-08
+
+**Migraciones.** Ninguna. La cabeza sigue en `027_tenancy_esquema`, que entró con `1.28.0`.
+
+**Rollback.** Redesplegar el tag anterior: no toca el esquema, así que no hay nada que revertir
+en la base ni orden que respetar.
+
+### Added
+
+- **Fase 2, rebanada B — el código de tenancy.** Modelos SQLModel encima de lo que creó la migración `027`, resolución de capabilities comerciales con techo descendente, y `GET /tenant-config`. **No trae migraciones**: es la mitad *contract* del expand/contract, código que empieza a usar columnas que llevan días en producción
+  - `app/models/tenancy.py` (`TenantDomain`, `TenantBranding`), `AccountCapability` en `capability.py` junto a sus hermanas, y `Account` gana `parent_account_id`, `account_type` y `account_path`
+  - **Al existir los modelos, el comparador de deriva empieza por fin a cubrir la `027`.** Verificado: 63 tablas revisadas, sin deriva
+  - **`account_path` lo siguen manteniendo los triggers.** El modelo lo declara para poder leerlo, pero escribirlo desde la aplicación no tiene efecto: el trigger `BEFORE` lo recalcula desde el camino del padre. Está dicho en el módulo y en los tests, porque el harness normal construye el esquema con `create_all()` y ahí **no hay triggers** — de esos tests no se puede concluir que escribirlo a mano funcione
+
+- **`app/services/account_capabilities.py` — el techo descendente.** Camina el `account_path` de la raíz a la hoja: `min` para enteros, `AND` para booleanos. Mero Mero no puede darle a Empresa 500 más de lo que Geminis le dio a Mero Mero, y eso es lo que hace delegable la reventa (§4)
+  - **Sin fila no significa cero, significa que no restringe.** Es §17 —«vacío no es sin límite»— en el sitio donde más daño haría: si «sin fila» fuera cero, el sistema denegaría todo hasta configurar cada cuenta una por una; si fuera «sin límite», un descendiente sin fila escaparía del techo de su ancestro
+  - **El valor por defecto no entra en el plegado**, solo se usa cuando no hay ninguna fila en todo el camino. Si entrara, conceder 5 000 subcuentas daría `min(default, 5000)` = 0 y el permiso otorgado no serviría de nada
+  - `limitado_por` dice **qué cuenta impone el techo**, comparando el valor propio contra el efectivo en vez del orden en que se plegaron: con `A(5) → B(10) → C(3)` quien manda es C, y atribuir el recorte al de A sobre B sería una explicación falsa
+  - En `text` no hay techo —un texto no tiene orden— y gana el más cercano a la hoja. Queda documentado con un test para que, cuando se definan los modos de `self_signup_mode`, la decisión sea consciente
+  - `validar_limite` trata el **0 como cero**, al revés que el servicio de organización, donde `<= 0` es «ilimitado». Es deliberado: los defaults de aquí valen 0 para que una cuenta sin permiso explícito no pueda revender ni reclamar dominios
+
+- **`GET /tenant-config`** — qué marca corresponde al `Host` de la petición. Público y sin autenticación por diseño: lo consume el `hooks.server.js` de nexus-web-page antes de que exista sesión, para que el primer HTML salga ya con la marca correcta y no con la de Geminis durante 200–800 ms — que es además lo que arruina el unfurl de WhatsApp, donde el crawler no ejecuta JavaScript
+  - **El Host resuelve apariencia y nunca autoriza.** Por ahí no sale un solo dato de cliente, **ni siquiera el `account_id`** de la marca: el endpoint es enumerable por diseño y ese id es el que después aparece en el predicado de aislamiento. Hay un test que lo fija
+  - Solo sirve dominios `VERIFIED`. Uno en `PENDING` lo puede reclamar cualquiera hasta que demuestre control por DNS, y servir su marca antes permitiría suplantar a un partner apuntando un CNAME
+  - Un Host desconocido responde **200 con la marca genérica**, no 404: el fallo más probable —un dominio recién dado de alta— dejaría si no la aplicación sin pintar en vez de pintarla neutra
+  - `Vary: Host` además de `Cache-Control`. Sin él una caché intermedia serviría la marca de un partner a otro
+
+### Fixed
+
+- **`OrganizationCapability.is_expired()` lanzaba `TypeError` con cualquier override que tuviera fecha de caducidad.** `expires_at` es `TIMESTAMP WITH TIME ZONE` —la columna la añadió la migración `026`— y `utcnow()` devuelve naive a propósito, así que compararlas sin normalizar da `can't compare offset-naive and offset-aware datetimes`. Está en el **camino central de resolución de capabilities**: la petición entera reventaba. Se salvaba solo porque la columna es del 7/09 y todavía no hay filas que la usen
+  - Es **el mismo fallo que tenía `Subscription.is_active()`**, y se arregla igual, con `as_naive_utc()` en la frontera de comparación
+  - **Por qué los tests no lo veían**: `test_organization_capability_is_expired` construye la fecha en Python, donde sale naive, así que pasaba en verde mientras el código reventaba con un valor real leído de Postgres. Es la lección de §20 en pequeño — un test que no puede fallar por la razón por la que falla producción no informa de nada. Se añade el caso *aware*
+  - Lo encontró un test de la rebanada B al copiar ese mismo `is_expired()` para `AccountCapability`
+
+
+- **CodeQL pasa a advanced setup y cubre `develop`** (`.github/workflows/codeql.yml`). El default setup analiza únicamente la rama por defecto y los PRs que la apuntan, y en este repositorio el trabajo real pasa por `develop` — los tags `v1.27.0` y `v1.27.1` se cortaron directamente sobre esa rama, así que fue código desplegado a producción sin que CodeQL lo hubiera mirado nunca. El workflow reproduce la configuración que ya había (lenguajes `actions` y `python`, suite `default`, threat model `remote`, corrida semanal); lo único que cambia es que ahora corre en las mismas ramas que `ci.yml`
+  - El caso que lo destapó: la fuga de `/health` entró en `1.27.0` el 5/09 y se marcó el 7/09, al abrir el primer PR contra `master` desde entonces. Esos dos días son el hueco
+  - Los demás escáneres —Gitleaks, Semgrep, pip-audit y OSV— **ya cubrían las dos ramas** vía `ci.yml`. Lo que faltaba en `develop` era el análisis de flujo de datos de CodeQL, que es justo el que encontró la fuga: Semgrep no la marcó
+  - **Requiere desactivar el default setup antes de mergear**, porque los dos modos no conviven: con el default activo, este workflow falla
+
+### Security
+
+- **Registro de riesgos aceptados en `docs/security/threat-model.md`.** La excepción de `ecdsa` (`GHSA-wj6h-64fc-37mp` / `CVE-2024-23342` / `PYSEC-2026-1325` — Minerva, sin versión corregida) estaba repartida entre `osv-scanner.toml` y `scripts/pip-audit-scan.sh`, y Dependabot no la conocía: la misma decisión, tomada dos veces, seguía apareciendo como alerta alta sin atender. Ahora hay un solo registro con el razonamiento, los tres sitios donde vive la excepción y **la condición que la invalidaría** — que se firme con ECDSA o se acepte ES256 en `jwt.decode`
+  - No aplica a este servicio: Minerva ataca el *firmado* ECDSA sobre P-256, y `app/core/security.py` hace una sola llamada, `jwt.decode(..., algorithms=["RS256"])`. RS256 es RSA
+  - Lo que cerraría el asunto de raíz es quitar `python-jose` —`PyJWT` + `cryptography` verifica RS256 sin arrastrar `ecdsa`—, pero toca el camino de verificación de tokens y merece su propio PR
 
 ## [1.28.0] - 2026-09-07
 
