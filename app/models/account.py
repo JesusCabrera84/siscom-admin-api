@@ -25,7 +25,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, Text, text
+from sqlalchemy import Column, DateTime, ForeignKey, Text, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -46,6 +47,25 @@ class AccountStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
     DELETED = "DELETED"
+
+
+class AccountType(str, enum.Enum):
+    """
+    Papel de la cuenta en el árbol de reventa (§3 del documento de arquitectura).
+
+    - PLATFORM: la cuenta de Geminis. Es una **etiqueta**, no una raíz sobre las
+      demás: nada en el esquema exige que exista, y las marcas son raíces
+      independientes. Ver la nota de `account_path`.
+    - RESELLER: puede crear subcuentas y administrarlas (reventa delegada).
+    - CUSTOMER: cliente final. Es el valor por defecto.
+
+    Es un CHECK en la base y no un tipo ENUM: los ENUM de Postgres solo se
+    amplían, y no dentro de una transacción.
+    """
+
+    PLATFORM = "PLATFORM"
+    RESELLER = "RESELLER"
+    CUSTOMER = "CUSTOMER"
 
 
 class Account(SQLModel, table=True):
@@ -86,6 +106,24 @@ class Account(SQLModel, table=True):
     billing_email: Optional[str] = Field(
         default=None, sa_column=Column(Text, nullable=True)
     )
+
+    # ── Árbol de tenancy (migración 027) ─────────────────────────────
+    parent_account_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("accounts.id", ondelete="RESTRICT"),
+            nullable=True,
+        ),
+    )
+    account_type: AccountType = Field(
+        default=AccountType.CUSTOMER,
+        sa_column=Column(Text, nullable=False, server_default=text("'CUSTOMER'")),
+    )
+    account_path: List[UUID] = Field(
+        default_factory=list,
+        sa_column=Column(ARRAY(PGUUID(as_uuid=True)), nullable=False),
+    )
     created_at: datetime = Field(
         sa_column=Column(
             DateTime(timezone=True), server_default=text("now()"), nullable=False
@@ -100,6 +138,21 @@ class Account(SQLModel, table=True):
     # Relationships
     organizations: List["Organization"] = Relationship(back_populates="account")
     account_users: List["AccountUser"] = Relationship(back_populates="account")
+
+    def es_raiz(self) -> bool:
+        """Si la cuenta cuelga de alguien. Cada marca es su propia raíz."""
+        return self.parent_account_id is None
+
+    def ancestros(self) -> List[UUID]:
+        """
+        Los ancestros de la cuenta, del más lejano al más cercano, **sin
+        incluirse a sí misma**.
+
+        `account_path` es la cadena completa con la propia cuenta como último
+        elemento —lo ancla `ck_accounts_camino_termina_en_si_misma`—, así que
+        los ancestros son todo menos el último.
+        """
+        return list(self.account_path[:-1])
 
     def get_default_organization(self) -> Optional["Organization"]:
         """
