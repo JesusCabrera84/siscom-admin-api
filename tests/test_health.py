@@ -120,9 +120,14 @@ def test_health_endpoint_devuelve_503_con_la_base_caida(client, monkeypatch):
     """
     import app.main as main_mod
 
-    monkeypatch.setattr(
-        main_mod, "check_database", lambda: (False, "connection refused")
+    # La forma real de un fallo de conexion de SQLAlchemy, que es justo lo que
+    # no debe salir por el cuerpo de la respuesta.
+    error_real = (
+        '(psycopg2.OperationalError) connection to server at "siscom-db" '
+        "(172.18.0.4), port 5432 failed: FATAL:  password authentication "
+        'failed for user "siscom"'
     )
+    monkeypatch.setattr(main_mod, "check_database", lambda: (False, error_real))
     monkeypatch.setattr(main_mod, "get_schema_revision", lambda: None)
 
     resp = client.get("/health")
@@ -131,7 +136,21 @@ def test_health_endpoint_devuelve_503_con_la_base_caida(client, monkeypatch):
     body = resp.json()
     assert body["status"] == "unhealthy"
     assert body["database"] == "unreachable"
-    assert body["detail"] == "connection refused"
+    assert body["detail"] == "database unreachable"
+
+    # Lo que de verdad importa: /health no exige autenticacion, asi que el
+    # detalle del fallo no puede llevar host, puerto ni usuario de la conexion.
+    cuerpo = resp.text
+    # "siscom" a secas no entra en la lista: el payload lleva siempre
+    # "service": "siscom-admin-api", que es publico a proposito.
+    for filtracion in (
+        "siscom-db",
+        "172.18.0.4",
+        "5432",
+        "psycopg2",
+        "password authentication",
+    ):
+        assert filtracion not in cuerpo, f"{filtracion!r} se filtro en /health"
 
 
 def test_health_endpoint_ok_expone_la_revision(client, monkeypatch):
