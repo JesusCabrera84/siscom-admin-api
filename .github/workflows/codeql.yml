@@ -1,0 +1,66 @@
+name: CodeQL
+
+# Por que este archivo existe, y no el default setup que había antes.
+#
+# El default setup analiza únicamente la rama por defecto y los PRs que la
+# apuntan. En este repositorio el trabajo real pasa por `develop`, y los tags
+# v1.27.0 y v1.27.1 se cortaron directamente sobre esa rama: código desplegado
+# a producción sin que CodeQL lo hubiera mirado nunca.
+#
+# El caso concreto que lo destapó: `/health` devolvía el `str(exc)` de
+# SQLAlchemy —host, IP, puerto y usuario de la conexión— sin exigir
+# autenticación. Entró en v1.27.0 el 5/09 y CodeQL lo marcó el 7/09, al abrir
+# el primer PR contra master desde entonces. Los dos días de diferencia son
+# exactamente este hueco.
+#
+# Los demás escáneres (Gitleaks, Semgrep, pip-audit, OSV) ya corrían en las dos
+# ramas vía ci.yml. Lo que faltaba en develop era el análisis de flujo de datos
+# de CodeQL, que es el que encontró esa fuga: Semgrep no la marcó.
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+  schedule:
+    # El default setup corría semanalmente y se conserva: encuentra alertas
+    # nuevas sobre código que no ha cambiado, que es la mitad del valor.
+    - cron: "27 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mismos lenguajes que traía el default setup.
+        language: [actions, python]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # Sin `queries:` a propósito: el default setup usaba la suite
+          # `default`, no `security-extended`. Este workflow reproduce la
+          # configuración que ya había; lo único que cambia es qué ramas cubre.
+          # El threat model `remote` también es el valor por defecto.
+
+      # Python es interpretado: no hace falta paso de build ni autobuild.
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

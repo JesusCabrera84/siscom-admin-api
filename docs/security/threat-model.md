@@ -73,3 +73,34 @@ Modelo de seguridad de alto nivel para la API administrativa (FastAPI). Compleme
 ## Reporting
 
 Sigue [SECURITY.md](../../SECURITY.md) para divulgación de vulnerabilidades. No abras issues públicos para bugs de seguridad.
+
+## Riesgos aceptados
+
+Vulnerabilidades conocidas que **no se van a corregir**, con el porqué. Existe
+esta sección porque la decisión estaba repartida entre la configuración de dos
+escáneres y no en ningún sitio legible: quien viera la alerta por tercera vez
+volvía a investigarla desde cero.
+
+### `ecdsa` — Minerva, ataque de timing sobre P-256
+
+- **Identificadores**: `GHSA-wj6h-64fc-37mp`, `CVE-2024-23342`, `PYSEC-2026-1325`.
+- **Severidad declarada**: alta. **Sin versión corregida**: los mantenedores de
+  `python-ecdsa` consideran los ataques de canal lateral fuera de alcance.
+- **Cómo llega**: transitiva vía `python-jose`, que es la librería de JWT.
+- **Por qué no aplica aquí**: Minerva ataca el *firmado* ECDSA sobre P-256.
+  `app/core/security.py` hace una sola llamada a la librería —`jwt.decode(...,
+  algorithms=["RS256"])`— y RS256 es RSA, no curva elíptica. No se firma nada,
+  no se generan claves y no hay ECDH. El camino vulnerable no se ejecuta.
+- **Dónde está registrada la excepción**, que ahora son tres sitios y deben
+  seguir coincidiendo:
+  - `osv-scanner.toml` → `[[IgnoredVulns]] id = "GHSA-wj6h-64fc-37mp"`
+  - `scripts/pip-audit-scan.sh` → `--ignore-vuln PYSEC-2026-1325`
+  - La alerta de Dependabot (#18), descartada el 8/09/2026 con motivo `not_used`
+- **Qué la cerraría de verdad**: quitar `python-jose`. Se usa para exactamente
+  una llamada, y `PyJWT` + `cryptography` hace la misma verificación RS256 sin
+  arrastrar `ecdsa`. Es un cambio en el camino de verificación de tokens, así
+  que merece su propio PR y sus pruebas, no ir de pasada.
+
+**Al revisar esta lista**: una excepción deja de ser válida en cuanto cambia el
+uso. Si algún día se firma con ECDSA o se acepta ES256 en `jwt.decode`, esta
+entrada se invalida y hay que quitar la dependencia.
