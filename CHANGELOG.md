@@ -10,8 +10,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Nota.** Lo que sigue arrastra entradas de varias versiones ya liberadas que
 > nunca se movieron a su sección. Se dejan aquí a propósito: atribuirlas exigiría
 > saber qué salió en cada tag anterior a `1.25.0`, y adivinarlo produciría un
-> historial falso. Las de `1.25.0`, `1.26.0`, `1.27.0` y `1.27.1` sí se
+> historial falso. Las de `1.25.0`, `1.26.0`, `1.27.0`, `1.27.1` y `1.28.0` sí se
 > repartieron, derivadas de `git log <tag-anterior>..<tag>`.
+
+
+### Changed
+
+- `GET /internal/accounts` deja de usar `DISTINCT ON` (Postgres-only): el owner se resuelve con `GROUP BY` + `min(email)` para que el query sea válido en SQLite (CI) y en Postgres
+- Middleware HTTP que convierte excepciones no manejadas en JSON `{"detail":"Internal server error"}` **dentro** de CORS, para que un 500 no se reporte en el browser como error de CORS
+- Engineering foundation (PR-1): blocking CI (`quality` + `security` jobs)
+- Soft foundations (PR-2): `.devcontainer/`, `docs/security/threat-model.md`, GitHub issue templates, process ADRs (002, 003)
+- Quality gates (PR-3): `CODEOWNERS`, `dependabot.yml`, `docs/GOVERNANCE.md`, OSV-Scanner, `osv-scanner.toml`
+- Coverage floor (65% on `app/`) via `pyproject.toml`
+
+- `scripts/gitleaks-scan.sh`, `scripts/pip-audit-scan.sh`, `scripts/osv-scan.sh`, `scripts/setup.sh`
+- `.pre-commit-config.yaml` (Ruff, Black, hygiene hooks)
+- `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/RELEASE.md`
+- `.editorconfig`, `.python-version`, `.gitleaks.toml`
+- GitHub pull request template
+- `make validate`, `make scan-secrets`, `make audit-deps`
+- Docs: `docs/api/teams.md` documenta los endpoints de teams, miembros, reglas de visibilidad, invitaciones, emergencias y snapshots internos ya presentes en `develop`
+- Docs: `docs/api/INDEX.md` incorpora teams y el set completo de `/mobility/devices` y `/mobility/locations` al índice y al mapa de rutas
+- Contrato Kafka de `user-devices-updates`: el payload pasa al envelope de control (`event_id`, `event_type`, `entity`, `organization_id`, `data`). La key es el UUID de la fila `user_devices.id`, no el token. **Ya no se envía `unit_id`**. `alert-distributor` tiene que consumir este contrato (deploy de consumers **antes** que esta API)
+- Deploy: `deploy.yml` y docker-compose reciben `KAFKA_UNIT_DEVICES_UPDATES_TOPIC` y `KAFKA_USER_UNITS_UPDATES_TOPIC`. Si las GitHub vars del environment `test` no existen, el workflow usa los defaults del código
+- Test harness: SQLite keeps JSONB operators (`.astext`) via compile hook; pytest env defaults in `conftest` for runs without `.env`
+- CI: Ruff, Black, pytest, and Docker build are blocking (removed `|| true`)
+- Deploy workflow: quality gates delegated to CI; deploy only builds and ships on tags
+- Deploy workflow: `alembic upgrade head` corre en un contenedor efímero (misma red y `.env`) antes de levantar el contenedor nuevo
+- Test harness: session-scoped SQLite metadata patch, GAC auth in `authenticated_client`, telemetry/sims isolation fixes
+- Minimum Python version raised to **3.12** (CI, Docker, Black/Ruff targets, docs)
+- Dependency security bumps: `cryptography`, `idna`, `python-multipart`, `starlette`, `pyseto`
+- Dependency security bumps: `cryptography` 48.0.1 → 50.0.0 (PYSEC-2026-3552/3553/3554), `kafka-python` 2.3.0 → 2.3.2 (PYSEC-2026-2190/2191), `pyasn1` 0.6.3 → 0.6.4 (PYSEC-2026-3455/3456/3457)
+- `scripts/pip-audit-scan.sh` ignora `PYSEC-2026-1325` (`ecdsa`, transitivo vía `python-jose`): no hay versión corregida y no es alcanzable — solo verificamos JWT con RS256. Mismo riesgo ya aceptado en `osv-scanner.toml`
+- Gitleaks scans working tree only (`--no-git`); doc placeholders sanitized
+
+### Fixed
+
+- **`Subscription.is_active()` lanzaba `TypeError` en cuanto una suscripción entraba en gracia.** `grace_until` es `TIMESTAMP WITH TIME ZONE` y `expires_at` es `TIMESTAMP` sin zona, mientras que `utcnow()` devuelve naive a propósito: comparar `grace_until > utcnow()` da `can't compare offset-naive and offset-aware datetimes`. Es el camino que recorre el código de cobranza al fallar un cobro. No se veía porque los tests corrían sobre SQLite, que devolvía todo naive. Se normaliza en la frontera de comparación con `as_naive_utc()`, siguiendo el patrón que ya usaba `access_control._aware`
+
+- Reasignar un tracker a otra org/unidad no actualizaba caches de `event-processor` / `alert-distributor`: no había evento de control. Quien recibía el push seguía siendo el dueño anterior hasta reiniciar esos servicios
+- Auth: las peticiones sin header `Authorization` (o con esquema distinto de Bearer) responden `401` con `WWW-Authenticate: Bearer` en lugar del `403` por defecto de `HTTPBearer`. Los clientes iOS/Android disparan el refresh de token solo con `401`
+- `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
+- User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
+- Auth: una caída de Cognito (JWKS inalcanzable y sin caché) ya no se presenta como `401`. En los endpoints de doble autenticación el error 5xx se propaga en vez de caer al camino PASETO y acabar respondiendo `401`, que mandaba al cliente a reautenticarse contra un problema que ninguna credencial arregla — y convertía la caída en una tormenta de peticiones sobre esta API
+
+### Notes
+
+- 24 tests still skipped (device status flow, orders invoice fixture, legacy DeviceService API, device activation) — follow-up PRs
+
+### Security
+
+- Gitleaks + Semgrep + pip-audit + OSV-Scanner in CI `security` job
+- `POST /api/v1/mobility/locations` y `/batch` exigen JWT y validan que el `device_id` pertenezca a un dispositivo activo del usuario autenticado. Antes aceptaban cualquier `device_id` sin autenticación, lo que permitía inyectar ubicaciones de terceros al tópico de Kafka
+- PASETO: los tokens de compartir ubicación se firman con `SHARE_LOCATION_KEY_B64`, una clave dedicada, en lugar de con `PASETO_SECRET_KEY`. El verificador de esos tokens vive en siscom-api; entregarle la clave de servicio le permitía firmar tokens `internal-*` y llamar a la API interna como administrador. Sin la clave nueva configurada, `/units/{id}/share-location` responde `503` en vez de degradar a la clave de servicio (ver ADR-004)
+- `decode_any_token` se elimina: probaba las dos claves contra el mismo token, de modo que un token de compartir ubicación podía acabar aceptado donde se esperaba uno de servicio
+- `scripts/paseto_key_fingerprint.py` imprime la huella SHA-256 (12 hex) del material de clave **efectivo**, para comparar entre servicios sin transmitir la clave
+- Telemetría: el acceso a un dispositivo deja de ser un booleano y pasa a ser un conjunto de rangos temporales autorizados. Un dispositivo reasignado a otra organización deja de ser legible por la anterior fuera de la ventana en que estuvo asignado
+- El resolver de alcance es explícito por sujeto (`ScopeSubject`): `accessible_device_ids`, que decidía a partir del usuario implícito, se elimina
+
+
+
+## [1.28.0] - 2026-09-07
+
+**Migraciones.** Trae una: `027_tenancy_esquema`. Cabeza `026_reconciliacion` → `027_tenancy_esquema`.
+
+**Rollback.** Revertir la imagen basta: la migración es aditiva (expand/contract), así que el código
+anterior convive con el esquema nuevo e ignora lo que no conoce. Para revertir también el esquema hay
+que hacerlo **antes** de desplegar el tag viejo, porque el archivo de la migración vive en la imagen
+nueva: `alembic downgrade 026_reconciliacion`. Sin ese paso, desplegar un tag anterior falla con
+`Can't locate revision identified by '027_tenancy_esquema'`. El downgrade **borra** lo que la 027
+creó —es seguro poco después de liberar y deja de serlo en cuanto entre dato nuevo— y no revierte las
+definiciones de capability ya referenciadas (ver `docs/runbooks/desplegar-tenancy.md`).
 
 ### Added
 
@@ -58,62 +127,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Aislamiento por test: transacción externa revertida al terminar, con `join_transaction_mode="create_savepoint"` para que los `commit()` de fixtures y código se traduzcan a SAVEPOINTs. Antes se hacían `create_all` + `drop_all` de 73 tablas **por cada test**.
   - Los seis tests que fallaron al cambiar de motor: tres eran el bug de `is_active()` de arriba; dos insertaban un `Command` sin que existiera su `Device` —SQLite no aplica claves foráneas, y sin `relationship` declarada SQLAlchemy no ordena los `INSERT`—; uno afirmaba un orden de claves que JSONB no preserva (las normaliza por longitud y bytes). Ninguno de los tres últimos es bug de producción, pero los tres fijaban suposiciones falsas
   - `ci.yml` levanta un servicio `postgres:15`; el harness local es `docker-compose.db.yml`. Se eliminan `tests/sqlite_dialect.py` y `tests/test_sqlite_dialect.py`.
-
-
-- `GET /internal/accounts` deja de usar `DISTINCT ON` (Postgres-only): el owner se resuelve con `GROUP BY` + `min(email)` para que el query sea válido en SQLite (CI) y en Postgres
-- Middleware HTTP que convierte excepciones no manejadas en JSON `{"detail":"Internal server error"}` **dentro** de CORS, para que un 500 no se reporte en el browser como error de CORS
-- Engineering foundation (PR-1): blocking CI (`quality` + `security` jobs)
-- Soft foundations (PR-2): `.devcontainer/`, `docs/security/threat-model.md`, GitHub issue templates, process ADRs (002, 003)
-- Quality gates (PR-3): `CODEOWNERS`, `dependabot.yml`, `docs/GOVERNANCE.md`, OSV-Scanner, `osv-scanner.toml`
-- Coverage floor (65% on `app/`) via `pyproject.toml`
-
-- `scripts/gitleaks-scan.sh`, `scripts/pip-audit-scan.sh`, `scripts/osv-scan.sh`, `scripts/setup.sh`
-- `.pre-commit-config.yaml` (Ruff, Black, hygiene hooks)
-- `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/RELEASE.md`
-- `.editorconfig`, `.python-version`, `.gitleaks.toml`
-- GitHub pull request template
-- `make validate`, `make scan-secrets`, `make audit-deps`
-- Docs: `docs/api/teams.md` documenta los endpoints de teams, miembros, reglas de visibilidad, invitaciones, emergencias y snapshots internos ya presentes en `develop`
-- Docs: `docs/api/INDEX.md` incorpora teams y el set completo de `/mobility/devices` y `/mobility/locations` al índice y al mapa de rutas
-
-### Changed
-
-- Contrato Kafka de `user-devices-updates`: el payload pasa al envelope de control (`event_id`, `event_type`, `entity`, `organization_id`, `data`). La key es el UUID de la fila `user_devices.id`, no el token. **Ya no se envía `unit_id`**. `alert-distributor` tiene que consumir este contrato (deploy de consumers **antes** que esta API)
-- Deploy: `deploy.yml` y docker-compose reciben `KAFKA_UNIT_DEVICES_UPDATES_TOPIC` y `KAFKA_USER_UNITS_UPDATES_TOPIC`. Si las GitHub vars del environment `test` no existen, el workflow usa los defaults del código
-- Test harness: SQLite keeps JSONB operators (`.astext`) via compile hook; pytest env defaults in `conftest` for runs without `.env`
-- CI: Ruff, Black, pytest, and Docker build are blocking (removed `|| true`)
-- Deploy workflow: quality gates delegated to CI; deploy only builds and ships on tags
-- Deploy workflow: `alembic upgrade head` corre en un contenedor efímero (misma red y `.env`) antes de levantar el contenedor nuevo
-- Test harness: session-scoped SQLite metadata patch, GAC auth in `authenticated_client`, telemetry/sims isolation fixes
-- Minimum Python version raised to **3.12** (CI, Docker, Black/Ruff targets, docs)
-- Dependency security bumps: `cryptography`, `idna`, `python-multipart`, `starlette`, `pyseto`
-- Dependency security bumps: `cryptography` 48.0.1 → 50.0.0 (PYSEC-2026-3552/3553/3554), `kafka-python` 2.3.0 → 2.3.2 (PYSEC-2026-2190/2191), `pyasn1` 0.6.3 → 0.6.4 (PYSEC-2026-3455/3456/3457)
-- `scripts/pip-audit-scan.sh` ignora `PYSEC-2026-1325` (`ecdsa`, transitivo vía `python-jose`): no hay versión corregida y no es alcanzable — solo verificamos JWT con RS256. Mismo riesgo ya aceptado en `osv-scanner.toml`
-- Gitleaks scans working tree only (`--no-git`); doc placeholders sanitized
-
-### Fixed
-
-- **`Subscription.is_active()` lanzaba `TypeError` en cuanto una suscripción entraba en gracia.** `grace_until` es `TIMESTAMP WITH TIME ZONE` y `expires_at` es `TIMESTAMP` sin zona, mientras que `utcnow()` devuelve naive a propósito: comparar `grace_until > utcnow()` da `can't compare offset-naive and offset-aware datetimes`. Es el camino que recorre el código de cobranza al fallar un cobro. No se veía porque los tests corrían sobre SQLite, que devolvía todo naive. Se normaliza en la frontera de comparación con `as_naive_utc()`, siguiendo el patrón que ya usaba `access_control._aware`
-
-- Reasignar un tracker a otra org/unidad no actualizaba caches de `event-processor` / `alert-distributor`: no había evento de control. Quien recibía el push seguía siendo el dueño anterior hasta reiniciar esos servicios
-- Auth: las peticiones sin header `Authorization` (o con esquema distinto de Bearer) responden `401` con `WWW-Authenticate: Bearer` en lugar del `403` por defecto de `HTTPBearer`. Los clientes iOS/Android disparan el refresh de token solo con `401`
-- `billing.py`: query devices by `device_id` (not legacy `Device.id`) — 8 billing unit tests re-enabled
-- User-commands list/sync tests re-enabled on SQLite JSONB paths (2 tests)
-- Auth: una caída de Cognito (JWKS inalcanzable y sin caché) ya no se presenta como `401`. En los endpoints de doble autenticación el error 5xx se propaga en vez de caer al camino PASETO y acabar respondiendo `401`, que mandaba al cliente a reautenticarse contra un problema que ninguna credencial arregla — y convertía la caída en una tormenta de peticiones sobre esta API
-
-### Notes
-
-- 24 tests still skipped (device status flow, orders invoice fixture, legacy DeviceService API, device activation) — follow-up PRs
-
-### Security
-
-- Gitleaks + Semgrep + pip-audit + OSV-Scanner in CI `security` job
-- `POST /api/v1/mobility/locations` y `/batch` exigen JWT y validan que el `device_id` pertenezca a un dispositivo activo del usuario autenticado. Antes aceptaban cualquier `device_id` sin autenticación, lo que permitía inyectar ubicaciones de terceros al tópico de Kafka
-- PASETO: los tokens de compartir ubicación se firman con `SHARE_LOCATION_KEY_B64`, una clave dedicada, en lugar de con `PASETO_SECRET_KEY`. El verificador de esos tokens vive en siscom-api; entregarle la clave de servicio le permitía firmar tokens `internal-*` y llamar a la API interna como administrador. Sin la clave nueva configurada, `/units/{id}/share-location` responde `503` en vez de degradar a la clave de servicio (ver ADR-004)
-- `decode_any_token` se elimina: probaba las dos claves contra el mismo token, de modo que un token de compartir ubicación podía acabar aceptado donde se esperaba uno de servicio
-- `scripts/paseto_key_fingerprint.py` imprime la huella SHA-256 (12 hex) del material de clave **efectivo**, para comparar entre servicios sin transmitir la clave
-- Telemetría: el acceso a un dispositivo deja de ser un booleano y pasa a ser un conjunto de rangos temporales autorizados. Un dispositivo reasignado a otra organización deja de ser legible por la anterior fuera de la ventana en que estuvo asignado
-- El resolver de alcance es explícito por sujeto (`ScopeSubject`): `accessible_device_ids`, que decidía a partir del usuario implícito, se elimina
 
 ## [1.27.1] - 2026-09-07
 
