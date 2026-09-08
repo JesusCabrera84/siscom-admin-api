@@ -59,6 +59,7 @@ from app.api.v1.endpoints import (
     team_invites,
     teams,
     telemetry,
+    tenant_config,
     trips,
     unit_devices,
     units,
@@ -200,6 +201,12 @@ api_router.include_router(
 
 # Contacto
 api_router.include_router(contact.router, prefix="/contact", tags=["contact"])
+
+# Configuracion de marca por Host. Sin prefijo y sin autenticacion a proposito:
+# lo consume el servidor de SvelteKit en cada peticion, antes de que exista
+# sesion. Devuelve solo datos de marca. El Host resuelve apariencia y nunca
+# autoriza -- ver el modulo.
+api_router.include_router(tenant_config.router, tags=["tenant-config"])
 
 # API Platform (API keys, usage, logs, alerts)
 api_router.include_router(
