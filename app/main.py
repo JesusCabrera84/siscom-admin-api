@@ -125,7 +125,9 @@ def health_check(response: Response):
     unhealthy: es la senal que el despliegue necesita para abortar en vez de
     declarar exito sobre una base inservible.
     """
-    db_ok, db_error = check_database()
+    # El detalle del fallo no sale de aqui: check_database() ya lo dejo en el
+    # log. Ver el comentario de mas abajo.
+    db_ok, _ = check_database()
 
     payload = {
         "status": "healthy" if db_ok else "unhealthy",
@@ -136,6 +138,12 @@ def health_check(response: Response):
     }
     if not db_ok:
         response.status_code = 503
-        payload["detail"] = db_error
+        # Mensaje generico a proposito. /health no exige autenticacion, y el
+        # str() de una excepcion de SQLAlchemy trae el host, el puerto y el
+        # usuario de la conexion --a veces la sentencia entera--. Devolverlo
+        # convertia una base caida en un mapa de la infraestructura para quien
+        # sondee el endpoint. El error real queda en el log de check_database(),
+        # que es donde hace falta para diagnosticar. (CodeQL py/stack-trace-exposure)
+        payload["detail"] = "database unreachable"
 
     return payload

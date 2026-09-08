@@ -128,6 +128,13 @@ definiciones de capability ya referenciadas (ver `docs/runbooks/desplegar-tenanc
   - Los seis tests que fallaron al cambiar de motor: tres eran el bug de `is_active()` de arriba; dos insertaban un `Command` sin que existiera su `Device` —SQLite no aplica claves foráneas, y sin `relationship` declarada SQLAlchemy no ordena los `INSERT`—; uno afirmaba un orden de claves que JSONB no preserva (las normaliza por longitud y bytes). Ninguno de los tres últimos es bug de producción, pero los tres fijaban suposiciones falsas
   - `ci.yml` levanta un servicio `postgres:15`; el harness local es `docker-compose.db.yml`. Se eliminan `tests/sqlite_dialect.py` y `tests/test_sqlite_dialect.py`.
 
+### Security
+
+- **`/health` deja de devolver el error de conexión de la base en el cuerpo.** `check_database()` devuelve `str(exc)` de SQLAlchemy, y un `OperationalError` real trae el host, la IP, el puerto y el usuario de la conexión —`connection to server at "siscom-db" (172.18.0.4), port 5432 failed: FATAL: password authentication failed for user "siscom"`—. `/health` no exige autenticación y el origen del ALB sigue abierto, así que una base caída se convertía en un mapa de la infraestructura para quien sondeara el endpoint. Ahora el cuerpo dice `"database unreachable"` y el error real queda en el log de `check_database()`, que es donde hace falta para diagnosticar. Detectado por CodeQL (`py/stack-trace-exposure`) en el PR #64
+  - **No es una regresión de esta versión**: entró con `/health` en `1.27.0` y lleva desplegado desde el 5/09. La alerta aparece ahora porque el diff contra `master` lo incluye por primera vez
+  - El despliegue no se entera: `deploy.yml` solo comprueba `"database": "ok"`, nunca el detalle
+  - El test de la base caída pasa a afirmar lo contrario de lo que afirmaba: en vez de exigir que el detalle sea el error, exige que host, IP, puerto y driver **no** aparezcan en la respuesta
+
 ## [1.27.1] - 2026-09-07
 
 ### Fixed
