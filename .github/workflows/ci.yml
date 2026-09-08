@@ -15,6 +15,26 @@ jobs:
   quality:
     runs-on: ubuntu-latest
 
+    # Los tests corren contra PostgreSQL real, no contra SQLite. El esquema de
+    # este sistema es especifico de Postgres —JSONB, ARRAY, tipos ENUM, el
+    # esquema api_platform, server_defaults, locks consultivos— y un motor
+    # sustituto solo podia probarlo falseandolo. Ver §20 del documento de
+    # arquitectura.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,11 +58,11 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          DB_HOST: localhost
-          DB_PORT: "5432"
-          DB_USER: test
-          DB_PASSWORD: test
-          DB_NAME: test
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: "5432"
+          TEST_DB_USER: postgres
+          TEST_DB_PASSWORD: postgres
+          TEST_DB_NAME: siscom_test
           COGNITO_REGION: us-east-1
           COGNITO_USER_POOL_ID: us-east-1_testpool
           COGNITO_CLIENT_ID: test-client-id
@@ -51,6 +71,22 @@ jobs:
           FRONTEND_URL: http://localhost:3000
           PASETO_SECRET_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
         run: pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Comprobar deriva entre migraciones y modelos
+        env:
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: "5432"
+          TEST_DB_USER: postgres
+          TEST_DB_PASSWORD: postgres
+          TEST_DB_NAME: siscom_test
+        run: |
+          # Parte del esquema real de produccion, aplica las migraciones y
+          # comprueba que el resultado contiene lo que los modelos esperan.
+          #
+          # No se puede hacer con la base que construye `create_all()`: comparar
+          # la metadata contra una base hecha desde esa misma metadata siempre
+          # sale vacio. Ver tests/schema/README.md.
+          python scripts/verificar-deriva.py
 
       - name: Upload coverage report
         if: always()

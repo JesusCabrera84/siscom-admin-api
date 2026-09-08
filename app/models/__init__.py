@@ -48,11 +48,6 @@ from app.models.command import Command
 from app.models.device import Device, DeviceEvent
 
 # Device Services (LEGACY - no usar en código nuevo)
-from app.models.device_service import (
-    DeviceService,
-    DeviceServiceStatus,
-    SubscriptionType,
-)
 from app.models.geofence import Geofence, GeofenceCell
 from app.models.idempotency import ApiIdempotencyRequest
 from app.models.invitation import Invitation
@@ -169,8 +164,6 @@ __all__ = [
     "OrderItem",
     "OrderItemType",
     # Device Services (LEGACY)
-    "DeviceService",
-    "DeviceServiceStatus",
     "SubscriptionType",
     "Geofence",
     "GeofenceCell",

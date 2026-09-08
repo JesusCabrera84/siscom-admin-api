@@ -53,7 +53,6 @@ from app.api.v1.endpoints import (
     organizations,
     payments,
     plans,
-    services,
     sims,
     stripe_billing,
     subscriptions,
@@ -165,7 +164,6 @@ api_router.include_router(
 api_router.include_router(internal_teams.router, tags=["internal"])
 
 # Servicios (legacy, considerar usar subscriptions)
-api_router.include_router(services.router, prefix="/services", tags=["services"])
 
 # Billing y Pagos (read-only)
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])

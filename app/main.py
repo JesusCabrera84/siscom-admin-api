@@ -16,7 +16,11 @@ from app.api.deps import (
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging_config import setup_logging
-from app.services.health import check_kafka_accessibility
+from app.services.health import (
+    check_database,
+    check_kafka_accessibility,
+    get_schema_revision,
+)
 from app.startup import print_startup_banner
 
 setup_logging()
@@ -114,6 +118,32 @@ def root():
 
 
 @app.get("/health")
-def health_check():
-    """Health check endpoint para Docker y monitoring"""
-    return {"status": "healthy", "service": "siscom-admin-api"}
+def health_check(response: Response):
+    """Health check para Docker, el ALB y el bucle de espera del despliegue.
+
+    Consulta la base. Si no responde, devuelve 503 y el contenedor pasa a
+    unhealthy: es la senal que el despliegue necesita para abortar en vez de
+    declarar exito sobre una base inservible.
+    """
+    # El detalle del fallo no sale de aqui: check_database() ya lo dejo en el
+    # log. Ver el comentario de mas abajo.
+    db_ok, _ = check_database()
+
+    payload = {
+        "status": "healthy" if db_ok else "unhealthy",
+        "service": "siscom-admin-api",
+        "database": "ok" if db_ok else "unreachable",
+        # None significa que alembic nunca gestiono este esquema.
+        "schema_revision": get_schema_revision() if db_ok else None,
+    }
+    if not db_ok:
+        response.status_code = 503
+        # Mensaje generico a proposito. /health no exige autenticacion, y el
+        # str() de una excepcion de SQLAlchemy trae el host, el puerto y el
+        # usuario de la conexion --a veces la sentencia entera--. Devolverlo
+        # convertia una base caida en un mapa de la infraestructura para quien
+        # sondee el endpoint. El error real queda en el log de check_database(),
+        # que es donde hace falta para diagnosticar. (CodeQL py/stack-trace-exposure)
+        payload["detail"] = "database unreachable"
+
+    return payload

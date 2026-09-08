@@ -1,0 +1,31 @@
+# Postgres local para probar migraciones y DDL antes de tocar producción.
+#
+# Réplica del motor productivo: misma imagen que database-siscom/Dockerfile
+# (timescale/timescaledb:2.15.1-pg15). No incluye pg_partman: lo usan las tablas
+# particionadas de siscom-api, no la cadena de alembic de este repo. Si restauras
+# un dump productivo que lo necesite, ver scripts/db-local.sh restore.
+#
+# Uso:  ./scripts/db-local.sh up
+services:
+  postgres-local:
+    image: timescale/timescaledb:2.15.1-pg15
+    container_name: siscom-admin-db-local
+    environment:
+      POSTGRES_USER: ${LOCAL_DB_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${LOCAL_DB_SUPERPASS:-postgres}
+      POSTGRES_DB: ${LOCAL_DB_NAME:-siscom-dev}
+    ports:
+      # 55432 y no 5432: no compite con un Postgres del anfitrión ni con
+      # el contenedor `postgres` de database-siscom.
+      - "${LOCAL_DB_PORT:-55432}:5432"
+    volumes:
+      - ./scripts/db-local:/docker-entrypoint-initdb.d:ro
+      - siscom_admin_db_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LOCAL_DB_SUPERUSER:-postgres} -d ${LOCAL_DB_NAME:-siscom-dev}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  siscom_admin_db_local:

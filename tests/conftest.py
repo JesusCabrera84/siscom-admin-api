@@ -4,16 +4,13 @@ from tests.bootstrap_env import bootstrap_test_runtime
 
 bootstrap_test_runtime()
 
-import uuid as _uuid_module
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+import sqlalchemy
 from fastapi.testclient import TestClient
-from sqlalchemy import Text, TypeDecorator, create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from sqlalchemy.sql.schema import ColumnDefault
 from sqlmodel import SQLModel
 
 from app.api.deps import (
@@ -29,6 +26,7 @@ from app.api.deps import (
     get_user_devices_kafka_producer,
     get_user_units_kafka_producer,
 )
+from app.core.config import settings
 from app.db.session import get_db
 from app.main import app
 from app.models.account import Account
@@ -38,14 +36,28 @@ from app.models.plan import Plan
 from app.models.unit import Unit
 from app.models.user import User
 
-# Base de datos SQLite en memoria para tests (engine aislado por fixture)
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+# Base de datos PostgreSQL real para los tests.
+#
+# Antes esto era SQLite en memoria con un parche que borraba los
+# `server_default`, sustituia UUID/ARRAY/INET/JSONB por Text y aplanaba el
+# schema. Ese parche hacia que la bateria no pudiera fallar por casi ninguna de
+# las razones por las que falla produccion: defaults, tipos, restricciones,
+# carreras (los locks consultivos eran un no-op declarado) ni migraciones.
+# Ver §20 del documento de arquitectura.
+DATABASE_URL = (
+    f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}"
+    f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+)
 
-_METADATA_PATCH_STATE = {"applied": False, "saved": None}
+# URL a la base de mantenimiento, para poder crear la de tests si no existe.
+_ADMIN_URL = (
+    f"postgresql+psycopg2://{settings.DB_USER}:{settings.DB_PASSWORD}"
+    f"@{settings.DB_HOST}:{settings.DB_PORT}/postgres"
+)
 
 
 def _register_all_table_models() -> None:
-    """Registra todos los modelos SQLModel antes de parchear metadata para SQLite."""
+    """Registra todos los modelos SQLModel antes de crear el esquema."""
     import app.models  # noqa: F401
     from app.api.v1.endpoints.api_platform.models import (  # noqa: F401
         api_alert,
@@ -57,32 +69,158 @@ def _register_all_table_models() -> None:
     )
 
 
-def _ensure_sqlite_metadata() -> None:
-    """Parchea metadata una vez por sesión para evitar drift entre tests unitarios y DB."""
-    if _METADATA_PATCH_STATE["applied"]:
-        return
+def _assert_es_base_de_tests() -> None:
+    """Impide que el borrado de esquemas caiga sobre una base que no sea de tests.
+
+    El fixture hace DROP SCHEMA ... CASCADE, que no perdona. El nombre debe
+    delatar que es desechable.
+    """
+    nombre = settings.DB_NAME or ""
+    if "test" not in nombre.lower():
+        raise RuntimeError(
+            f"DB_NAME={nombre!r} no parece una base de tests y el harness borra "
+            f"esquemas enteros. Usa TEST_DB_NAME (por defecto 'siscom_test')."
+        )
+
+
+def _ensure_database_exists() -> None:
+    """Crea la base de tests si no existe. Idempotente."""
+    admin = create_engine(_ADMIN_URL, isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as conn:
+            existe = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :n"),
+                {"n": settings.DB_NAME},
+            ).scalar()
+            if not existe:
+                conn.execute(text(f'CREATE DATABASE "{settings.DB_NAME}"'))
+    except sqlalchemy.exc.OperationalError as exc:
+        raise RuntimeError(
+            f"No se pudo conectar a PostgreSQL en "
+            f"{settings.DB_HOST}:{settings.DB_PORT}.\n"
+            f"Los tests necesitan un Postgres real. Levantalo con:\n"
+            f"    ./scripts/db-local.sh up\n"
+            f"Original: {exc}"
+        ) from exc
+    finally:
+        admin.dispose()
+
+
+def _reset_schemas(engine) -> None:
+    """Deja los esquemas vacios, sin depender de lo que la metadata conozca."""
+    esquemas = {"public"} | {
+        t.schema for t in SQLModel.metadata.tables.values() if t.schema
+    }
+    with engine.connect() as conn:
+        for esquema in sorted(esquemas):
+            conn.execute(text(f'DROP SCHEMA IF EXISTS "{esquema}" CASCADE'))
+        conn.commit()
+
+
+def _create_schemas(engine) -> None:
+    """Crea los esquemas de PostgreSQL que declaran los modelos.
+
+    Hay tablas fuera de `public` — `api_platform.*` —, y `create_all()` no crea
+    el esquema que las contiene. Con SQLite esto no se veia: el parche hacia
+    `table.schema = None` y renombraba la tabla a `api_platform_api_alerts`,
+    asi que las pruebas se ejecutaban contra una tabla en otro sitio y con otro
+    nombre que el codigo de produccion nunca toca.
+    """
+    esquemas = {"public"} | {
+        t.schema for t in SQLModel.metadata.tables.values() if t.schema
+    }
+    with engine.connect() as conn:
+        for esquema in sorted(esquemas):
+            conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{esquema}"'))
+        conn.commit()
+
+
+def _create_enum_types(engine) -> None:
+    """Crea los tipos ENUM de PostgreSQL que `create_all()` no crea.
+
+    `app/core/pg_enums.py` los declara con `create_type=False` a proposito: en
+    produccion los crea el SQL crudo de la migracion 023, y SQLAlchemy solo los
+    referencia. Consecuencia: **`SQLModel.metadata.create_all()` no es una
+    definicion completa del esquema** — sin estos tipos falla con
+    `type "payment_gateway" does not exist`.
+
+    Con SQLite esto era invisible porque los tipos se sustituian por Text.
+
+    Los CREATE TYPE se derivan del propio modulo para que no puedan divergir de
+    lo que usan las columnas.
+    """
+    from sqlalchemy.dialects.postgresql import ENUM as PgEnum
+
+    import app.core.pg_enums as pg_enums
+
+    with engine.connect() as conn:
+        for objeto in vars(pg_enums).values():
+            if not isinstance(objeto, PgEnum) or not objeto.name:
+                continue
+            valores = ", ".join(f"'{v}'" for v in objeto.enums)
+            conn.execute(
+                text(
+                    f"DO $$ BEGIN "
+                    f"IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{objeto.name}') "
+                    f"THEN CREATE TYPE {objeto.name} AS ENUM ({valores}); "
+                    f"END IF; END $$;"
+                )
+            )
+        conn.commit()
+
+
+@pytest.fixture(scope="session")
+def _engine():
+    """Engine y esquema, una sola vez por sesion de tests.
+
+    El esquema se crea una vez y cada test corre dentro de una transaccion que
+    se revierte al terminar. Antes se hacia create_all + drop_all de 73 tablas
+    *por cada test*, que en Postgres seria inviable.
+    """
+    _assert_es_base_de_tests()
+    _ensure_database_exists()
     _register_all_table_models()
-    _METADATA_PATCH_STATE["saved"] = _patch_metadata(SQLModel.metadata)
-    _METADATA_PATCH_STATE["applied"] = True
 
+    # El reseteo va con un engine EFIMERO, y no es un detalle de estilo.
+    #
+    # Recrear `public` invalida el `search_path` de cualquier conexion que el
+    # pool tuviera abierta de antes: al reusarla, Postgres responde
+    # `no schema has been selected to create in`. Con un engine propio que se
+    # desecha, el engine de la sesion nace despues y todas sus conexiones
+    # resuelven el search_path sobre el esquema nuevo.
+    #
+    # Y se borran los esquemas enteros, no `SQLModel.metadata.drop_all()`:
+    # `drop_all` solo tira lo que la metadata conoce, asi que una tabla de una
+    # corrida anterior cuyo modelo ya se borro se queda huerfana, y basta con
+    # que tenga una FK para que el siguiente `drop_all` falle en cascada. Paso
+    # de verdad al eliminar `device_services`: su FK a `payments` impedia tirar
+    # `payments`.
+    preparador = create_engine(DATABASE_URL, future=True)
+    try:
+        _reset_schemas(preparador)
+        _create_schemas(preparador)
+        with preparador.connect() as conn:
+            # Despues de recrear los esquemas, no antes: una extension necesita
+            # un esquema donde vivir, y sin `public` falla con
+            # `no schema has been selected to create in`.
+            # gen_random_uuid() es nativo desde PG13; pgcrypto cubre versiones
+            # anteriores y no estorba en las nuevas.
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+            conn.commit()
+    finally:
+        preparador.dispose()
 
-@pytest.fixture(scope="session", autouse=True)
-def _sqlite_test_metadata():
-    _ensure_sqlite_metadata()
-    yield
-    saved = _METADATA_PATCH_STATE["saved"]
-    if saved is not None:
-        _restore_metadata(SQLModel.metadata, saved)
-        _METADATA_PATCH_STATE["applied"] = False
-        _METADATA_PATCH_STATE["saved"] = None
-
-
-def _create_test_engine():
-    return create_engine(
-        SQLALCHEMY_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = create_engine(DATABASE_URL, future=True)
+    _create_enum_types(engine)
+    SQLModel.metadata.create_all(bind=engine)
+    try:
+        yield engine
+    finally:
+        # No se borra al terminar: el reseteo del arranque ya garantiza pizarra
+        # limpia, y dejar la base sin `public` la deja inservible para la
+        # siguiente corrida. Ademas, conservar el esquema ayuda a inspeccionar
+        # un fallo despues de que la bateria termine.
+        engine.dispose()
 
 
 class _SilentKafkaProducer:
@@ -115,133 +253,32 @@ def _clear_dependency_overrides():
     app.dependency_overrides.clear()
 
 
-class _SQLiteUUID(TypeDecorator):
-    impl = Text
-    cache_ok = True
-
-    def process_bind_param(self, value, dialect):
-        if value is None:
-            return None
-        return str(value)
-
-    def process_result_value(self, value, dialect):
-        if value is None:
-            return None
-        try:
-            return _uuid_module.UUID(str(value))
-        except (ValueError, AttributeError):
-            return value
-
-
-_PG_TYPE_REPLACEMENTS = {}
-try:
-    from sqlalchemy.dialects.postgresql import ARRAY, CIDR, INET
-    from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-
-    _PG_TYPE_REPLACEMENTS = {
-        PG_UUID: _SQLiteUUID(),
-        ARRAY: Text(),
-        INET: Text(),
-        CIDR: Text(),
-    }
-except ImportError:
-    pass
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _python_default_for(server_default_text: str):
-    text = server_default_text.lower()
-    if any(k in text for k in ("gen_random_uuid", "uuid_generate")):
-        return uuid4
-    if any(k in text for k in ("now()", "current_timestamp", "timezone(")):
-        return _utcnow
-    return None
-
-
-def _patch_metadata(metadata) -> dict:
-    """Elimina server_defaults PG y reemplaza tipos PG con equivalentes SQLite."""
-    saved = {}
-    for table in metadata.tables.values():
-        table_id = id(table)
-        if table.schema is not None:
-            saved[(table_id, "__table_schema__")] = {
-                "schema": table.schema,
-                "name": table.name,
-            }
-            table.name = f"{table.schema}_{table.name}"
-            table.schema = None
-
-        for column in table.columns:
-            col_save = {}
-
-            if column.server_default is not None:
-                sd_text = str(getattr(column.server_default, "arg", ""))
-                col_save["server_default"] = column.server_default
-                column.server_default = None
-                if column.default is None:
-                    callable_default = _python_default_for(sd_text)
-                    if callable_default:
-                        col_save["default"] = column.default
-                        column.default = ColumnDefault(callable_default)
-
-            for pg_type, sqlite_type in _PG_TYPE_REPLACEMENTS.items():
-                if isinstance(column.type, pg_type):
-                    col_save["type"] = column.type
-                    column.type = sqlite_type
-                    break
-
-            if col_save:
-                saved[(table_id, column.name)] = col_save
-
-    return saved
-
-
-def _restore_metadata(metadata, saved: dict) -> None:
-    """Restaura server_defaults y tipos originales."""
-    for table in metadata.tables.values():
-        table_id = id(table)
-        schema_key = (table_id, "__table_schema__")
-        if schema_key in saved:
-            if "name" in saved[schema_key]:
-                table.name = saved[schema_key]["name"]
-            if "schema" in saved[schema_key]:
-                table.schema = saved[schema_key]["schema"]
-
-        for column in table.columns:
-            key = (table_id, column.name)
-            if key in saved:
-                if "server_default" in saved[key]:
-                    column.server_default = saved[key]["server_default"]
-                if "default" in saved[key]:
-                    column.default = saved[key]["default"]
-                if "type" in saved[key]:
-                    column.type = saved[key]["type"]
-
-
 @pytest.fixture(scope="function")
-def db_session():
-    """
-    Crea una nueva sesión de base de datos para cada test.
-    """
-    _ensure_sqlite_metadata()
-    test_engine = _create_test_engine()
-    try:
-        SQLModel.metadata.create_all(bind=test_engine)
-    except Exception:
-        test_engine.dispose()
-        raise
+def db_session(_engine):
+    """Sesion aislada por test.
 
-    session_factory = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    Cada test corre dentro de una transaccion externa que se revierte al
+    terminar, asi que no ve lo que escribieron los demas y no deja rastro.
+    `join_transaction_mode="create_savepoint"` hace que los `commit()` de los
+    fixtures y del codigo bajo prueba se traduzcan a SAVEPOINTs dentro de esa
+    transaccion, en vez de escribir de verdad.
+    """
+    connection = _engine.connect()
+    transaction = connection.begin()
+    session_factory = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+    )
     session = session_factory()
     try:
         yield session
     finally:
         session.close()
-        SQLModel.metadata.drop_all(bind=test_engine)
-        test_engine.dispose()
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture(scope="function")
