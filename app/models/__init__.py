@@ -24,7 +24,7 @@ Los nombres pueden repetirse; la unicidad está en los UUIDs.
 """
 
 # Account (raíz comercial)
-from app.models.account import Account, AccountStatus
+from app.models.account import Account, AccountStatus, AccountType
 
 # Account Events (auditoría)
 from app.models.account_event import AccountEvent, ActorType, EventType, TargetType
@@ -37,6 +37,7 @@ from app.models.alert_rule import AlertRule, AlertRuleUnit
 
 # Capabilities
 from app.models.capability import (
+    AccountCapability,
     Capability,
     CapabilityValueType,
     OrganizationCapability,
@@ -88,6 +89,9 @@ from app.models.team import (
     TeamVisibilityRule,
 )
 
+# Tenancy (arbol de cuentas, dominios y marca) - migracion 027
+from app.models.tenancy import TenantBranding, TenantDomain
+
 # Tokens
 from app.models.token_confirmacion import TokenConfirmacion, TokenType
 
@@ -108,6 +112,7 @@ __all__ = [
     # Account (raíz comercial)
     "Account",
     "AccountStatus",
+    "AccountType",
     "AccountTaxProfile",
     "AccountEvent",
     "ActorType",
@@ -128,6 +133,10 @@ __all__ = [
     "CapabilityValueType",
     "PlanCapability",
     "OrganizationCapability",
+    "AccountCapability",
+    # Tenancy
+    "TenantDomain",
+    "TenantBranding",
     # Users
     "User",
     "Invitation",
